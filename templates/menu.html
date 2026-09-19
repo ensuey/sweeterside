@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Menu — Sweeter Side by Dachel</title>
+<meta name="description" content="Browse the full Sweeter Side by Dachel menu: frappe-based drinks, pasta and sandwiches, with prices.">
+<meta name="theme-color" content="#F7E4A1">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Menu — Sweeter Side by Dachel">
+<meta property="og:description" content="Frappe-based drinks, pasta and sandwiches.">
+<meta property="og:image" content="assets/Sweeter%20Side%20-%20PNG.png">
+
+<link rel="icon" href="assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="apple-touch-icon" href="assets/Sweeter%20Side%20-%20PNG.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body>
+
+<a class="skip" href="#menu">Skip to menu</a>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="hero__logo" src="assets/Sweeter%20Side%20-%20PNG.png" alt="Sweeter Side by Dachel logo" width="1563" height="1563">
+    <h1 class="hero__title">Sweeter Side</h1>
+    <p class="hero__sub">Frappe-based drinks, hot pasta and sandwiches — made fresh by Dachel.</p>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="wrap toolbar__inner">
+    <div class="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path>
+      </svg>
+      <label class="vh" for="q">Search the menu</label>
+      <input id="q" type="search" placeholder="Search the menu…" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="filters" role="group" aria-label="Filter menu by category">
+<!--CHIPS-->
+    </div>
+  </div>
+</div>
+
+<main id="menu" class="wrap">
+
+<!--SECTIONS-->
+
+  <div class="empty" role="status">
+    <h2>Nothing matches that</h2>
+    <p>Try a different word, or show the whole menu again.</p>
+    <button type="button" data-reset>Show all items</button>
+  </div>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <strong>Sweeter Side by Dachel</strong>
+    <p>Prices in Philippine pesos and subject to change.</p>
+  </div>
+</footer>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-name">
+  <button class="sheet__close" type="button" aria-label="Close">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18"></path>
+    </svg>
+  </button>
+  <div class="shot" id="sheet-shot"><img id="sheet-img" src="" alt=""></div>
+  <div class="sheet__body">
+    <h2 class="sheet__name" id="sheet-name"></h2>
+    <div class="sheet__row">
+      <span class="sheet__price" id="sheet-price"></span>
+      <span class="tag" id="sheet-tag"></span>
+    </div>
+  </div>
+</dialog>
+
+<script src="assets/js/menu.js" defer></script>
+</body>
+</html>

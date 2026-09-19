@@ -1,90 +1,138 @@
 # sweeterside
 
-Online menu for **Sweeter Side by Dachel** — a static page customers can browse on
-their phone: search, filter by category, and tap any item for a larger photo.
+Online menu for **Sweeter Side by Dachel**, plus a password-protected admin
+dashboard for adding, editing and deleting menu items.
 
-## Getting started
+Customers browse a fast page with search and category filters. Dachel signs in
+at `/admin` and edits the menu; the customer page updates immediately.
 
-There is no build step and no dependencies. Open `index.html` in a browser.
+## Requirements
 
-To serve it locally (needed if you want to test on your phone over Wi-Fi):
+**Node.js 22.5 or newer** — the server uses the built-in `node:sqlite` module.
+Check with `node --version`.
+
+There are **no dependencies**. Nothing to `npm install`.
+
+## Running it
 
 ```bash
-py -3 -m http.server 8000
-# then visit http://localhost:8000
+npm run create-admin      # once — creates your sign-in account
+npm start                 # http://127.0.0.1:3000
 ```
+
+- Menu:  <http://127.0.0.1:3000/>
+- Admin: <http://127.0.0.1:3000/admin>
+
+`npm test` runs the test suite (13 tests covering password hashing, CSRF,
+validation and path containment).
+
+### Changing the admin password
+
+Run `npm run create-admin` again with the same email. It resets the password
+and signs out every existing session.
 
 ## Project layout
 
 ```
-index.html              The whole menu — every item lives here as markup
-assets/css/styles.css   Design tokens and all styling
-assets/js/menu.js       Search + category filtering + the detail dialog
-assets/*.jpg|png        The original menu posters and the logo
+server/
+  index.js       HTTP server, routing, static files, uploads
+  db.js          SQLite schema and the first-run seed
+  auth.js        scrypt hashing, sessions, CSRF, login throttling
+  menu.js        item validation and CRUD
+  render.js      builds the customer page from the database
+  imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
+admin/           login page and dashboard
+templates/
+  menu.html      customer page shell; the server fills in the items
+test/            test suite
+data/            SQLite database (gitignored, created on first run)
+assets/          images, customer CSS and JS; uploads/ is gitignored
+index.html       generated — see below
 ```
 
-The menu works with JavaScript disabled — every item is real markup in
-`index.html`. The script only adds search, filtering and the detail popup.
+## How the data flows
 
-## Editing the menu
+The database is the single source of truth. `templates/menu.html` holds the page
+shell with a `<!--SECTIONS-->` placeholder, and the server renders the items into
+it on every request.
 
-### Changing a name or price
+Items are rendered as **real markup**, not fetched by JavaScript, so the menu
+still works with JavaScript disabled. The customer-side script only adds search,
+filtering and the detail popup.
 
-Edit the item's `<li class="card">` block in `index.html`. Each item repeats its
-price twice, so change both:
+**`index.html` is generated.** The server rewrites it after every admin change,
+so the repository always holds a current, fully static copy of the menu. Edit
+items in the admin, not in `index.html` — your edits there will be overwritten.
+Run `npm run build` to regenerate it by hand.
 
-```html
-<li class="card" data-cat="drinks" data-name="Matcha Frappe" data-price="129">
-                                                             ^^^ detail popup
-  ...
-  <span class="price"><small>Php</small> 129</span>
-            <!-- what the customer sees on the card ^^^ -->
-```
-
-`data-name` is what the search box matches against.
-
-### Adding an item
-
-Copy an existing `<li class="card">` block into the right section, then update
-the name, price and photo. Also bump the number in that section's
-`<span data-count>` and in the matching filter chip near the top of the file.
+This means you can still deploy the folder as a static site (GitHub Pages and
+similar) and get a correct menu; you just will not have the admin there, because
+static hosting cannot run the server.
 
 ## How the photos work
 
-There are only two photographs in this project — the original menu posters
-(`assets/Menu Frappe.jpg` and `assets/Meals.jpg`), both 1021×1434. Each card
-shows one product by displaying a **window** onto the poster, CSS-sprite style:
+The original two menu posters (1021×1434) double as sprite sheets. An item can
+either show a **crop window** onto a poster:
 
 ```html
 <div class="shot" style="--x:113; --y:530; --w:184; --h:245">
 ```
 
-- `--x`, `--y` — top-left corner of the crop, in source pixels
-- `--w`, `--h` — size of the crop, in source pixels
+…or show a **whole photo** (`.shot--plain`, `object-fit: cover`) when no crop is
+set. Uploading a new photo through the admin gives you the second kind; leave
+the crop fields blank.
 
-`.shot` in `styles.css` turns those four numbers into the right scale and offset,
-so the crops stay sharp and correct at every screen size. The crop windows were
-chosen to sit fully inside each photo's white background — widen one too far and
-the poster's yellow background creeps into the corner.
+The admin's crop fields show the photo's pixel dimensions and render a live card
+preview, and the server rejects any crop that falls outside the image.
 
-The upside is that the page loads **two images total** no matter how many items
-you add. The downside is that a new item needs a new crop window. If you have
-separate photos per product, that is strictly better: drop the `--x/--y/--w/--h`
-style off `.shot` and point the `<img>` at your own file.
+## Security
 
-## Deploying
+The login is real, not decorative:
 
-It is a folder of static files, so anything works — Netlify, Vercel, GitHub
-Pages, Cloudflare Pages, or plain shared hosting. Upload the whole directory;
-`index.html` must stay at the root.
+- **Passwords** hashed with scrypt (N=16384), unique 16-byte salt each,
+  compared in constant time. Never stored or logged in plain text.
+- **Sessions** are 32 bytes of CSPRNG randomness in an `HttpOnly`,
+  `SameSite=Strict` cookie, expiring after 8 hours. Only the SHA-256 of the
+  token is stored, so a database leak does not yield usable cookies.
+- **CSRF**: every write requires an `X-CSRF-Token` header matching the session.
+- **Throttling**: 6 failed attempts per email+IP triggers a 15-minute lockout.
+  Wrong password and unknown account return the same message and take
+  comparable time, so the form does not reveal which emails exist.
+- **Uploads** are accepted only if their *bytes* parse as JPEG, PNG or WebP —
+  the filename and declared type are ignored. Files are saved under a
+  server-generated random name, capped at 5MB.
+- **Paths**: item images must resolve inside `assets/`; static serving is
+  containment-checked, and the admin HTML cannot be fetched as a static file.
+- **Headers**: CSP (no inline scripts), `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
+
+Cookies are marked `Secure` automatically behind an HTTPS proxy
+(`X-Forwarded-Proto: https`), or set `FORCE_SECURE_COOKIES=1`.
+
+### Before putting this on the internet
+
+1. **Serve it over HTTPS.** The server speaks plain HTTP; run it behind a
+   reverse proxy (Caddy, nginx, a platform like Fly or Railway) that terminates
+   TLS. Without HTTPS the session cookie crosses the network in the clear.
+2. It binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` and `PORT` to expose
+   it, and only do that behind the proxy above.
+3. Back up `data/app.db` — it holds the menu and the admin account.
+
+## Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `PORT` | `3000` | Port to listen on |
+| `HOST` | `127.0.0.1` | Interface to bind |
+| `DB_PATH` | `data/app.db` | SQLite file location |
+| `FORCE_SECURE_COOKIES` | unset | Set to `1` to always mark cookies `Secure` |
+| `ADMIN_PASSWORD` | unset | Skips the prompt in `create-admin` |
 
 ## Still to fill in
 
-The page deliberately claims nothing that has not been confirmed:
-
-- **No contact details, address, hours or socials.** The footer is a stub. A
-  menu customers find online usually needs at least a way to order or a link to
-  your page — add it to the `<footer class="foot">` block.
+- **No contact details, address, hours or ordering link.** The footer is a stub.
+  A menu customers find online usually needs a way to order — add it to the
+  `<footer class="foot">` block in `templates/menu.html`.
 - **No item descriptions.** Names and prices only, taken from the posters.
   Descriptions were left out rather than invented, since they imply ingredient
   and allergen claims.

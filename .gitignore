@@ -28,3 +28,9 @@ desktop.ini
 .vscode/
 .idea/
 *.swp
+
+# Runtime data (SQLite database, WAL files)
+data/
+
+# Admin photo uploads
+assets/uploads/

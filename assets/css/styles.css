@@ -179,6 +179,18 @@ main { padding-block: var(--sp-7) var(--sp-8); }
 }
 .card:hover .shot img { transform: scale(1.045); }
 
+/* An item whose photo has no crop window: show the whole image. */
+.shot--plain { aspect-ratio: 3 / 4; }
+.shot--plain img {
+  position: absolute; inset: 0; left: 0; top: 0;
+  width: 100%; height: 100%; object-fit: cover;
+}
+
+.no-items {
+  text-align: center; color: var(--ink-soft);
+  padding: var(--sp-8) var(--sp-4); font-size: 1.0625rem;
+}
+
 .card__body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); flex: 1; }
 .card__name { font-size: 1.0625rem; font-weight: 600; }
 .card__btn {

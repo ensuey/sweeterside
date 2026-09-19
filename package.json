@@ -1,0 +1,17 @@
+{
+  "name": "sweeterside",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Online menu and admin dashboard for Sweeter Side by Dachel",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "create-admin": "node scripts/create-admin.js",
+    "build": "node -e \"require('./server/db').seedIfEmpty(); require('./server/render').writeStatic(); console.log('index.html rebuilt')\"",
+    "test": "node --test"
+  },
+  "dependencies": {}
+}

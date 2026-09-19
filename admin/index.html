@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Menu admin — Sweeter Side</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <img class="topbar__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+    <h1 class="topbar__title">Menu admin</h1>
+    <div class="topbar__spacer"></div>
+    <span class="topbar__user" id="who"></span>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
+    <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+  </div>
+</header>
+
+<main class="admin">
+  <div class="admin__head">
+    <div>
+      <h2 class="admin__title">Items</h2>
+      <p class="admin__sub" id="summary">Loading…</p>
+    </div>
+    <button class="btn btn--primary" type="button" id="add">Add item</button>
+  </div>
+
+  <p class="alert" id="page-error" role="alert" hidden></p>
+
+  <div id="groups"></div>
+
+  <p class="empty-note" id="empty" hidden>
+    No items yet. Use <strong>Add item</strong> to create the first one.
+  </p>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- ---------- Add / edit ---------- -->
+<dialog class="modal" id="editor" aria-labelledby="editor-title">
+  <form method="dialog" class="modal__form" id="editor-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="editor-title">Add item</h2>
+      <button class="icon-btn" type="button" id="editor-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal__body">
+      <p class="alert" id="editor-error" role="alert" hidden></p>
+
+      <div class="field">
+        <label for="f-name">Name</label>
+        <input id="f-name" name="name" type="text" maxlength="80" required>
+        <p class="field__err" data-err="name" hidden></p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="f-price">Price (Php)</label>
+          <input id="f-price" name="price" type="number" min="0" max="100000" step="1" required>
+          <p class="field__err" data-err="price" hidden></p>
+        </div>
+        <div class="field">
+          <label for="f-category">Category</label>
+          <select id="f-category" name="category" required>
+            <option value="drinks">Frappe Based Drinks</option>
+            <option value="food">Food</option>
+          </select>
+          <p class="field__err" data-err="category" hidden></p>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-image">Photo</label>
+        <select id="f-image" name="image" required></select>
+        <p class="field__err" data-err="image" hidden></p>
+        <div class="upload">
+          <label class="btn btn--ghost btn--sm" for="f-upload">Upload a new photo</label>
+          <input id="f-upload" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+          <span class="upload__status" id="upload-status"></span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-alt">Photo description <span class="hint">(for screen readers)</span></label>
+        <input id="f-alt" name="alt" type="text" maxlength="300">
+      </div>
+
+      <fieldset class="crop">
+        <legend>
+          Crop
+          <span class="hint">Leave blank to show the whole photo</span>
+        </legend>
+        <p class="crop__note" id="crop-note"></p>
+        <div class="crop__grid">
+          <div class="field field--xs">
+            <label for="f-cx">X</label>
+            <input id="f-cx" name="crop_x" type="number" min="0" step="1" inputmode="numeric">
+          </div>
+          <div class="field field--xs">
+            <label for="f-cy">Y</label>
+            <input id="f-cy" name="crop_y" type="number" min="0" step="1" inputmode="numeric">
+          </div>
+          <div class="field field--xs">
+            <label for="f-cw">Width</label>
+            <input id="f-cw" name="crop_w" type="number" min="1" step="1" inputmode="numeric">
+          </div>
+          <div class="field field--xs">
+            <label for="f-ch">Height</label>
+            <input id="f-ch" name="crop_h" type="number" min="1" step="1" inputmode="numeric">
+          </div>
+          <button class="btn btn--ghost btn--sm" type="button" id="crop-clear">Clear crop</button>
+        </div>
+        <p class="field__err" data-err="crop" hidden></p>
+      </fieldset>
+
+      <div class="preview">
+        <span class="preview__label">Card preview</span>
+        <div class="preview__card">
+          <div class="shot" id="preview-shot"><img id="preview-img" src="" alt=""></div>
+          <div class="preview__body">
+            <span class="preview__name" id="preview-name">Item name</span>
+            <span class="preview__price" id="preview-price">Php 0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="editor-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit" id="editor-save">Save item</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- Delete confirmation ---------- -->
+<dialog class="modal modal--sm" id="confirm" aria-labelledby="confirm-title">
+  <div class="modal__head">
+    <h2 class="modal__title" id="confirm-title">Delete this item?</h2>
+  </div>
+  <div class="modal__body">
+    <p id="confirm-text">This removes it from the customer menu straight away.</p>
+  </div>
+  <div class="modal__foot">
+    <button class="btn btn--ghost" type="button" id="confirm-cancel">Keep it</button>
+    <button class="btn btn--danger" type="button" id="confirm-ok">Delete</button>
+  </div>
+</dialog>
+
+<script src="/admin/admin.js" defer></script>
+</body>
+</html>

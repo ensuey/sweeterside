@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sign in — Sweeter Side admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body class="login-body">
+
+<main class="login">
+  <img class="login__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+  <h1 class="login__title">Menu admin</h1>
+  <p class="login__sub">Sign in to edit the Sweeter Side menu.</p>
+
+  <!--SETUP-->
+
+  <form class="login__form" id="login-form" novalidate>
+    <p class="alert" id="error" role="alert" hidden></p>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="username"
+             required autofocus spellcheck="false">
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="field__reveal">
+        <input id="password" name="password" type="password"
+               autocomplete="current-password" required>
+        <button class="reveal" type="button" id="toggle-password"
+                aria-pressed="false" aria-label="Show password">Show</button>
+      </div>
+    </div>
+
+    <button class="btn btn--primary btn--block" type="submit" id="submit">Sign in</button>
+  </form>
+
+  <p class="login__foot"><a href="/">Back to the menu</a></p>
+</main>
+
+<script src="/admin/login.js" defer></script>
+</body>
+</html>
