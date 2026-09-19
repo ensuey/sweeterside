@@ -7,7 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const { seedIfEmpty, ROOT } = require('./db');
+const { seedIfEmpty } = require('./db');
+const { ROOT, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const auth = require('./auth');
 const menu = require('./menu');
 const render = require('./render');
@@ -17,7 +18,6 @@ const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
 const MAX_JSON = 64 * 1024;          // 64KB
 const MAX_UPLOAD = 5 * 1024 * 1024;  // 5MB
-const UPLOAD_DIR = path.join(ROOT, 'assets', 'uploads');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -270,6 +270,11 @@ async function route(req, res) {
     return sendHtml(res, 200, render.buildHtml(), { 'Cache-Control': 'no-cache' });
   }
 
+  /* ---- health check (for the hosting platform) ---- */
+  if (pathname === '/healthz' && (method === 'GET' || method === 'HEAD')) {
+    return sendJson(res, 200, { ok: true, items: menu.list().length });
+  }
+
   /* ---- auth API ---- */
   if (pathname === '/api/login' && method === 'POST') return handleLogin(req, res);
   if (pathname === '/api/logout' && method === 'POST') return handleLogout(req, res);
@@ -344,6 +349,13 @@ async function route(req, res) {
 
   /* ---- static files ---- */
   if (method === 'GET' || method === 'HEAD') {
+    // Uploads keep the /assets/uploads/ URL but may live on a mounted volume.
+    if (pathname.startsWith(`/${UPLOAD_URL_PREFIX}/`)) {
+      const mapped = menu.resolveImage(pathname.slice(1));
+      if (mapped && serveFile(req, res, mapped.abs)) return;
+      return sendHtml(res, 404, '<h1>404</h1><p>Image not found.</p>');
+    }
+
     const abs = safeResolve(pathname, ['assets', 'admin']);
     if (abs) {
       // Never serve the admin HTML shells through the static path — they are
@@ -384,6 +396,15 @@ if (require.main === module) {
     console.log(`Menu   http://${HOST}:${PORT}/`);
     console.log(`Admin  http://${HOST}:${PORT}/admin`);
   });
+
+  // Hosting platforms send SIGTERM on deploy and shutdown.
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.on(signal, () => {
+      console.log(`\n${signal} received, closing.`);
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 5000).unref();
+    });
+  }
 }
 
 module.exports = { server, route };

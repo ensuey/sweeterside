@@ -1,0 +1,11 @@
+.git
+.github
+.gitignore
+node_modules
+data
+assets/uploads
+test
+README.md
+fly.toml
+Dockerfile
+.dockerignore

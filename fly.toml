@@ -1,0 +1,40 @@
+# Fly.io deployment. Change `app` to the name you created, and `primary_region`
+# to the region nearest your customers (sin = Singapore, closest to the PH).
+app = "sweeterside"
+primary_region = "sin"
+
+[build]
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  DATA_DIR = "/data"
+  DB_PATH = "/data/app.db"
+  UPLOAD_DIR = "/data/uploads"
+  # Fly terminates TLS and forces HTTPS, so the session cookie is always Secure.
+  FORCE_SECURE_COOKIES = "1"
+
+# The SQLite database and uploaded photos live here. Without this the menu
+# resets to the nine seeded items on every deploy.
+[[mounts]]
+  source = "sweeterside_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  auto_stop_machines = "suspend"
+  # SQLite tolerates exactly one writer. Keep this at one machine.
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

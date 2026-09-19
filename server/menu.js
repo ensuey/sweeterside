@@ -4,7 +4,8 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { db, ROOT } = require('./db');
+const { db } = require('./db');
+const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
 
 const CATEGORIES = ['drinks', 'food'];
@@ -20,21 +21,38 @@ class ValidationError extends Error {
   }
 }
 
-/** Resolve an image path from the client to a real file under assets/. */
-function resolveImage(rel) {
+/**
+ * Map an "assets/…" URL path to a real file and check it stays inside the
+ * directory that is meant to back it. Uploads keep the assets/uploads/ prefix
+ * but may live on a mounted volume somewhere else entirely.
+ */
+function imagePathToDisk(rel) {
   const clean = String(rel || '').replace(/\\/g, '/').trim();
   if (!clean.startsWith('assets/')) return null;
   if (clean.includes('..') || clean.includes('\0')) return null;
 
-  const abs = path.resolve(ROOT, clean);
-  const assetsRoot = path.resolve(ROOT, 'assets');
-  // Containment check — defeats traversal even if the prefix test is fooled.
-  if (abs !== assetsRoot && !abs.startsWith(assetsRoot + path.sep)) return null;
-  if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return null;
+  const uploadPrefix = `${UPLOAD_URL_PREFIX}/`;
+  const base = clean.startsWith(uploadPrefix) ? UPLOAD_DIR : ASSETS_DIR;
+  const tail = clean.startsWith(uploadPrefix)
+    ? clean.slice(uploadPrefix.length)
+    : clean.slice('assets/'.length);
+  if (!tail) return null;
 
-  const size = imagesize.fromFile(abs);
+  const abs = path.resolve(base, tail);
+  // Containment check — defeats traversal even if the prefix test is fooled.
+  if (abs !== base && !abs.startsWith(base + path.sep)) return null;
+  return { clean, abs };
+}
+
+/** Resolve an image path from the client to a real file. */
+function resolveImage(rel) {
+  const mapped = imagePathToDisk(rel);
+  if (!mapped) return null;
+  if (!fs.existsSync(mapped.abs) || !fs.statSync(mapped.abs).isFile()) return null;
+
+  const size = imagesize.fromFile(mapped.abs);
   if (!size) return null;
-  return { rel: clean, abs, ...size };
+  return { rel: mapped.clean, abs: mapped.abs, ...size };
 }
 
 function intOrNull(v) {
@@ -173,25 +191,39 @@ function reorder(ids) {
   return list();
 }
 
-/** Images already present in assets/ that an item can point at. */
+/** Images an item can point at: bundled assets plus anything uploaded. */
 function availableImages() {
-  const assetsRoot = path.resolve(ROOT, 'assets');
   const out = [];
-  const walk = (dir, prefix) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+  const seen = new Set();
+
+  const walk = (dir, urlPrefix) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return; // directory may not exist yet (no uploads so far)
+    }
+    for (const entry of entries) {
       if (entry.name.startsWith('.')) continue;
       const abs = path.join(dir, entry.name);
-      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const url = `${urlPrefix}/${entry.name}`;
       if (entry.isDirectory()) {
-        if (entry.name === 'css' || entry.name === 'js') continue;
-        walk(abs, rel);
+        // Skip stylesheets/scripts, and skip an uploads folder nested inside
+        // assets — it is walked separately so a volume mount is picked up.
+        if (['css', 'js', 'uploads'].includes(entry.name)) continue;
+        walk(abs, url);
       } else {
         const size = imagesize.fromFile(abs);
-        if (size) out.push({ path: `assets/${rel}`, width: size.width, height: size.height });
+        if (size && !seen.has(url)) {
+          seen.add(url);
+          out.push({ path: url, width: size.width, height: size.height });
+        }
       }
     }
   };
-  walk(assetsRoot, '');
+
+  walk(ASSETS_DIR, 'assets');
+  walk(UPLOAD_DIR, UPLOAD_URL_PREFIX);
   return out.sort((a, b) => a.path.localeCompare(b.path));
 }
 

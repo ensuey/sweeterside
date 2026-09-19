@@ -109,14 +109,67 @@ The login is real, not decorative:
 Cookies are marked `Secure` automatically behind an HTTPS proxy
 (`X-Forwarded-Proto: https`), or set `FORCE_SECURE_COOKIES=1`.
 
+## Deploying
+
+The admin needs a host that **runs Node and gives you a persistent disk**.
+Static hosting (GitHub Pages, Netlify drop) can serve the customer menu but
+cannot run the admin at all.
+
+A `Dockerfile` is included and works on Fly.io, Railway, Render or any VPS.
+
+### The one thing that will bite you
+
+The SQLite database and uploaded photos live in `/data`. **Mount a volume
+there.** Containers get a fresh filesystem on every deploy, so without a volume
+the menu silently resets to the nine seeded items and uploaded photos vanish.
+
+Also keep it to **exactly one machine**. SQLite allows one writer; two
+instances sharing a volume will corrupt it.
+
+### Fly.io (cheapest with a real volume)
+
+`fly.toml` is already configured — the volume mount, HTTPS, the `/healthz`
+check and secure cookies. You need a Fly account with a card on file (the
+volume is roughly $0.15/GB/month; a 1GB volume is plenty).
+
+```bash
+# 1. Install flyctl, then sign in
+fly auth login
+
+# 2. Create the app. Pick your own name and put it in fly.toml.
+fly apps create sweeterside
+
+# 3. Create the volume — same region as primary_region in fly.toml
+fly volumes create sweeterside_data --size 1 --region sin
+
+# 4. Deploy
+fly deploy
+
+# 5. Create your admin account on the running machine
+fly ssh console -C "node scripts/create-admin.js --email you@example.com"
+```
+
+Your menu is then at `https://<app>.fly.dev/` and the admin at
+`https://<app>.fly.dev/admin`.
+
+### Other hosts
+
+- **Railway** — add a volume mounted at `/data`, set the same env vars as
+  `fly.toml`, deploy from the Dockerfile.
+- **Render** — a persistent disk requires a paid instance. The free tier has an
+  ephemeral filesystem and will lose the database on every restart.
+- **VPS** — run the container behind Caddy or nginx for TLS, and bind-mount a
+  host directory to `/data`.
+
 ### Before putting this on the internet
 
-1. **Serve it over HTTPS.** The server speaks plain HTTP; run it behind a
-   reverse proxy (Caddy, nginx, a platform like Fly or Railway) that terminates
-   TLS. Without HTTPS the session cookie crosses the network in the clear.
-2. It binds to `127.0.0.1` by default. Set `HOST=0.0.0.0` and `PORT` to expose
-   it, and only do that behind the proxy above.
-3. Back up `data/app.db` — it holds the menu and the admin account.
+1. **Serve it over HTTPS.** The server speaks plain HTTP; the host or proxy
+   terminates TLS. Without HTTPS the session cookie crosses the network in the
+   clear. Fly does this for you and `fly.toml` sets `FORCE_SECURE_COOKIES=1`.
+2. It binds to `127.0.0.1` by default. `HOST=0.0.0.0` (set in the Dockerfile)
+   exposes it — only do that behind the proxy above.
+3. **Back up the volume.** `/data/app.db` holds the menu and the admin account.
+   `fly ssh sftp get /data/app.db` pulls a copy down.
 
 ## Environment variables
 
@@ -125,6 +178,8 @@ Cookies are marked `Secure` automatically behind an HTTPS proxy
 | `PORT` | `3000` | Port to listen on |
 | `HOST` | `127.0.0.1` | Interface to bind |
 | `DB_PATH` | `data/app.db` | SQLite file location |
+| `DATA_DIR` | `data/` | Directory holding the database |
+| `UPLOAD_DIR` | `assets/uploads/` | Where uploaded photos are written |
 | `FORCE_SECURE_COOKIES` | unset | Set to `1` to always mark cookies `Secure` |
 | `ADMIN_PASSWORD` | unset | Skips the prompt in `create-admin` |
 
