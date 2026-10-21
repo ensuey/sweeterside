@@ -44,7 +44,7 @@ h1, h2, h3 {
 }
 img { max-width: 100%; }
 
-:where(a, button, input, textarea, [tabindex]):focus-visible {
+:where(a, button, input, textarea, summary, [tabindex]):focus-visible {
   outline: 3px solid var(--navy);
   outline-offset: 2px;
   border-radius: var(--r-sm);
@@ -396,6 +396,41 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .cfield__err[hidden] { display: none; }
 
 .cart__done p { margin: 0; }
+.checkout__req { margin: calc(var(--sp-2) * -1) 0 0; font-size: .875rem; color: var(--ink-soft); }
+
+/* Messenger step after an order is placed. */
+.msgr {
+  display: flex; flex-direction: column; gap: var(--sp-3);
+  padding: var(--sp-4); border-radius: var(--r-md);
+  background: #EEF4FF; border: 1px solid #D3E2FF;
+}
+.msgr[hidden], .msgr__fallback[hidden] { display: none; }
+.msgr__title { font-size: 1.0625rem; }
+.msgr__steps { margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: var(--sp-1); font-size: .9375rem; }
+.msgr__btn {
+  min-height: 52px; display: flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  font: 700 1rem "Nunito", sans-serif; color: #fff; text-decoration: none;
+  background: linear-gradient(135deg, #0A7CFF 0%, #6B4BFF 60%, #D946EF 100%);
+  border-radius: var(--r-full); box-shadow: var(--shadow);
+  transition: filter .2s var(--ease), transform .12s var(--ease);
+}
+.msgr__btn:hover { filter: brightness(1.08); }
+.msgr__btn:active { transform: scale(.98); }
+.msgr__status:empty { display: none; }
+.msgr__status { font-weight: 700; font-size: .9375rem; color: #1D3F8A; }
+.msgr__details summary { cursor: pointer; font-weight: 600; font-size: .9375rem; color: var(--navy); }
+.msgr__text {
+  width: 100%; margin-top: var(--sp-2); padding: var(--sp-3);
+  font: .875rem/1.45 ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); resize: vertical;
+}
+.msgr__copy, .cart__back {
+  min-height: 44px; padding: 0 var(--sp-5); cursor: pointer;
+  font: 700 .9375rem "Nunito", sans-serif; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-full);
+}
+.msgr__copy { margin-top: var(--sp-2); }
+.msgr__copy:hover, .cart__back:hover { background: var(--cream); }
 
 /* ---------- Footer ---------- */
 .foot {

@@ -438,15 +438,14 @@ async function route(req, res) {
   /* ---- settings ---- */
   if (pathname === '/api/settings' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
-    return sendJson(res, 200, { delivery_fee: orders.getDeliveryFee() });
+    return sendJson(res, 200, orders.settings());
   }
 
   if (pathname === '/api/settings' && (method === 'PUT' || method === 'PATCH')) {
     if (!requireApiAuth(req, res, { csrf: true })) return;
-    const body = await readJson(req);
-    const fee = orders.setDeliveryFee(body.delivery_fee);
-    // The fee is printed into the customer page, so rebuild it.
-    return afterMutation(res, 200, { delivery_fee: fee });
+    const settings = orders.updateSettings(await readJson(req));
+    // Both values are printed into the customer page, so rebuild it.
+    return afterMutation(res, 200, settings);
   }
 
   /* ---- images ---- */

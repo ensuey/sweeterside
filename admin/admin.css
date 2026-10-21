@@ -159,8 +159,10 @@ a { color: var(--navy); }
 
 /* ---------------- orders ---------------- */
 .orders { margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid var(--line); }
-.fee { display: flex; align-items: flex-end; gap: .6rem; }
+.fee { display: flex; align-items: flex-end; gap: .6rem; flex-wrap: wrap; }
 .fee .field { width: 9rem; }
+.fee .fee__page { width: 15rem; }
+@media (max-width: 520px) { .fee .field, .fee .fee__page { width: 100%; } }
 .fee__err { margin: -1rem 0 1rem; text-align: right; }
 
 .tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }

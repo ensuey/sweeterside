@@ -24,6 +24,7 @@
     catalog[card.dataset.id] = { name: card.dataset.name, price: Number(card.dataset.price) };
   });
   var deliveryFee = Number(document.body.dataset.deliveryFee) || 0;
+  var messengerPage = document.body.dataset.messengerPage || '';
 
   var lines = []; // [{ id: '12', qty: 2 }], in the order they were added
   var sending = false;
@@ -245,14 +246,115 @@
     render();
   }
 
-  function showDone(order) {
+  /* Every field is required. The server checks all of this too; checking here
+     saves a round trip and points the customer at what is missing. */
+  function checkFields() {
+    var errors = {};
+    var name = form.elements.name.value.trim();
+    var phoneDigits = form.elements.phone.value.replace(/\D/g, '');
+    var address = form.elements.address.value.trim();
+    var cashRaw = form.elements.cash.value.trim();
+    var cash = Number(cashRaw);
+
+    if (!name) errors.name = 'Enter your full name.';
+    if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
+    else if (phoneDigits.length < 7 || phoneDigits.length > 15) errors.phone = 'That phone number does not look right.';
+    if (!address) errors.address = 'Enter the delivery address.';
+    if (!cashRaw) errors.cash = 'Enter how much cash you will pay with.';
+    else if (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash) errors.cash = 'Enter the cash as a whole number of pesos.';
+    else if (cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
+    return errors;
+  }
+
+  /* ---------------------------- messenger ---------------------------- */
+
+  function messengerUrl() {
+    return 'https://m.me/' + encodeURIComponent(messengerPage);
+  }
+
+  /** The message the customer sends us: the order as the server recorded it. */
+  function orderMessage(order, details) {
+    var out = ['Hi Sweeter Side! I just placed order #' + order.id + ' on your website.', ''];
+    order.items.forEach(function (l) {
+      out.push(l.qty + ' × ' + l.name + ' — ' + money(l.price * l.qty));
+    });
+    out.push('');
+    out.push('Subtotal: ' + money(order.subtotal));
+    out.push('Delivery fee: ' + (order.delivery_fee === 0 ? 'Free' : money(order.delivery_fee)));
+    out.push('Total: ' + money(order.total));
+    out.push('Cash: ' + money(order.cash) + (order.change_due === 0
+      ? ' (exact amount)' : ' (change ' + money(order.change_due) + ')'));
+    out.push('');
+    out.push('Name: ' + details.name.trim());
+    out.push('Phone: ' + details.phone.trim());
+    out.push('Address: ' + details.address.trim().replace(/\s*\n\s*/g, ', '));
+    return out.join('\n');
+  }
+
+  /* Copy without the Clipboard API: needs a selectable textarea inside the
+     dialog, because everything outside a modal dialog is inert. */
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+    done.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    done.removeChild(ta);
+    return ok;
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).then(
+        function () { return true; },
+        function () { return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+
+  function msgrStatus(copied, opened) {
+    var text;
+    if (copied && opened) text = 'Your order is copied. In Messenger, paste it and tap Send.';
+    else if (copied) text = 'Your order is copied. Tap the button above to open Messenger, then paste and send.';
+    else text = 'We could not copy it automatically. Open “See the message” below, copy it, and send it to us on Messenger.';
+    $('msgr-status').textContent = text;
+    if (!copied) $('msgr-text').closest('details').open = true;
+  }
+
+  /* Called straight after the order is placed. Browsers allow opening a new
+     tab only shortly after a tap; if this one is blocked (common on iPhone),
+     the big button does the same thing on the next tap. */
+  function sendToMessenger(message) {
+    var win = null;
+    try { win = window.open(messengerUrl(), '_blank'); } catch (e) { win = null; }
+    if (win) { try { win.opener = null; } catch (e) { /* cross-origin */ } }
+    return copyText(message).then(function (copied) { msgrStatus(copied, !!win); });
+  }
+
+  function showDone(order, details) {
     $('done-id').textContent = '#' + order.id;
     $('done-total').textContent = money(order.total);
     $('done-cash').textContent = money(order.cash);
     $('done-change').textContent = order.change_due === 0 ? 'None (exact amount)' : money(order.change_due);
+
+    var hasMessenger = !!messengerPage;
+    $('msgr').hidden = !hasMessenger;
+    $('msgr-off').hidden = hasMessenger;
+    if (hasMessenger) {
+      var message = orderMessage(order, details);
+      $('msgr-text').value = message;
+      $('msgr-open').href = messengerUrl();
+      $('msgr-status').textContent = '';
+      $('msgr-text').closest('details').open = false;
+    }
+
     view.hidden = true;
     done.hidden = false;
     $('done-title').focus();
+    if (hasMessenger) sendToMessenger($('msgr-text').value);
   }
 
   function submit(event) {
@@ -260,6 +362,13 @@
     if (sending || !count()) return;
     clearErrors();
     notice('');
+
+    var missing = checkFields();
+    if (Object.keys(missing).length) {
+      formError('Please fill in every field before placing your order.');
+      showErrors(missing);
+      return;
+    }
 
     var payload = {
       name: form.elements.name.value,
@@ -288,7 +397,7 @@
         save();
         form.reset();
         render();
-        showDone(r.data.order);
+        showDone(r.data.order, payload);
         return;
       }
       if (r.status === 422 && r.data.fields) {
@@ -369,6 +478,21 @@
       sheet.close();
     });
   }
+
+  // The link opens Messenger itself (a real tap is never blocked); copy alongside it.
+  $('msgr-open').addEventListener('click', function () {
+    copyText($('msgr-text').value).then(function (copied) { msgrStatus(copied, true); });
+  });
+  $('msgr-copy').addEventListener('click', function () {
+    var ta = $('msgr-text');
+    ta.focus();
+    ta.select();
+    copyText(ta.value).then(function (copied) {
+      $('msgr-status').textContent = copied
+        ? 'Copied. Paste it in Messenger and tap Send.'
+        : 'Select the text above and copy it.';
+    });
+  });
 
   $('cart-open').addEventListener('click', open);
   form.addEventListener('submit', submit);

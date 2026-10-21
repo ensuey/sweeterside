@@ -432,8 +432,9 @@ async function changeStatus(select) {
 }
 
 async function loadSettings() {
-  const { delivery_fee } = await api('/api/settings');
+  const { delivery_fee, messenger_page } = await api('/api/settings');
   $('fee').value = delivery_fee;
+  $('messenger-page').value = messenger_page;
 }
 
 async function saveFee(event) {
@@ -442,15 +443,18 @@ async function saveFee(event) {
   err.hidden = true;
   $('fee-save').disabled = true;
   try {
-    const { delivery_fee } = await api('/api/settings', {
-      method: 'PUT', body: { delivery_fee: $('fee').value },
+    const { delivery_fee, messenger_page } = await api('/api/settings', {
+      method: 'PUT',
+      body: { delivery_fee: $('fee').value, messenger_page: $('messenger-page').value },
     });
     $('fee').value = delivery_fee;
-    toast(delivery_fee === 0
-      ? 'Delivery is now free on the menu.'
-      : `Delivery fee is now ${money(delivery_fee)} on the menu.`);
+    $('messenger-page').value = messenger_page;
+    const fee = delivery_fee === 0 ? 'Delivery is free' : `Delivery fee is ${money(delivery_fee)}`;
+    toast(messenger_page
+      ? `${fee}. Orders go to m.me/${messenger_page}.`
+      : `${fee}. The Messenger step is off.`);
   } catch (e) {
-    err.textContent = (e.fields && e.fields.delivery_fee) || e.message;
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
     err.hidden = false;
   } finally {
     $('fee-save').disabled = false;
