@@ -8,7 +8,6 @@ const { db } = require('./db');
 const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
 
-const CATEGORIES = ['drinks', 'food'];
 const MAX_PRICE = 100000;
 const NAME_MAX = 80;
 const ALT_MAX = 300;
@@ -85,8 +84,10 @@ function validate(input) {
     price = priceNum;
   }
 
-  const category = String(input.category ?? '').trim();
-  if (!CATEGORIES.includes(category)) errors.category = 'Choose a category.';
+  const categoryId = Number(input.category_id);
+  const categoryOk = Number.isInteger(categoryId)
+    && db.prepare('SELECT 1 FROM categories WHERE id = ?').get(categoryId);
+  if (!categoryOk) errors.category = 'Choose a category.';
 
   const image = resolveImage(input.image);
   if (!image) errors.image = 'Choose an image that exists in assets/.';
@@ -120,36 +121,37 @@ function validate(input) {
   if (Object.keys(errors).length) throw new ValidationError(errors);
 
   return {
-    name, price, category, image: image.rel, alt,
+    name, price, category_id: categoryId, image: image.rel, alt,
     crop_x: crop.x, crop_y: crop.y, crop_w: crop.w, crop_h: crop.h,
   };
 }
 
 /* ---------------------------- queries ---------------------------- */
 
-const SELECT = `SELECT id, name, price, category, image, alt,
-                       crop_x, crop_y, crop_w, crop_h, position
-                FROM items`;
+const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
+                       i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position
+                FROM items i`;
 
+/** Items in menu order: by category position, then item position. */
 function list() {
-  return db.prepare(`${SELECT} ORDER BY
-    CASE category WHEN 'drinks' THEN 0 ELSE 1 END, position, id`).all();
+  return db.prepare(`${SELECT} JOIN categories c ON c.id = i.category_id
+    ORDER BY c.position, c.id, i.position, i.id`).all();
 }
 
 function get(id) {
-  return db.prepare(`${SELECT} WHERE id = ?`).get(Number(id)) || null;
+  return db.prepare(`${SELECT} WHERE i.id = ?`).get(Number(id)) || null;
 }
 
 function create(input) {
   const row = validate(input);
   const { next } = db.prepare(
-    'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM items WHERE category = ?'
-  ).get(row.category);
+    'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM items WHERE category_id = ?'
+  ).get(row.category_id);
 
   const info = db.prepare(`
-    INSERT INTO items (name, price, category, image, alt, crop_x, crop_y, crop_w, crop_h, position)
+    INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    row.name, row.price, row.category, row.image, row.alt,
+    row.name, row.price, row.category_id, row.image, row.alt,
     row.crop_x, row.crop_y, row.crop_w, row.crop_h, next);
 
   return get(info.lastInsertRowid);
@@ -161,10 +163,10 @@ function update(id, input) {
   const row = validate(input);
 
   db.prepare(`
-    UPDATE items SET name = ?, price = ?, category = ?, image = ?, alt = ?,
+    UPDATE items SET name = ?, price = ?, category_id = ?, image = ?, alt = ?,
       crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?, updated_at = datetime('now')
     WHERE id = ?`).run(
-    row.name, row.price, row.category, row.image, row.alt,
+    row.name, row.price, row.category_id, row.image, row.alt,
     row.crop_x, row.crop_y, row.crop_w, row.crop_h, Number(id));
 
   return get(id);
@@ -228,7 +230,7 @@ function availableImages() {
 }
 
 module.exports = {
-  CATEGORIES, ValidationError,
+  ValidationError,
   list, get, create, update, remove, reorder,
   availableImages, resolveImage, validate,
 };

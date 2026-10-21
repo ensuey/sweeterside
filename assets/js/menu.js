@@ -95,7 +95,7 @@
 
         nameEl.textContent  = card.dataset.name;
         priceEl.textContent = 'Php ' + card.dataset.price;
-        tagEl.textContent   = card.dataset.cat === 'drinks' ? 'Frappe' : 'Food';
+        tagEl.textContent   = card.dataset.tag || '';
 
         opener = btn;
         sheet.showModal();

@@ -40,6 +40,22 @@
   <p class="empty-note" id="empty" hidden>
     No items yet. Use <strong>Add item</strong> to create the first one.
   </p>
+
+  <section class="admin__section" aria-labelledby="cats-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="cats-title">Categories</h2>
+        <p class="admin__sub" id="cats-summary">Loading…</p>
+      </div>
+      <button class="btn btn--primary" type="button" id="add-category">Add category</button>
+    </div>
+
+    <ul class="rows" id="cats"></ul>
+
+    <p class="empty-note" id="cats-empty" hidden>
+      No categories yet. Add one before adding menu items.
+    </p>
+  </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -69,10 +85,7 @@
         </div>
         <div class="field">
           <label for="f-category">Category</label>
-          <select id="f-category" name="category" required>
-            <option value="drinks">Frappe Based Drinks</option>
-            <option value="food">Food</option>
-          </select>
+          <select id="f-category" name="category_id" required></select>
           <p class="field__err" data-err="category" hidden></p>
         </div>
       </div>
@@ -140,7 +153,38 @@
   </form>
 </dialog>
 
-<!-- ---------- Delete confirmation ---------- -->
+<!-- ---------- Add / edit category ---------- -->
+<dialog class="modal modal--sm" id="cat-editor" aria-labelledby="cat-editor-title">
+  <form method="dialog" class="modal__form" id="cat-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="cat-editor-title">Add category</h2>
+      <button class="icon-btn" type="button" id="cat-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal__body">
+      <p class="alert" id="cat-error" role="alert" hidden></p>
+
+      <div class="field">
+        <label for="c-name">Name <span class="hint">(section heading on the menu)</span></label>
+        <input id="c-name" name="name" type="text" maxlength="60" required>
+        <p class="field__err" data-err="name" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="c-label">Short label <span class="hint">(filter button; blank uses the name)</span></label>
+        <input id="c-label" name="label" type="text" maxlength="30">
+        <p class="field__err" data-err="label" hidden></p>
+      </div>
+    </div>
+
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="cat-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit" id="cat-save">Add category</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- Delete confirmation (items and categories) ---------- -->
 <dialog class="modal modal--sm" id="confirm" aria-labelledby="confirm-title">
   <div class="modal__head">
     <h2 class="modal__title" id="confirm-title">Delete this item?</h2>

@@ -1,7 +1,7 @@
 # sweeterside
 
 Online menu for **Sweeter Side by Dachel**, plus a password-protected admin
-dashboard for adding, editing and deleting menu items.
+dashboard for adding, editing and deleting menu items and categories.
 
 Customers browse a fast page with search and category filters. Dachel signs in
 at `/admin` and edits the menu; the customer page updates immediately.
@@ -23,8 +23,8 @@ npm start                 # http://127.0.0.1:3000
 - Menu:  <http://127.0.0.1:3000/>
 - Admin: <http://127.0.0.1:3000/admin>
 
-`npm test` runs the test suite (13 tests covering password hashing, CSRF,
-validation and path containment).
+`npm test` runs the test suite (21 tests covering password hashing, CSRF,
+validation, path containment, categories and the database migration).
 
 ### Changing the admin password
 
@@ -39,6 +39,7 @@ server/
   db.js          SQLite schema and the first-run seed
   auth.js        scrypt hashing, sessions, CSRF, login throttling
   menu.js        item validation and CRUD
+  categories.js  category validation, CRUD and ordering
   render.js      builds the customer page from the database
   imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
 admin/           login page and dashboard
