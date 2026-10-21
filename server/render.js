@@ -6,14 +6,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { ROOT } = require('./db');
 const menu = require('./menu');
+const categories = require('./categories');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const OUTPUT = path.join(ROOT, 'index.html');
-
-const SECTIONS = [
-  { key: 'drinks', title: 'Frappe Based Drinks' },
-  { key: 'food', title: 'Food' },
-];
 
 function esc(s) {
   return String(s ?? '')
@@ -26,13 +22,13 @@ function encPath(p) {
   return String(p).split('/').map(encodeURIComponent).join('/');
 }
 
-function cardHtml(item) {
+function cardHtml(item, category) {
   const hasCrop = item.crop_w != null && item.crop_h != null;
   const shotAttrs = hasCrop
     ? ` class="shot" style="--x:${item.crop_x}; --y:${item.crop_y}; --w:${item.crop_w}; --h:${item.crop_h}"`
     : ' class="shot shot--plain"';
 
-  return `      <li class="card" data-cat="${esc(item.category)}" data-name="${esc(item.name)}" data-price="${item.price}">
+  return `      <li class="card" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.price}">
         <div${shotAttrs}>
           <img src="${esc(encPath(item.image))}" alt="${esc(item.alt || item.name)}">
         </div>
@@ -46,45 +42,45 @@ function cardHtml(item) {
       </li>`;
 }
 
-function sectionHtml(section, items) {
-  if (items.length === 0) return '';
-  return `  <section class="section" id="${section.key}" data-cat="${section.key}">
+function sectionHtml(category, items) {
+  const slug = esc(category.slug);
+  return `  <section class="section" id="${slug}" data-cat="${slug}">
     <div class="section__head">
-      <h2 class="section__title">${esc(section.title)}</h2>
+      <h2 class="section__title">${esc(category.name)}</h2>
       <span class="section__rule" aria-hidden="true"></span>
       <span class="section__count"><span data-count>${items.length}</span> items</span>
     </div>
     <ul class="grid">
-${items.map(cardHtml).join('\n\n')}
+${items.map((item) => cardHtml(item, category)).join('\n\n')}
     </ul>
   </section>`;
 }
 
-function chipsHtml(counts) {
-  const total = counts.drinks + counts.food;
-  return `      <button class="chip" type="button" data-filter="all" aria-pressed="true">All <span class="chip__n">${total}</span></button>
-      <button class="chip" type="button" data-filter="drinks" aria-pressed="false">Frappes <span class="chip__n">${counts.drinks}</span></button>
-      <button class="chip" type="button" data-filter="food" aria-pressed="false">Food <span class="chip__n">${counts.food}</span></button>`;
+function chipsHtml(groups, total) {
+  const chip = (filter, label, n, pressed) =>
+    `      <button class="chip" type="button" data-filter="${esc(filter)}" aria-pressed="${pressed}">${esc(label)} <span class="chip__n">${n}</span></button>`;
+  return [
+    chip('all', 'All', total, true),
+    ...groups.map((g) => chip(g.category.slug, g.category.label, g.items.length, false)),
+  ].join('\n');
 }
 
-function buildHtml(items = menu.list()) {
+function buildHtml(items = menu.list(), cats = categories.list()) {
   const template = fs.readFileSync(TEMPLATE, 'utf8');
-  const byCat = {
-    drinks: items.filter((i) => i.category === 'drinks'),
-    food: items.filter((i) => i.category === 'food'),
-  };
 
-  const sections = SECTIONS
-    .map((s) => sectionHtml(s, byCat[s.key]))
-    .filter(Boolean)
-    .join('\n\n');
+  // Empty categories get neither a section nor a filter chip.
+  const groups = cats
+    .map((category) => ({ category, items: items.filter((i) => i.category_id === category.id) }))
+    .filter((g) => g.items.length > 0);
+
+  const sections = groups.map((g) => sectionHtml(g.category, g.items)).join('\n\n');
 
   const empty = items.length === 0
     ? '  <p class="no-items">The menu is being updated. Please check back shortly.</p>'
     : '';
 
   return template
-    .replace('<!--CHIPS-->', chipsHtml({ drinks: byCat.drinks.length, food: byCat.food.length }))
+    .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
     .replace('<!--SECTIONS-->', sections + empty);
 }
 

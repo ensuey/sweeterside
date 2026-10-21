@@ -39,25 +39,89 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   locked_until INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS items (
+CREATE TABLE IF NOT EXISTS categories (
   id         INTEGER PRIMARY KEY,
-  name       TEXT    NOT NULL,
-  price      INTEGER NOT NULL,
-  category   TEXT    NOT NULL CHECK (category IN ('drinks','food')),
-  image      TEXT    NOT NULL,
-  alt        TEXT    NOT NULL DEFAULT '',
-  -- When crop_w is NULL the image is shown whole (object-fit: cover).
-  -- Otherwise it is a sprite window onto a shared menu poster.
-  crop_x     INTEGER,
-  crop_y     INTEGER,
-  crop_w     INTEGER,
-  crop_h     INTEGER,
+  -- slug is fixed at creation: it is the section's anchor (#drinks) and the
+  -- filter key on the customer page, so a rename does not break links.
+  slug       TEXT    NOT NULL UNIQUE,
+  name       TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+  -- Short form for the filter chip and the item popup tag.
+  label      TEXT    NOT NULL,
   position   INTEGER NOT NULL DEFAULT 0,
   created_at TEXT    NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
-CREATE INDEX IF NOT EXISTS idx_items_order ON items(category, position, id);
 `);
+
+const ITEMS_TABLE = (name) => `
+CREATE TABLE ${name} (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  price       INTEGER NOT NULL,
+  -- RESTRICT: a category cannot be deleted while items still use it.
+  category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+  image       TEXT    NOT NULL,
+  alt         TEXT    NOT NULL DEFAULT '',
+  -- When crop_w is NULL the image is shown whole (object-fit: cover).
+  -- Otherwise it is a sprite window onto a shared menu poster.
+  crop_x      INTEGER,
+  crop_y      INTEGER,
+  crop_w      INTEGER,
+  crop_h      INTEGER,
+  position    INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)`;
+
+/* The original two categories, as they appear on the printed posters. */
+const DEFAULT_CATEGORIES = [
+  ['drinks', 'Frappe Based Drinks', 'Frappes'],
+  ['food', 'Food', 'Food'],
+];
+
+function insertDefaultCategories() {
+  const insert = db.prepare(
+    'INSERT OR IGNORE INTO categories (slug, name, label, position) VALUES (?, ?, ?, ?)');
+  DEFAULT_CATEGORIES.forEach((row, i) => insert.run(...row, i));
+}
+
+function transaction(fn) {
+  db.exec('BEGIN');
+  try {
+    const out = fn();
+    db.exec('COMMIT');
+    return out;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/* Databases created before categories were editable store items.category as
+   'drinks' | 'food' behind a CHECK constraint. SQLite cannot drop a CHECK, so
+   the table is rebuilt with a category_id foreign key instead. */
+function migrateItems() {
+  const cols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
+  if (cols.length === 0) {
+    db.exec(ITEMS_TABLE('items'));
+  } else if (cols.includes('category') && !cols.includes('category_id')) {
+    transaction(() => {
+      insertDefaultCategories();
+      db.exec(ITEMS_TABLE('items_new'));
+      db.exec(`
+        INSERT INTO items_new (id, name, price, category_id, image, alt,
+                               crop_x, crop_y, crop_w, crop_h, position, created_at, updated_at)
+        SELECT i.id, i.name, i.price, c.id, i.image, i.alt,
+               i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position, i.created_at, i.updated_at
+        FROM items i JOIN categories c ON c.slug = i.category`);
+      db.exec('DROP TABLE items');
+      db.exec('ALTER TABLE items_new RENAME TO items');
+    });
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_items_order ON items(category_id, position, id)');
+}
+
+migrateItems();
 
 /* ---------- First-run seed: the nine items from the printed posters ---------- */
 
@@ -85,22 +149,22 @@ const SEED = [
     'Bacon and Egg Sandwich — layered sandwich with egg, bacon and avocado in a takeaway box', 690, 335, 270, 270],
 ];
 
+/* Seeds only a brand-new database. Once the admin has categories of their
+   own, an empty menu stays empty rather than refilling itself on restart. */
 function seedIfEmpty() {
-  const { n } = db.prepare('SELECT COUNT(*) AS n FROM items').get();
-  if (n > 0) return false;
+  const { items } = db.prepare('SELECT COUNT(*) AS items FROM items').get();
+  const { cats } = db.prepare('SELECT COUNT(*) AS cats FROM categories').get();
+  if (items > 0 || cats > 0) return false;
 
+  // SEED rows name their category by slug.
   const insert = db.prepare(`
-    INSERT INTO items (name, price, category, image, alt, crop_x, crop_y, crop_w, crop_h, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+    INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position)
+    VALUES (?, ?, (SELECT id FROM categories WHERE slug = ?), ?, ?, ?, ?, ?, ?, ?)`);
 
-  db.exec('BEGIN');
-  try {
+  transaction(() => {
+    insertDefaultCategories();
     SEED.forEach((row, i) => insert.run(...row, i));
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+  });
   return true;
 }
 
@@ -109,4 +173,4 @@ function pruneSessions() {
   db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
 }
 
-module.exports = { db, seedIfEmpty, pruneSessions, DB_PATH, ROOT };
+module.exports = { db, seedIfEmpty, pruneSessions, transaction, DB_PATH, ROOT };

@@ -13,9 +13,15 @@ const fs = require('node:fs');
 process.env.DB_PATH = path.join(
   fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-test-')), 'test.db');
 
+const { db, seedIfEmpty } = require('../server/db');
 const auth = require('../server/auth');
 const menu = require('../server/menu');
+const categories = require('../server/categories');
+const render = require('../server/render');
 const imagesize = require('../server/imagesize');
+
+seedIfEmpty();
+const DRINKS_ID = db.prepare("SELECT id FROM categories WHERE slug = 'drinks'").get().id;
 
 /* ---------------------------- passwords ---------------------------- */
 
@@ -83,7 +89,7 @@ test('a real asset resolves and reports its size', () => {
 /* ---------------------------- validation ---------------------------- */
 
 const base = {
-  name: 'Test Item', price: 100, category: 'drinks',
+  name: 'Test Item', price: 100, category_id: DRINKS_ID,
   image: 'assets/Menu Frappe.jpg', alt: 'x',
 };
 
@@ -111,7 +117,8 @@ test('bad prices are rejected', () => {
 });
 
 test('bad categories and empty names are rejected', () => {
-  assert.ok(errorsFor({ ...base, category: 'desserts' }).category);
+  assert.ok(errorsFor({ ...base, category_id: 99999 }).category);
+  assert.ok(errorsFor({ ...base, category_id: 'drinks' }).category);
   assert.ok(errorsFor({ ...base, name: '   ' }).name);
   assert.ok(errorsFor({ ...base, name: 'x'.repeat(81) }).name);
 });
@@ -124,6 +131,132 @@ test('crop must be complete and inside the image', () => {
 
   const ok = menu.validate({ ...base, crop_x: 113, crop_y: 530, crop_w: 184, crop_h: 245 });
   assert.strictEqual(ok.crop_w, 184);
+});
+
+/* ---------------------------- categories ---------------------------- */
+
+function categoryErrors(input, id) {
+  try {
+    categories.validate(input, id);
+    return null;
+  } catch (err) {
+    assert.ok(err instanceof menu.ValidationError);
+    return err.errors;
+  }
+}
+
+test('the seed creates the two poster categories with every item in one', () => {
+  const list = categories.list();
+  assert.deepStrictEqual(list.slice(0, 2).map((c) => c.slug), ['drinks', 'food']);
+  assert.strictEqual(list[0].item_count + list[1].item_count, 9);
+});
+
+test('category names are required, bounded and unique ignoring case', () => {
+  assert.ok(categoryErrors({ name: '  ' }).name);
+  assert.ok(categoryErrors({ name: 'x'.repeat(61) }).name);
+  assert.ok(categoryErrors({ name: 'FOOD' }).name, 'case-insensitive clash');
+  assert.ok(categoryErrors({ name: 'Desserts', label: 'x'.repeat(31) }).label);
+
+  const food = categories.list().find((c) => c.slug === 'food');
+  assert.strictEqual(categoryErrors({ name: 'Food' }, food.id), null, 'own name is not a clash');
+  assert.strictEqual(categories.validate({ name: 'Desserts' }).label, 'Desserts',
+    'blank label falls back to the name');
+});
+
+test('slugs are unique and avoid ids the page already uses', () => {
+  assert.strictEqual(categories.slugify('Food'), 'food-2');
+  assert.strictEqual(categories.slugify('Menu'), 'menu-2');
+  assert.strictEqual(categories.slugify('All'), 'all-2');
+  assert.strictEqual(categories.slugify('Crème Brûlée!'), 'creme-brulee');
+  assert.strictEqual(categories.slugify('☕☕'), 'category');
+});
+
+test('a category can be created, renamed and deleted; its slug never changes', () => {
+  const cat = categories.create({ name: 'Desserts', label: 'Sweets' });
+  assert.strictEqual(cat.slug, 'desserts');
+  assert.strictEqual(cat.item_count, 0);
+
+  const renamed = categories.update(cat.id, { name: 'Cakes', label: '' });
+  assert.strictEqual(renamed.name, 'Cakes');
+  assert.strictEqual(renamed.label, 'Cakes');
+  assert.strictEqual(renamed.slug, 'desserts', 'renaming must not break #desserts links');
+
+  assert.strictEqual(categories.remove(cat.id), true);
+  assert.strictEqual(categories.get(cat.id), null);
+  assert.strictEqual(categories.remove(cat.id), false);
+  assert.strictEqual(categories.update(cat.id, { name: 'Gone' }), null);
+});
+
+test('a category with items cannot be deleted', () => {
+  assert.throws(() => categories.remove(DRINKS_ID), (err) => err.status === 409);
+  assert.ok(categories.get(DRINKS_ID), 'still there');
+  assert.ok(menu.list().some((i) => i.category_id === DRINKS_ID), 'items untouched');
+});
+
+test('reordering categories changes the order of the customer menu', () => {
+  const ids = categories.list().map((c) => c.id);
+  const reversed = [...ids].reverse();
+  categories.reorder(reversed);
+  try {
+    assert.deepStrictEqual(categories.list().map((c) => c.id), reversed);
+    const html = render.buildHtml();
+    assert.ok(html.indexOf('id="food"') < html.indexOf('id="drinks"'));
+    assert.throws(() => categories.reorder(ids.slice(1)), (err) => err.status === 409,
+      'a partial list is refused');
+  } finally {
+    categories.reorder(ids);
+  }
+});
+
+test('the customer page escapes category names and hides empty categories', () => {
+  const cat = categories.create({ name: '<b>Empty</b>' });
+  try {
+    const html = render.buildHtml();
+    assert.doesNotMatch(html, /<b>Empty<\/b>/);
+    assert.doesNotMatch(html, /data-filter="b-empty-b"/, 'no chip for an empty category');
+
+    const item = menu.create({ ...base, category_id: cat.id });
+    const withItem = render.buildHtml();
+    assert.match(withItem, /&lt;b&gt;Empty&lt;\/b&gt;/);
+    assert.match(withItem, /data-filter="b-empty-b"/);
+    menu.remove(item.id);
+  } finally {
+    categories.remove(cat.id);
+  }
+});
+
+test('a database from before editable categories is migrated with its items', () => {
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-migrate-'));
+  const dbPath = path.join(dir, 'old.db');
+
+  // Build the old schema by hand, exactly as the previous release created it.
+  const { DatabaseSync } = require('node:sqlite');
+  const old = new DatabaseSync(dbPath);
+  old.exec(`CREATE TABLE items (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER NOT NULL,
+    category TEXT NOT NULL CHECK (category IN ('drinks','food')),
+    image TEXT NOT NULL, alt TEXT NOT NULL DEFAULT '',
+    crop_x INTEGER, crop_y INTEGER, crop_w INTEGER, crop_h INTEGER,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO items (id, name, price, category, image, position) VALUES
+      (7, 'Old Frappe', 120, 'drinks', 'assets/Menu Frappe.jpg', 0),
+      (8, 'Old Pasta', 130, 'food', 'assets/Meals.jpg', 0);`);
+  old.close();
+
+  // Open it with the current code in a fresh process (db.js migrates on load).
+  const out = execFileSync(process.execPath, ['--no-warnings', '-e', `
+    const { db } = require(${JSON.stringify(path.join(__dirname, '..', 'server', 'db'))});
+    console.log(JSON.stringify(db.prepare(
+      'SELECT i.id, i.name, c.slug FROM items i JOIN categories c ON c.id = i.category_id ORDER BY i.id'
+    ).all()));`], { env: { ...process.env, DB_PATH: dbPath }, encoding: 'utf8' });
+
+  assert.deepStrictEqual(JSON.parse(out), [
+    { id: 7, name: 'Old Frappe', slug: 'drinks' },
+    { id: 8, name: 'Old Pasta', slug: 'food' },
+  ]);
 });
 
 /* ---------------------------- image sniffing ---------------------------- */

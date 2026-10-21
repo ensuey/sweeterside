@@ -11,6 +11,7 @@ const { seedIfEmpty } = require('./db');
 const { ROOT, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const auth = require('./auth');
 const menu = require('./menu');
+const categories = require('./categories');
 const render = require('./render');
 const imagesize = require('./imagesize');
 
@@ -332,6 +333,41 @@ async function route(req, res) {
     if (method === 'DELETE') {
       if (!requireApiAuth(req, res, { csrf: true })) return;
       if (!menu.remove(id)) return sendJson(res, 404, { error: 'That item no longer exists.' });
+      return afterMutation(res, 200, { ok: true });
+    }
+  }
+
+  /* ---- categories API (all authenticated) ---- */
+  if (pathname === '/api/categories' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { categories: categories.list() });
+  }
+
+  if (pathname === '/api/categories' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const category = categories.create(await readJson(req));
+    return afterMutation(res, 201, { category });
+  }
+
+  if (pathname === '/api/categories/reorder' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const body = await readJson(req);
+    if (!Array.isArray(body.ids)) return sendJson(res, 400, { error: 'Expected an "ids" array.' });
+    return afterMutation(res, 200, { categories: categories.reorder(body.ids) });
+  }
+
+  const categoryMatch = pathname.match(/^\/api\/categories\/(\d+)$/);
+  if (categoryMatch) {
+    const id = Number(categoryMatch[1]);
+    if (method === 'PUT' || method === 'PATCH') {
+      if (!requireApiAuth(req, res, { csrf: true })) return;
+      const category = categories.update(id, await readJson(req));
+      if (!category) return sendJson(res, 404, { error: 'That category no longer exists.' });
+      return afterMutation(res, 200, { category });
+    }
+    if (method === 'DELETE') {
+      if (!requireApiAuth(req, res, { csrf: true })) return;
+      if (!categories.remove(id)) return sendJson(res, 404, { error: 'That category no longer exists.' });
       return afterMutation(res, 200, { ok: true });
     }
   }
