@@ -7,6 +7,7 @@ const path = require('node:path');
 const { ROOT } = require('./db');
 const menu = require('./menu');
 const categories = require('./categories');
+const orders = require('./orders');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const OUTPUT = path.join(ROOT, 'index.html');
@@ -28,7 +29,7 @@ function cardHtml(item, category) {
     ? ` class="shot" style="--x:${item.crop_x}; --y:${item.crop_y}; --w:${item.crop_w}; --h:${item.crop_h}"`
     : ' class="shot shot--plain"';
 
-  return `      <li class="card" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.price}">
+  return `      <li class="card" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.price}">
         <div${shotAttrs}>
           <img src="${esc(encPath(item.image))}" alt="${esc(item.alt || item.name)}">
         </div>
@@ -36,6 +37,7 @@ function cardHtml(item, category) {
           <h3 class="card__name">${esc(item.name)}</h3>
           <div class="card__foot">
             <span class="price"><small>Php</small> ${item.price}</span>
+            <button class="card__add" type="button" data-add>Add<span class="vh"> ${esc(item.name)} to cart</span></button>
             <button class="card__btn" type="button">View ${esc(item.name)}</button>
           </div>
         </div>
@@ -80,6 +82,7 @@ function buildHtml(items = menu.list(), cats = categories.list()) {
     : '';
 
   return template
+    .replace('<!--DELIVERY_FEE-->', String(orders.getDeliveryFee()))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
     .replace('<!--SECTIONS-->', sections + empty);
 }

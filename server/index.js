@@ -12,6 +12,7 @@ const { ROOT, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const auth = require('./auth');
 const menu = require('./menu');
 const categories = require('./categories');
+const orders = require('./orders');
 const render = require('./render');
 const imagesize = require('./imagesize');
 
@@ -115,6 +116,27 @@ function clientIp(req) {
   const fwd = req.headers['x-forwarded-for'];
   if (fwd) return String(fwd).split(',')[0].trim();
   return req.socket.remoteAddress || 'unknown';
+}
+
+/* Placing an order is the one public write. Cap how many orders one address
+   can place, so a script cannot flood the kitchen. Only placed orders count:
+   a customer fixing a typo in the form is never locked out. */
+const ORDER_LIMIT = 5;
+const ORDER_WINDOW_MS = 10 * 60 * 1000;
+const orderLog = new Map(); // ip -> timestamps of placed orders
+
+function orderRateLimited(ip) {
+  const now = Date.now();
+  const recent = (orderLog.get(ip) || []).filter((t) => now - t < ORDER_WINDOW_MS);
+  if (recent.length) orderLog.set(ip, recent);
+  else orderLog.delete(ip);
+  return recent.length >= ORDER_LIMIT;
+}
+
+function recordOrder(ip) {
+  const list = orderLog.get(ip) || [];
+  list.push(Date.now());
+  orderLog.set(ip, list);
 }
 
 /* ---------------------------- static ---------------------------- */
@@ -372,6 +394,61 @@ async function route(req, res) {
     }
   }
 
+  /* ---- orders: placing is public, everything else is admin-only ---- */
+  if (pathname === '/api/orders' && method === 'POST') {
+    // Requiring JSON means a plain HTML form on another site cannot post here.
+    if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
+      return sendJson(res, 415, { error: 'Send the order as JSON.' });
+    }
+    const ip = clientIp(req);
+    if (orderRateLimited(ip)) {
+      return sendJson(res, 429, {
+        error: 'You have placed several orders in the last few minutes. Please call us to add more.',
+      });
+    }
+    const order = orders.create(await readJson(req));
+    recordOrder(ip);
+    console.log(`[order] #${order.id} Php ${order.total} — ${order.items.length} line(s)`);
+    return sendJson(res, 201, {
+      order: {
+        id: order.id, items: order.items, subtotal: order.subtotal,
+        delivery_fee: order.delivery_fee, total: order.total,
+        cash: order.cash, change_due: order.change_due,
+      },
+    });
+  }
+
+  if (pathname === '/api/orders' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, {
+      orders: orders.list(url.searchParams.get('show') || 'active'),
+      counts: orders.counts(),
+    });
+  }
+
+  const orderMatch = pathname.match(/^\/api\/orders\/(\d+)$/);
+  if (orderMatch && (method === 'PATCH' || method === 'PUT')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const body = await readJson(req);
+    const order = orders.setStatus(Number(orderMatch[1]), String(body.status ?? ''));
+    if (!order) return sendJson(res, 404, { error: 'That order no longer exists.' });
+    return sendJson(res, 200, { order });
+  }
+
+  /* ---- settings ---- */
+  if (pathname === '/api/settings' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { delivery_fee: orders.getDeliveryFee() });
+  }
+
+  if (pathname === '/api/settings' && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const body = await readJson(req);
+    const fee = orders.setDeliveryFee(body.delivery_fee);
+    // The fee is printed into the customer page, so rebuild it.
+    return afterMutation(res, 200, { delivery_fee: fee });
+  }
+
   /* ---- images ---- */
   if (pathname === '/api/images' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
@@ -413,6 +490,7 @@ const server = http.createServer((req, res) => {
     }
     const status = err.status || 500;
     if (status >= 500) console.error('[error]', err);
+    if (status < 500 && err.body) return sendJson(res, status, err.body);
     sendJson(res, status, { error: status >= 500 ? 'Something went wrong on the server.' : err.message });
   });
 });

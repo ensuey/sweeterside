@@ -25,6 +25,31 @@
 </header>
 
 <main class="admin">
+  <section class="orders" aria-labelledby="orders-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="orders-title">Orders</h2>
+        <p class="admin__sub" id="orders-summary">Loading…</p>
+      </div>
+      <form class="fee" id="fee-form" novalidate>
+        <div class="field">
+          <label for="fee">Delivery fee (Php)</label>
+          <input id="fee" name="delivery_fee" type="number" min="0" max="10000" step="1" inputmode="numeric" required>
+        </div>
+        <button class="btn btn--ghost" type="submit" id="fee-save">Save fee</button>
+      </form>
+    </div>
+    <p class="field__err fee__err" id="fee-err" hidden></p>
+
+    <div class="tabs" role="group" aria-label="Which orders to show">
+      <button class="tab" type="button" data-show="active" aria-pressed="true">To do <span class="tab__n" id="n-active">0</span></button>
+      <button class="tab" type="button" data-show="finished" aria-pressed="false">Finished <span class="tab__n" id="n-finished">0</span></button>
+    </div>
+
+    <ul class="orders__list" id="orders"></ul>
+    <p class="empty-note" id="orders-empty" hidden></p>
+  </section>
+
   <div class="admin__head">
     <div>
       <h2 class="admin__title">Items</h2>

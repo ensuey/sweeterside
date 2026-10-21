@@ -18,6 +18,7 @@ const auth = require('../server/auth');
 const menu = require('../server/menu');
 const categories = require('../server/categories');
 const render = require('../server/render');
+const orders = require('../server/orders');
 const imagesize = require('../server/imagesize');
 
 seedIfEmpty();
@@ -257,6 +258,160 @@ test('a database from before editable categories is migrated with its items', ()
     { id: 7, name: 'Old Frappe', slug: 'drinks' },
     { id: 8, name: 'Old Pasta', slug: 'food' },
   ]);
+});
+
+/* ---------------------------- orders ---------------------------- */
+
+function menuItem(name) {
+  return menu.list().find((i) => i.name === name);
+}
+
+function orderInput(over = {}) {
+  const matcha = menuItem('Matcha Frappe');      // Php 129
+  const sandwich = menuItem('Bacon and Egg Sandwich'); // Php 85
+  return {
+    name: '  Juan   dela Cruz ', phone: '0917 123-4567', address: '12 Mabini St, Brgy. Uno',
+    cash: 500,
+    items: [{ id: matcha.id, qty: 2 }, { id: sandwich.id, qty: 1 }],
+    expected_total: 129 * 2 + 85 + orders.getDeliveryFee(),
+    ...over,
+  };
+}
+
+function orderErrors(input) {
+  try {
+    orders.create(input);
+    return null;
+  } catch (err) {
+    assert.ok(err instanceof menu.ValidationError, `expected a ValidationError, got ${err.message}`);
+    return err.errors;
+  }
+}
+
+test('the delivery fee defaults to zero and only takes whole pesos in range', () => {
+  assert.strictEqual(orders.getDeliveryFee(), 0);
+  for (const bad of ['', null, 'abc', 1.5, -1, 10001]) {
+    assert.throws(() => orders.setDeliveryFee(bad), menu.ValidationError, `should reject ${bad}`);
+  }
+  assert.strictEqual(orders.setDeliveryFee('45'), 45);
+  assert.strictEqual(orders.getDeliveryFee(), 45);
+  assert.match(render.buildHtml(), /data-delivery-fee="45"/, 'the page carries the fee');
+});
+
+test('an order is priced from the database, not from the browser', () => {
+  orders.setDeliveryFee(50);
+  const order = orders.create(orderInput({
+    // Prices sent by the browser are ignored outright.
+    items: orderInput().items.map((l) => ({ ...l, price: 1 })),
+    cash: 1000,
+  }));
+  assert.strictEqual(order.subtotal, 129 * 2 + 85);
+  assert.strictEqual(order.delivery_fee, 50);
+  assert.strictEqual(order.total, 393);
+  assert.strictEqual(order.change_due, 1000 - 393);
+  assert.strictEqual(order.customer_name, 'Juan dela Cruz', 'whitespace tidied');
+  assert.strictEqual(order.phone, '09171234567', 'spaces and dashes removed');
+  assert.strictEqual(order.status, 'new');
+  assert.deepStrictEqual(order.items.map((l) => [l.name, l.qty, l.price]),
+    [['Matcha Frappe', 2, 129], ['Bacon and Egg Sandwich', 1, 85]]);
+});
+
+test('an order whose total the customer did not see is refused with the new prices', () => {
+  orders.setDeliveryFee(60);
+  assert.throws(() => orders.create(orderInput({ expected_total: 129 * 2 + 85 + 50 })), (err) => {
+    assert.strictEqual(err.status, 409);
+    assert.strictEqual(err.body.quote.delivery_fee, 60);
+    assert.strictEqual(err.body.quote.total, 129 * 2 + 85 + 60);
+    return true;
+  });
+});
+
+test('an item removed from the menu is reported, not silently dropped', () => {
+  const temp = menu.create({ ...base, name: 'Soon Gone' });
+  const input = orderInput({ items: [{ id: temp.id, qty: 1 }, ...orderInput().items] });
+  menu.remove(temp.id);
+  assert.throws(() => orders.create(input), (err) => {
+    assert.strictEqual(err.status, 409);
+    assert.deepStrictEqual(err.body.quote.unavailable, [temp.id]);
+    return true;
+  });
+});
+
+test('order details are required and checked', () => {
+  orders.setDeliveryFee(0);
+  const e = orderErrors(orderInput({ name: ' ', phone: '12', address: '', cash: '' }));
+  assert.ok(e.name && e.phone && e.address && e.cash);
+
+  assert.ok(orderErrors(orderInput({ items: [] })).items, 'empty cart');
+  assert.ok(orderErrors(orderInput({ items: 'lots' })).items, 'not an array');
+  assert.ok(orderErrors(orderInput({ items: [{ id: 1, qty: 0 }] })).items, 'zero quantity');
+  assert.ok(orderErrors(orderInput({ items: [{ id: 1, qty: 51 }] })).items, 'too many of one item');
+  assert.ok(orderErrors(orderInput({ cash: 12.5 })).cash, 'cash must be whole pesos');
+
+  const short = orderErrors(orderInput({ cash: 100 }));
+  assert.match(short.cash, /Php 343/, 'the error names the total');
+});
+
+test('order status moves through the queue', () => {
+  const order = orders.create(orderInput({ expected_total: 343 }));
+  assert.ok(orders.list('active').some((o) => o.id === order.id));
+
+  assert.strictEqual(orders.setStatus(order.id, 'completed').status, 'completed');
+  assert.ok(!orders.list('active').some((o) => o.id === order.id));
+  assert.ok(orders.list('finished').some((o) => o.id === order.id));
+
+  assert.throws(() => orders.setStatus(order.id, 'eaten'), menu.ValidationError);
+  assert.strictEqual(orders.setStatus(999999, 'new'), null);
+  assert.throws(() => orders.list('everything'), (err) => err.status === 400);
+});
+
+test('deleting a menu item keeps past orders of it', () => {
+  const temp = menu.create({ ...base, name: 'Limited Frappe', price: 150 });
+  const order = orders.create(orderInput({
+    items: [{ id: temp.id, qty: 1 }], expected_total: 150, cash: 150,
+  }));
+  menu.remove(temp.id);
+  const kept = orders.get(order.id);
+  assert.deepStrictEqual(kept.items.map((l) => [l.item_id, l.name, l.price]), [[null, 'Limited Frappe', 150]]);
+  assert.strictEqual(kept.change_due, 0);
+});
+
+test('the order endpoints: public placing, admin-only reading', async () => {
+  const { server } = require('../server/index');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const place = (body, headers = { 'Content-Type': 'application/json' }) =>
+      fetch(`${url}/api/orders`, { method: 'POST', headers, body: JSON.stringify(body) });
+
+    const ok = await place(orderInput({ expected_total: 343 }));
+    assert.strictEqual(ok.status, 201);
+    const { order } = await ok.json();
+    assert.strictEqual(order.total, 343);
+    assert.strictEqual(order.change_due, 157);
+    assert.strictEqual(order.phone, undefined, 'the reply does not echo personal details');
+
+    const bad = await place(orderInput({ cash: 1 }));
+    assert.strictEqual(bad.status, 422);
+    assert.ok((await bad.json()).fields.cash);
+
+    const stale = await place(orderInput({ expected_total: 1 }));
+    assert.strictEqual(stale.status, 409);
+    assert.strictEqual((await stale.json()).quote.total, 343);
+
+    const form = await place(orderInput(), { 'Content-Type': 'text/plain' });
+    assert.strictEqual(form.status, 415, 'a cross-site form post is refused');
+
+    // Four more placed orders reach the limit of five in ten minutes.
+    for (let i = 0; i < 4; i++) assert.strictEqual((await place(orderInput({ expected_total: 343 }))).status, 201);
+    assert.strictEqual((await place(orderInput({ expected_total: 343 }))).status, 429);
+
+    assert.strictEqual((await fetch(`${url}/api/orders`)).status, 401, 'orders list needs sign-in');
+    assert.strictEqual((await fetch(`${url}/api/orders/1`, { method: 'PATCH' })).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/settings`, { method: 'PUT' })).status, 401);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 /* ---------------------------- image sniffing ---------------------------- */
