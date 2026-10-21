@@ -36,6 +36,13 @@ a { color: var(--navy); }
   outline: 3px solid var(--navy); outline-offset: 2px; border-radius: var(--r-sm);
 }
 
+/* Visually hidden, still read by screen readers. */
+.vh {
+  position: absolute !important; width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
 /* ---------------- buttons ---------------- */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: .4em;
@@ -149,6 +156,64 @@ a { color: var(--navy); }
 .admin__sub { margin: .2rem 0 0; color: var(--ink-soft); font-size: .9375rem; }
 .empty-note { color: var(--ink-soft); text-align: center; padding: 3rem 1rem; }
 .admin__section { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--line); }
+
+/* ---------------- orders ---------------- */
+.orders { margin-bottom: 3rem; padding-bottom: 2rem; border-bottom: 1px solid var(--line); }
+.fee { display: flex; align-items: flex-end; gap: .6rem; flex-wrap: wrap; }
+.fee .field { width: 9rem; }
+.fee .fee__page { width: 15rem; }
+@media (max-width: 520px) { .fee .field, .fee .fee__page { width: 100%; } }
+.fee__err { margin: -1rem 0 1rem; text-align: right; }
+
+.tabs { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.tab {
+  min-height: 40px; padding: 0 1rem; cursor: pointer;
+  display: inline-flex; align-items: center; gap: .45rem;
+  font: 600 .9375rem "Nunito", sans-serif; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-full);
+}
+.tab:hover { background: var(--cream); }
+.tab[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+.tab__n { font-size: .8125rem; opacity: .75; font-variant-numeric: tabular-nums; }
+
+.orders__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; }
+@media (min-width: 820px) { .orders__list { grid-template-columns: 1fr 1fr; } }
+
+.order {
+  display: flex; flex-direction: column; gap: .8rem; padding: 1rem;
+  background: var(--surface); border: 1px solid var(--line);
+  border-left: 5px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
+}
+.order[data-status="new"]        { border-left-color: var(--coral-ink); }
+.order[data-status="preparing"]  { border-left-color: #C98A1B; }
+.order[data-status="delivering"] { border-left-color: var(--navy); }
+.order[data-status="completed"]  { border-left-color: var(--ok); }
+.order[data-status="cancelled"]  { opacity: .7; }
+
+.order__head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.order__id { font: 600 1.15rem "Fredoka", sans-serif; }
+.order__time { color: var(--ink-soft); font-size: .875rem; flex: 1; }
+.order__status { min-height: 38px; padding: .3rem .6rem; font: inherit; font-size: .875rem;
+  color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-sm); }
+
+.order__who { display: flex; flex-direction: column; gap: .15rem; }
+.order__name { font-weight: 700; overflow-wrap: anywhere; }
+.order__phone { font-weight: 600; font-variant-numeric: tabular-nums; }
+.order__addr { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-soft); }
+
+.order__items { list-style: none; margin: 0; padding: .6rem 0; display: flex; flex-direction: column; gap: .25rem;
+  border-block: 1px dashed var(--line); }
+.order__items li { display: flex; justify-content: space-between; gap: 1rem; }
+.order__items span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.order__sum { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; font-size: .9375rem; }
+.order__sum dt { color: var(--ink-soft); }
+.order__sum dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.order__sum .is-total { color: var(--ink); font-weight: 700; }
+.order__change {
+  grid-column: 1 / -1; margin-top: .35rem; padding: .5rem .7rem; border-radius: var(--r-sm);
+  background: #EEF6F0; color: #1F5A3A; font-weight: 700;
+}
 .group + .group { margin-top: 2rem; }
 .group__title {
   font-size: 1.05rem; margin-bottom: .7rem;

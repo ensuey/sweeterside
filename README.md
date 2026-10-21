@@ -3,8 +3,9 @@
 Online menu for **Sweeter Side by Dachel**, plus a password-protected admin
 dashboard for adding, editing and deleting menu items and categories.
 
-Customers browse a fast page with search and category filters. Dachel signs in
-at `/admin` and edits the menu; the customer page updates immediately.
+Customers browse a fast page with search and category filters, add items to a
+cart and place a cash-on-delivery order. Dachel signs in at `/admin` to see
+incoming orders and edit the menu; the customer page updates immediately.
 
 ## Requirements
 
@@ -23,8 +24,8 @@ npm start                 # http://127.0.0.1:3000
 - Menu:  <http://127.0.0.1:3000/>
 - Admin: <http://127.0.0.1:3000/admin>
 
-`npm test` runs the test suite (21 tests covering password hashing, CSRF,
-validation, path containment, categories and the database migration).
+`npm test` runs the test suite (31 tests covering password hashing, CSRF,
+validation, path containment, categories, orders and the database migration).
 
 ### Changing the admin password
 
@@ -40,6 +41,7 @@ server/
   auth.js        scrypt hashing, sessions, CSRF, login throttling
   menu.js        item validation and CRUD
   categories.js  category validation, CRUD and ordering
+  orders.js      delivery orders, pricing and the delivery fee
   render.js      builds the customer page from the database
   imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
 admin/           login page and dashboard
@@ -69,6 +71,53 @@ Run `npm run build` to regenerate it by hand.
 This means you can still deploy the folder as a static site (GitHub Pages and
 similar) and get a correct menu; you just will not have the admin there, because
 static hosting cannot run the server.
+
+## How ordering works
+
+Each card has an **Add** button. The cart is kept in the customer's browser,
+so it survives a reload. At checkout the customer gives their full name, phone
+number, delivery address and the cash they will pay with — all four are
+required — and the page shows the subtotal, delivery fee, total and their
+change as they type.
+
+### Sending the order on Messenger
+
+Once the order is placed, the page copies a summary of it (items, totals,
+cash, change, name, phone and address) to the customer's clipboard and opens
+Messenger to the shop's page, `m.me/<page>`. The customer pastes and sends.
+
+Two limits worth knowing:
+
+- **Messenger cannot be pre-filled.** Facebook's `m.me` links open a chat but
+  do not accept message text, so the customer has to paste it. The steps on
+  screen say so.
+- **Browsers may block the automatic open.** Opening a new tab is only allowed
+  shortly after a tap; the order request comes first, so some browsers
+  (notably Safari on iPhone) block it. The confirmation then shows a large
+  **Send order on Messenger** button, which always works.
+
+The page is set in the admin next to the delivery fee (a username or a
+facebook.com link both work). It defaults to `SweeterSideByDachel`; clear the
+field to turn the Messenger step off.
+
+Orders appear at the top of the admin, oldest first, with the change to bring.
+The page checks for new ones every 20 seconds and shows the count in the tab
+title. Move each order through **New → Preparing → Out for delivery →
+Completed** (or **Cancelled**). The **delivery fee** is set next to the orders
+list and applies to the menu straight away.
+
+What the server does not trust:
+
+- **Prices.** The browser sends only item ids and quantities. Prices, the fee
+  and the total are recomputed from the database.
+- **A stale page.** The browser also sends the total the customer saw. If the
+  menu or the fee changed since, the order is refused with the new prices, and
+  the cart updates so the customer can check before placing it again.
+- **Volume.** Each IP address can place 5 orders per 10 minutes. The endpoint
+  only accepts JSON, so a form on another site cannot post to it.
+
+Ordering needs the server running. On static hosting the menu still shows,
+but placing an order fails with a connection message.
 
 ## How the photos work
 

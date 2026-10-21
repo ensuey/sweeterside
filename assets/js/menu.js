@@ -96,6 +96,7 @@
         nameEl.textContent  = card.dataset.name;
         priceEl.textContent = 'Php ' + card.dataset.price;
         tagEl.textContent   = card.dataset.tag || '';
+        sheet.dataset.id    = card.dataset.id;  // read by cart.js's "Add to cart"
 
         opener = btn;
         sheet.showModal();

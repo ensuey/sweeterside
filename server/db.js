@@ -51,6 +51,41 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at TEXT    NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- Amounts are whole pesos, copied at order time so later price changes do
+-- not rewrite what the customer was charged.
+CREATE TABLE IF NOT EXISTS orders (
+  id            INTEGER PRIMARY KEY,
+  customer_name TEXT    NOT NULL,
+  phone         TEXT    NOT NULL,
+  address       TEXT    NOT NULL,
+  subtotal      INTEGER NOT NULL,
+  delivery_fee  INTEGER NOT NULL,
+  total         INTEGER NOT NULL,
+  cash          INTEGER NOT NULL,
+  change_due    INTEGER NOT NULL,
+  status        TEXT    NOT NULL DEFAULT 'new'
+                CHECK (status IN ('new','preparing','delivering','completed','cancelled')),
+  created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, id);
+
+CREATE TABLE IF NOT EXISTS order_items (
+  id       INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  -- SET NULL: deleting a menu item must not delete past orders of it.
+  item_id  INTEGER REFERENCES items(id) ON DELETE SET NULL,
+  name     TEXT    NOT NULL,
+  price    INTEGER NOT NULL,
+  qty      INTEGER NOT NULL CHECK (qty > 0)
+);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 `);
 
 const ITEMS_TABLE = (name) => `
