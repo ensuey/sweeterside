@@ -1,4 +1,4 @@
-/* Sweeter Side — cart and delivery checkout.
+/* Sweeter Side — cart and checkout (delivery, pick-up or dine-in).
    Adds an "Add" button to every card, keeps the cart in this browser, and
    posts the order to the server. The server reprices everything; the totals
    shown here are only what the customer sees before confirming. */
@@ -6,7 +6,9 @@
   'use strict';
 
   var STORAGE_KEY = 'sweeterside-cart-v1';
+  var TYPE_KEY = 'sweeterside-order-type';
   var MAX_QTY = 50;
+  var SLOT_MINUTES = 15;
 
   var dialog = document.getElementById('cart');
   if (!dialog || typeof dialog.showModal !== 'function' || !window.fetch) return;
@@ -24,8 +26,13 @@
     catalog[card.dataset.id] = { name: card.dataset.name, price: Number(card.dataset.price) };
   });
   var deliveryFee = Number(document.body.dataset.deliveryFee) || 0;
+  // The order types turned on in the admin, e.g. "delivery pickup dinein".
+  var enabledTypes = (document.body.dataset.orderTypes || '').split(' ').filter(Boolean);
+  var pickupOpen = toMinutes(document.body.dataset.pickupOpen);
+  var pickupClose = toMinutes(document.body.dataset.pickupClose);
 
   var lines = []; // [{ id: '12', qty: 2 }], in the order they were added
+  var type = null; // 'delivery' | 'pickup' | 'dinein', or null when none is open
   var sending = false;
 
   // Announces cart changes to screen readers without moving focus.
@@ -47,7 +54,114 @@
   function subtotal() {
     return lines.reduce(function (sum, l) { return sum + catalog[l.id].price * l.qty; }, 0);
   }
-  function total() { return subtotal() + deliveryFee; }
+  // Only delivery pays the fee; pick-up and dine-in pay at the counter.
+  function fee() { return type === 'delivery' ? deliveryFee : 0; }
+  function total() { return subtotal() + fee(); }
+
+  /* ---------------------------- pick-up times ---------------------------- */
+
+  function toMinutes(hhmm) {
+    var m = /^(\d\d):(\d\d)$/.exec(hhmm || '');
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  }
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  // Pick-up is in the shop's time zone. The Philippines has no daylight
+  // saving, so Manila is always UTC+8, whatever the customer's phone says.
+  function manilaMinutes() {
+    var now = new Date();
+    return (now.getUTCHours() * 60 + now.getUTCMinutes() + 8 * 60) % (24 * 60);
+  }
+
+  function clockLabel(mins) {
+    var h = Math.floor(mins / 60);
+    return (h % 12 || 12) + ':' + pad(mins % 60) + (h < 12 ? ' AM' : ' PM');
+  }
+
+  /** Today's choices: "As soon as possible" while open, then 15-minute slots
+      from at least 15 minutes from now until closing. [{ value, label }] */
+  function pickupSlots() {
+    if (pickupOpen === null || pickupClose === null) return [];
+    var now = manilaMinutes();
+    var slots = [];
+    if (now >= pickupOpen && now < pickupClose) {
+      slots.push({ value: 'asap', label: 'As soon as possible' });
+    }
+    var first = Math.max(pickupOpen, Math.ceil((now + 15) / SLOT_MINUTES) * SLOT_MINUTES);
+    for (var t = first; t <= pickupClose; t += SLOT_MINUTES) {
+      slots.push({ value: pad(Math.floor(t / 60)) + ':' + pad(t % 60), label: clockLabel(t) });
+    }
+    return slots;
+  }
+
+  /** Rebuild the pick-up select, keeping the customer's choice if it is still offered. */
+  function fillPickupTimes() {
+    var select = $('o-pickup');
+    var previous = select.value;
+    var slots = pickupSlots();
+    select.textContent = '';
+    slots.forEach(function (s) {
+      var opt = el('option', null, s.label);
+      opt.value = s.value;
+      select.appendChild(opt);
+    });
+    if (slots.some(function (s) { return s.value === previous; })) select.value = previous;
+    return slots.length > 0;
+  }
+
+  /* ---------------------------- order type ---------------------------- */
+
+  /** Which types can be chosen right now: turned on, and pick-up only while
+      there is a slot left today. */
+  function availableTypes() {
+    var pickupOk = fillPickupTimes();
+    return enabledTypes.filter(function (t) { return t !== 'pickup' || pickupOk; });
+  }
+
+  function setType(next) {
+    type = next;
+    try { if (next) localStorage.setItem(TYPE_KEY, next); } catch (e) { /* ignore */ }
+
+    Array.prototype.forEach.call(form.querySelectorAll('input[name="type"]'), function (r) {
+      r.checked = r.value === next;
+    });
+    // Hide, and disable, every field the chosen type does not use, so the
+    // browser neither shows nor submits it.
+    Array.prototype.forEach.call(form.querySelectorAll('[data-for]'), function (node) {
+      var off = node.dataset.for.split(' ').indexOf(next) === -1;
+      node.hidden = off;
+      Array.prototype.forEach.call(node.querySelectorAll('input, textarea, select'), function (input) {
+        input.disabled = off;
+      });
+    });
+    clearErrors();
+    render();
+  }
+
+  /** Show the types that are open, and keep or pick a sensible current one. */
+  function refreshTypes() {
+    var open = availableTypes();
+    Array.prototype.forEach.call(form.querySelectorAll('.otype__opt'), function (opt) {
+      opt.hidden = open.indexOf(opt.dataset.type) === -1;
+    });
+    // With a single choice there is nothing to ask.
+    $('otype').hidden = open.length < 2;
+
+    var note = '';
+    if (enabledTypes.indexOf('pickup') > -1 && open.indexOf('pickup') === -1) {
+      note = 'Pick-up is closed for today.';
+    }
+    $('otype-note').textContent = note;
+    $('otype-note').hidden = !note;
+
+    var saved = null;
+    try { saved = localStorage.getItem(TYPE_KEY); } catch (e) { saved = null; }
+    var next = open.indexOf(type) > -1 ? type
+      : open.indexOf(saved) > -1 ? saved
+      : open[0] || null;
+    setType(next);
+  }
 
   function find(id) {
     for (var i = 0; i < lines.length; i++) if (lines[i].id === id) return lines[i];
@@ -164,9 +278,12 @@
 
     $('cart-empty').hidden = n > 0;
     $('cart-sum').hidden = n === 0;
-    form.hidden = n === 0;
+    // No type open (all turned off, or only pick-up and it is past closing).
+    $('cart-closed').hidden = n === 0 || type !== null;
+    form.hidden = n === 0 || type === null;
 
     $('cart-subtotal').textContent = money(subtotal());
+    $('cart-fee-row').hidden = type !== 'delivery';
     $('cart-fee').textContent = deliveryFee === 0 ? 'Free' : money(deliveryFee);
     $('cart-total').textContent = money(total());
     submitBtn.textContent = sending ? 'Placing order…' : 'Place order · ' + money(total());
@@ -212,7 +329,8 @@
       var p = form.querySelector('[data-err="' + name + '"]');
       if (p) { p.textContent = fields[name]; p.hidden = false; }
       var input = form.elements[name];
-      if (input) {
+      // The order type is a group of radios, which has no single element to mark.
+      if (input && input.setAttribute) {
         input.setAttribute('aria-invalid', 'true');
         if (!first) first = input;
       }
@@ -240,7 +358,8 @@
       if (line) lines.splice(lines.indexOf(line), 1);
       delete catalog[id];
     });
-    if (typeof quote.delivery_fee === 'number') deliveryFee = quote.delivery_fee;
+    // Other types are quoted with no fee, which says nothing about delivery's.
+    if (type === 'delivery' && typeof quote.delivery_fee === 'number') deliveryFee = quote.delivery_fee;
     save();
     render();
   }
@@ -250,26 +369,54 @@
   function checkFields() {
     var errors = {};
     var name = form.elements.name.value.trim();
-    var phoneDigits = form.elements.phone.value.replace(/\D/g, '');
-    var address = form.elements.address.value.trim();
-    var cashRaw = form.elements.cash.value.trim();
-    var cash = Number(cashRaw);
-
     if (!name) errors.name = 'Enter your full name.';
-    if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
-    else if (phoneDigits.length < 7 || phoneDigits.length > 15) errors.phone = 'That phone number does not look right.';
-    if (!address) errors.address = 'Enter the delivery address.';
-    if (!cashRaw) errors.cash = 'Enter how much cash you will pay with.';
-    else if (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash) errors.cash = 'Enter the cash as a whole number of pesos.';
-    else if (cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
+
+    if (type !== 'dinein') {
+      var phoneDigits = form.elements.phone.value.replace(/\D/g, '');
+      if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
+      else if (phoneDigits.length < 7 || phoneDigits.length > 15) errors.phone = 'That phone number does not look right.';
+    }
+
+    if (type === 'delivery') {
+      var address = form.elements.address.value.trim();
+      var cashRaw = form.elements.cash.value.trim();
+      var cash = Number(cashRaw);
+      if (!address) errors.address = 'Enter the delivery address.';
+      if (!cashRaw) errors.cash = 'Enter how much cash you will pay with.';
+      else if (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash) errors.cash = 'Enter the cash as a whole number of pesos.';
+      else if (cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
+    }
+
+    if (type === 'pickup' && !form.elements.pickup_at.value) {
+      errors.pickup_at = 'Choose when you will pick up your order.';
+    }
+    if (type === 'dinein' && !form.elements.table_no.value.trim()) {
+      errors.table_no = 'Enter your table number.';
+    }
     return errors;
   }
 
   function showDone(order) {
+    var counter = order.order_type !== 'delivery';
     $('done-id').textContent = '#' + order.id;
     $('done-total').textContent = money(order.total);
+    $('done-total-label').textContent = counter ? 'Total to pay at the counter' : 'Total to pay';
+    $('done-cash-row').hidden = counter;
+    $('done-change-row').hidden = counter;
     $('done-cash').textContent = money(order.cash);
     $('done-change').textContent = order.change_due === 0 ? 'None (exact amount)' : money(order.change_due);
+
+    var next;
+    if (order.order_type === 'pickup') {
+      next = order.pickup_at === 'asap'
+        ? 'Pick it up as soon as it is ready. Dachel will call you when it is.'
+        : 'Pick it up at ' + clockLabel(toMinutes(order.pickup_at)) + ' today.';
+    } else if (order.order_type === 'dinein') {
+      next = 'We will bring it to table ' + order.table_no + '.';
+    } else {
+      next = 'Dachel will call you to confirm.';
+    }
+    $('done-next').textContent = next;
 
     view.hidden = true;
     done.hidden = false;
@@ -289,11 +436,15 @@
       return;
     }
 
+    // Fields the type does not use go as empty strings; the server ignores them.
     var payload = {
+      type: type,
       name: form.elements.name.value,
-      phone: form.elements.phone.value,
-      address: form.elements.address.value,
-      cash: form.elements.cash.value.trim(),
+      phone: type === 'dinein' ? '' : form.elements.phone.value,
+      address: type === 'delivery' ? form.elements.address.value : '',
+      cash: type === 'delivery' ? form.elements.cash.value.trim() : '',
+      table_no: type === 'dinein' ? form.elements.table_no.value : '',
+      pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
       items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
       expected_total: total(),
     };
@@ -315,7 +466,7 @@
         lines = [];
         save();
         form.reset();
-        render();
+        setType(type); // reset() unchecked the type; keep it for next time
         showDone(r.data.order);
         return;
       }
@@ -348,7 +499,7 @@
     opener = document.activeElement;
     view.hidden = false;
     done.hidden = true;
-    render();
+    refreshTypes(); // the page may have been open a while: recheck pick-up times
     dialog.showModal();
   }
 
@@ -401,6 +552,9 @@
   $('cart-open').addEventListener('click', open);
   form.addEventListener('submit', submit);
   $('o-cash').addEventListener('input', renderChange);
+  form.addEventListener('change', function (e) {
+    if (e.target.name === 'type') setType(e.target.value);
+  });
 
   // Clear a field's error as soon as the customer starts fixing it.
   form.addEventListener('input', function (e) {
@@ -412,5 +566,5 @@
   });
 
   load();
-  render();
+  refreshTypes();
 })();

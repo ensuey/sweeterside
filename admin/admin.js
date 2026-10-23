@@ -22,6 +22,14 @@ const ORDER_STATUS = {
   completed: 'Completed',
   cancelled: 'Cancelled',
 };
+// The 'delivering' step means "handed over" and reads differently per type.
+const HANDOVER_LABEL = { delivery: 'Out for delivery', pickup: 'Ready for pick-up', dinein: 'Served' };
+const ORDER_TYPES = ['delivery', 'pickup', 'dinein'];
+const TYPE_LABEL = { delivery: 'Delivery', pickup: 'Pick-up', dinein: 'Dine-in' };
+
+function statusLabel(status, type) {
+  return status === 'delivering' ? HANDOVER_LABEL[type] || ORDER_STATUS.delivering : ORDER_STATUS[status];
+}
 const ORDER_POLL_MS = 20000;
 
 const $ = (id) => document.getElementById(id);
@@ -336,38 +344,60 @@ function orderTime(sqlTime) {
   return when;
 }
 
+/** 'HH:MM' (Manila time) -> '3:30 PM' */
+function clock(hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  if (!Number.isInteger(h) || !Number.isInteger(m)) return hhmm;
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+/** The badge in an order's head: what kind of order, and when or where. */
+function typeBadge(o) {
+  if (o.order_type === 'pickup') {
+    return o.pickup_at === 'asap' ? 'Pick-up · ASAP' : `Pick-up · ${clock(o.pickup_at)}`;
+  }
+  if (o.order_type === 'dinein') return `Dine-in · Table ${o.table_no}`;
+  return 'Delivery';
+}
+
 // Every field below was typed by a customer on the public menu: escape all of it.
 function orderHtml(o) {
-  const options = Object.entries(ORDER_STATUS)
-    .map(([value, label]) => `<option value="${value}"${value === o.status ? ' selected' : ''}>${label}</option>`)
+  const type = o.order_type || 'delivery';
+  const options = Object.keys(ORDER_STATUS)
+    .map((value) => `<option value="${value}"${value === o.status ? ' selected' : ''}>${statusLabel(value, type)}</option>`)
     .join('');
   const lines = o.items
     .map((l) => `<li><span>${l.qty} × ${esc(l.name)}</span><span>${money(l.price * l.qty)}</span></li>`)
     .join('');
-  const change = o.change_due === 0
-    ? 'Exact amount, no change needed'
-    : `Bring ${money(o.change_due)} change`;
+
+  // Delivery collects cash at the door; the other types pay at the counter.
+  const payment = type === 'delivery'
+    ? `<dt>Customer pays with</dt><dd>${money(o.cash)}</dd>
+        <dd class="order__change">${o.change_due === 0
+          ? 'Exact amount, no change needed'
+          : `Bring ${money(o.change_due)} change`}</dd>`
+    : '<dd class="order__change">Pays at the counter</dd>';
 
   return `
-    <li class="order" data-order-id="${o.id}" data-status="${esc(o.status)}">
+    <li class="order" data-order-id="${o.id}" data-status="${esc(o.status)}" data-type="${esc(type)}">
       <div class="order__head">
         <span class="order__id">#${o.id}</span>
+        <span class="order__type">${esc(typeBadge(o))}</span>
         <span class="order__time">${esc(orderTime(o.created_at))}</span>
         <label class="vh" for="status-${o.id}">Status of order ${o.id}</label>
         <select class="order__status" id="status-${o.id}" data-status-select>${options}</select>
       </div>
       <div class="order__who">
         <span class="order__name">${esc(o.customer_name)}</span>
-        <a class="order__phone" href="tel:${esc(o.phone)}">${esc(o.phone)}</a>
-        <span class="order__addr">${esc(o.address)}</span>
+        ${o.phone ? `<a class="order__phone" href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : ''}
+        ${type === 'delivery' ? `<span class="order__addr">${esc(o.address)}</span>` : ''}
       </div>
       <ul class="order__items">${lines}</ul>
       <dl class="order__sum">
         <dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>
-        <dt>Delivery fee</dt><dd>${money(o.delivery_fee)}</dd>
+        ${o.delivery_fee > 0 ? `<dt>Delivery fee</dt><dd>${money(o.delivery_fee)}</dd>` : ''}
         <dt class="is-total">Total</dt><dd class="is-total">${money(o.total)}</dd>
-        <dt>Customer pays with</dt><dd>${money(o.cash)}</dd>
-        <dd class="order__change">${change}</dd>
+        ${payment}
       </dl>
     </li>`;
 }
@@ -420,7 +450,7 @@ async function changeStatus(select) {
   select.disabled = true;
   try {
     await api(`/api/orders/${id}`, { method: 'PATCH', body: { status: select.value } });
-    toast(`Order #${id}: ${ORDER_STATUS[select.value]}.`);
+    toast(`Order #${id}: ${statusLabel(select.value, previous ? previous.order_type : 'delivery')}.`);
     select.blur();
     await loadOrders();
   } catch (err) {
@@ -431,23 +461,36 @@ async function changeStatus(select) {
   }
 }
 
-async function loadSettings() {
-  const { delivery_fee } = await api('/api/settings');
-  $('fee').value = delivery_fee;
+function showSettings(s) {
+  $('fee').value = s.delivery_fee;
+  $('pickup-open').value = s.pickup_open;
+  $('pickup-close').value = s.pickup_close;
+  ORDER_TYPES.forEach((t) => { $(`on-${t}`).checked = s[`${t}_enabled`]; });
 }
 
-async function saveFee(event) {
+async function loadSettings() {
+  showSettings(await api('/api/settings'));
+}
+
+async function saveSettings(event) {
   event.preventDefault();
   const err = $('fee-err');
   err.hidden = true;
   $('fee-save').disabled = true;
   try {
-    const { delivery_fee } = await api('/api/settings', {
-      method: 'PUT',
-      body: { delivery_fee: $('fee').value },
-    });
-    $('fee').value = delivery_fee;
-    toast(delivery_fee === 0 ? 'Delivery is free.' : `Delivery fee is ${money(delivery_fee)}.`);
+    const body = {
+      delivery_fee: $('fee').value,
+      pickup_open: $('pickup-open').value,
+      pickup_close: $('pickup-close').value,
+    };
+    ORDER_TYPES.forEach((t) => { body[`${t}_enabled`] = $(`on-${t}`).checked; });
+    const s = await api('/api/settings', { method: 'PUT', body });
+    showSettings(s);
+
+    const open = ORDER_TYPES.filter((t) => s[`${t}_enabled`]).map((t) => TYPE_LABEL[t]);
+    toast(open.length
+      ? `Saved. Taking orders for ${open.join(', ')}.`
+      : 'Saved. Online ordering is closed.');
   } catch (e) {
     err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
     err.hidden = false;
@@ -644,7 +687,7 @@ document.querySelectorAll('.tab[data-show]').forEach((tab) => {
   });
 });
 
-$('fee-form').addEventListener('submit', saveFee);
+$('fee-form').addEventListener('submit', saveSettings);
 
 $('add-category').addEventListener('click', () => openCategoryEditor(null));
 $('cat-form').addEventListener('submit', saveCategory);

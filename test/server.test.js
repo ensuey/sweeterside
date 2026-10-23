@@ -376,6 +376,147 @@ test('deleting a menu item keeps past orders of it', () => {
   assert.strictEqual(kept.change_due, 0);
 });
 
+/* ---------------------------- order types ---------------------------- */
+
+// Noon in Manila (UTC+8), and the cart from orderInput() without the fee.
+const MANILA_NOON = new Date(Date.UTC(2026, 9, 23, 4, 0));
+const ITEMS_TOTAL = 129 * 2 + 85;
+
+function pickupInput(over = {}) {
+  return orderInput({
+    type: 'pickup', address: '', cash: '', pickup_at: '13:00', expected_total: ITEMS_TOTAL, ...over,
+  });
+}
+
+function dineinInput(over = {}) {
+  return orderInput({
+    type: 'dinein', phone: '', address: '', cash: '', table_no: ' 4 ', expected_total: ITEMS_TOTAL, ...over,
+  });
+}
+
+function pickupErrors(input, now = MANILA_NOON) {
+  try {
+    orders.create(input, { now });
+    return null;
+  } catch (err) {
+    assert.ok(err instanceof menu.ValidationError, `expected a ValidationError, got ${err.message}`);
+    return err.errors;
+  }
+}
+
+test('pick-up and dine-in pay no delivery fee and keep only their own details', () => {
+  orders.setDeliveryFee(50);
+
+  const pickup = orders.create(pickupInput(), { now: MANILA_NOON });
+  assert.strictEqual(pickup.order_type, 'pickup');
+  assert.strictEqual(pickup.delivery_fee, 0);
+  assert.strictEqual(pickup.total, ITEMS_TOTAL);
+  assert.strictEqual(pickup.pickup_at, '13:00');
+  assert.strictEqual(pickup.phone, '09171234567');
+  assert.strictEqual(pickup.address, '', 'no address is kept');
+  assert.strictEqual(pickup.cash, 0, 'pays at the counter');
+  assert.strictEqual(pickup.change_due, 0);
+
+  const dinein = orders.create(dineinInput({ phone: '0917 000 0000', address: 'ignored' }));
+  assert.strictEqual(dinein.order_type, 'dinein');
+  assert.strictEqual(dinein.delivery_fee, 0);
+  assert.strictEqual(dinein.table_no, '4', 'trimmed');
+  assert.strictEqual(dinein.phone, '', 'dine-in keeps no phone');
+  assert.strictEqual(dinein.address, '');
+
+  // The total the customer saw must match the fee for the type they chose.
+  assert.throws(() => orders.create(dineinInput({ expected_total: ITEMS_TOTAL + 50 })),
+    (err) => err.status === 409 && err.body.quote.delivery_fee === 0);
+  assert.strictEqual(orders.create(orderInput({ expected_total: ITEMS_TOTAL + 50 })).delivery_fee, 50,
+    'a missing type is still a delivery');
+  orders.setDeliveryFee(0);
+});
+
+test('each order type asks only for its own details', () => {
+  const p = pickupErrors(pickupInput({ phone: '', pickup_at: '' }));
+  assert.deepStrictEqual(Object.keys(p).sort(), ['phone', 'pickup_at']);
+
+  const d = orderErrors(dineinInput({ table_no: '  ' }));
+  assert.deepStrictEqual(Object.keys(d), ['table_no']);
+  assert.ok(orderErrors(dineinInput({ table_no: 'x'.repeat(11) })).table_no, 'table number is short');
+
+  assert.ok(orderErrors(orderInput({ type: 'takeaway' })).type, 'unknown type');
+});
+
+test('pick-up times must be today, within hours, on the quarter hour and not too soon', () => {
+  orders.updateSettings({ pickup_open: '10:00', pickup_close: '20:00' });
+
+  for (const bad of ['9:45', '09:45', '20:15', '13:10', '12:00', '12:05', 'noon', '25:00']) {
+    assert.ok(pickupErrors(pickupInput({ pickup_at: bad })), `should reject ${bad} at noon`);
+  }
+  for (const ok of ['12:15', '20:00', 'asap']) {
+    assert.strictEqual(pickupErrors(pickupInput({ pickup_at: ok })), null, `should accept ${ok} at noon`);
+  }
+
+  // Before opening and after closing there is no "as soon as possible".
+  const early = new Date(Date.UTC(2026, 9, 23, 0, 30)); // 08:30 in Manila
+  const late = new Date(Date.UTC(2026, 9, 23, 12, 30)); // 20:30 in Manila
+  assert.ok(pickupErrors(pickupInput({ pickup_at: 'asap' }), early).pickup_at);
+  assert.strictEqual(pickupErrors(pickupInput({ pickup_at: '10:00' }), early), null, 'opening time is fine');
+  assert.ok(pickupErrors(pickupInput({ pickup_at: 'asap' }), late).pickup_at);
+});
+
+test('order types can be turned off and the page only offers the ones on', () => {
+  orders.updateSettings({ delivery_enabled: false, dinein_enabled: '0' });
+  assert.deepStrictEqual(orders.enabledTypes(), ['pickup']);
+  assert.match(render.buildHtml(), /data-order-types="pickup"/);
+  assert.ok(orderErrors(orderInput()).type, 'delivery refused while off');
+  assert.ok(orderErrors(dineinInput()).type, 'dine-in refused while off');
+
+  orders.updateSettings({ delivery_enabled: true, pickup_enabled: true, dinein_enabled: true });
+  assert.deepStrictEqual(orders.enabledTypes(), ['delivery', 'pickup', 'dinein']);
+});
+
+test('ordering settings are validated together, so a bad value never half-applies', () => {
+  const before = orders.settings();
+  assert.throws(() => orders.updateSettings({ delivery_enabled: false, pickup_open: '10:07' }),
+    (err) => err instanceof menu.ValidationError && Boolean(err.errors.pickup_open));
+  assert.throws(() => orders.updateSettings({ pickup_open: '18:00', pickup_close: '09:00' }),
+    (err) => err instanceof menu.ValidationError && Boolean(err.errors.pickup_close));
+  assert.throws(() => orders.updateSettings({ dinein_enabled: 'maybe' }), menu.ValidationError);
+  assert.deepStrictEqual(orders.settings(), before, 'nothing was saved');
+
+  const html = render.buildHtml();
+  assert.match(html, /data-pickup-open="10:00"/);
+  assert.match(html, /data-pickup-close="20:00"/);
+});
+
+test('orders from before order types are kept as delivery orders', () => {
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-migrate-orders-'));
+  const dbPath = path.join(dir, 'old.db');
+
+  // The orders table exactly as the delivery-only release created it.
+  const { DatabaseSync } = require('node:sqlite');
+  const old = new DatabaseSync(dbPath);
+  old.exec(`CREATE TABLE orders (
+    id INTEGER PRIMARY KEY, customer_name TEXT NOT NULL, phone TEXT NOT NULL, address TEXT NOT NULL,
+    subtotal INTEGER NOT NULL, delivery_fee INTEGER NOT NULL, total INTEGER NOT NULL,
+    cash INTEGER NOT NULL, change_due INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new'
+      CHECK (status IN ('new','preparing','delivering','completed','cancelled')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO orders (id, customer_name, phone, address, subtotal, delivery_fee, total, cash, change_due)
+    VALUES (3, 'Old Customer', '09170000000', '1 Old St', 100, 40, 140, 200, 60);`);
+  old.close();
+
+  const out = execFileSync(process.execPath, ['--no-warnings', '-e', `
+    const { db } = require(${JSON.stringify(path.join(__dirname, '..', 'server', 'db'))});
+    console.log(JSON.stringify(db.prepare(
+      'SELECT id, order_type, table_no, pickup_at, address FROM orders').all()));`],
+  { env: { ...process.env, DB_PATH: dbPath }, encoding: 'utf8' });
+
+  assert.deepStrictEqual(JSON.parse(out), [
+    { id: 3, order_type: 'delivery', table_no: '', pickup_at: '', address: '1 Old St' },
+  ]);
+});
+
 test('the order endpoints: public placing, admin-only reading', async () => {
   const { server } = require('../server/index');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
