@@ -95,8 +95,10 @@
 
         nameEl.textContent  = card.dataset.name;
         priceEl.textContent = 'Php ' + card.dataset.price;
-        tagEl.textContent   = card.dataset.tag || '';
+        var soldOut = card.hasAttribute('data-soldout');
+        tagEl.textContent   = soldOut ? 'Sold out' : card.dataset.tag || '';
         sheet.dataset.id    = card.dataset.id;  // read by cart.js's "Add to cart"
+        sheet.toggleAttribute('data-soldout', soldOut); // hides "Add to cart"
 
         opener = btn;
         sheet.showModal();

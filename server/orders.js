@@ -4,7 +4,10 @@
    is trusted: prices, the fee and the total are all recomputed here. */
 
 const { db, transaction } = require('./db');
-const { ValidationError } = require('./menu');
+const menu = require('./menu');
+const { manilaMinutes } = require('./clock');
+
+const { ValidationError } = menu;
 
 const STATUSES = ['new', 'preparing', 'delivering', 'completed', 'cancelled'];
 const ACTIVE_STATUSES = ['new', 'preparing', 'delivering'];
@@ -76,16 +79,9 @@ function parseSwitch(key) {
 /* ---------------------------- pick-up hours ---------------------------- */
 
 // Pick-up is same day only, in 15-minute steps, in the shop's time zone.
-// The Philippines has no daylight saving, so Manila is always UTC+8.
 const SLOT_MINUTES = 15;
-const MANILA_OFFSET_MINUTES = 8 * 60;
 const DEFAULT_PICKUP_OPEN = '10:00';
 const DEFAULT_PICKUP_CLOSE = '20:00';
-
-/** Minutes since midnight in Manila. */
-function manilaMinutes(now = new Date()) {
-  return (now.getUTCHours() * 60 + now.getUTCMinutes() + MANILA_OFFSET_MINUTES) % (24 * 60);
-}
 
 /** 'HH:MM' -> minutes since midnight, or null if it is not a valid time. */
 function toMinutes(hhmm) {
@@ -218,22 +214,32 @@ function cartLines(rawItems) {
 
 /**
  * Price a cart against the live menu. Only delivery pays the delivery fee.
- * @returns {{ lines, unavailable, subtotal, delivery_fee, total }}
+ * Items that are deleted, not available or sold out (by hand or because
+ * today's limit is used up) go in `unavailable`. Items with fewer left today
+ * than the cart wants go in `limits` as { id: remaining }.
+ * @returns {{ lines, unavailable, limits, short, subtotal, delivery_fee, total }}
  */
-function quote(rawItems, type = 'delivery') {
+function quote(rawItems, type = 'delivery', now = new Date()) {
   const lines = [];
   const unavailable = [];
-  const find = db.prepare('SELECT id, name, price FROM items WHERE id = ?');
+  const short = [];
 
   for (const { id, qty } of cartLines(rawItems)) {
-    const item = find.get(id);
-    if (item) lines.push({ item_id: item.id, name: item.name, price: item.price, qty });
-    else unavailable.push(id);
+    const item = menu.get(id, { now });
+    if (!item || item.availability === 'unavailable' || item.sold_out) {
+      unavailable.push(id);
+      continue;
+    }
+    if (item.remaining !== null && qty > item.remaining) {
+      short.push({ id: item.id, name: item.name, remaining: item.remaining });
+    }
+    lines.push({ item_id: item.id, name: item.name, price: item.price, qty });
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.price * l.qty, 0);
   const delivery_fee = type === 'delivery' ? getDeliveryFee() : 0;
-  return { lines, unavailable, subtotal, delivery_fee, total: subtotal + delivery_fee };
+  const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
+  return { lines, unavailable, limits, short, subtotal, delivery_fee, total: subtotal + delivery_fee };
 }
 
 /** A 409 carrying the live prices, so the page can update and ask again. */
@@ -245,6 +251,7 @@ function staleCart(message, q) {
       quote: {
         items: q.lines.map((l) => ({ id: l.item_id, name: l.name, price: l.price })),
         unavailable: q.unavailable,
+        limits: q.limits,
         delivery_fee: q.delivery_fee,
         total: q.total,
       },
@@ -322,9 +329,12 @@ function create(input, { now = new Date() } = {}) {
     }
   }
 
+  // The stock check and the insert below run with no await in between, and
+  // Node runs one request's synchronous code at a time, so two customers
+  // cannot both take the last one.
   let q = null;
   try {
-    q = quote(input.items, type);
+    q = quote(input.items, type, now);
   } catch (err) {
     if (!(err instanceof ValidationError)) throw err;
     Object.assign(errors, err.errors);
@@ -333,7 +343,13 @@ function create(input, { now = new Date() } = {}) {
   if (Object.keys(errors).length) throw new ValidationError(errors);
 
   if (q.unavailable.length) {
-    throw staleCart('Some items in your cart are no longer on the menu. They have been removed.', q);
+    throw staleCart('Some items in your cart are sold out or no longer on the menu. They have been removed.', q);
+  }
+  if (q.short.length) {
+    const message = q.short.length === 1
+      ? `Only ${q.short[0].remaining} ${q.short[0].name} left today. Your cart has been updated.`
+      : 'Some items have only a few left today. Your cart has been updated.';
+    throw staleCart(message, q);
   }
   if (q.lines.length === 0) throw new ValidationError({ items: 'Your cart is empty.' });
   if (Number(input.expected_total) !== q.total) {
@@ -406,6 +422,6 @@ function setStatus(id, status) {
 
 module.exports = {
   STATUSES, ORDER_TYPES, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
-  manilaMinutes, settings, updateSettings, normalisePhone,
+  settings, updateSettings, normalisePhone,
   quote, create, get, list, counts, setStatus,
 };

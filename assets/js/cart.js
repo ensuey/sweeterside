@@ -21,9 +21,17 @@
   var submitBtn = $('checkout-submit');
 
   // Everything the cart knows about the menu comes from the rendered cards.
+  // Sold-out cards are left out, so they cannot be added and a saved cart
+  // holding one has it removed. `max` is how many can be ordered today.
   var catalog = {};
   cards.forEach(function (card) {
-    catalog[card.dataset.id] = { name: card.dataset.name, price: Number(card.dataset.price) };
+    if (card.hasAttribute('data-soldout')) return;
+    var remaining = card.dataset.remaining;
+    catalog[card.dataset.id] = {
+      name: card.dataset.name,
+      price: Number(card.dataset.price),
+      max: remaining === undefined ? MAX_QTY : Math.min(MAX_QTY, Number(remaining)),
+    };
   });
   var deliveryFee = Number(document.body.dataset.deliveryFee) || 0;
   // The order types turned on in the admin, e.g. "delivery pickup dinein".
@@ -182,13 +190,13 @@
     var dropped = 0;
     saved.forEach(function (l) {
       var id = String(l && l.id);
-      var qty = Math.min(MAX_QTY, Math.floor(Number(l && l.qty)));
       if (!catalog[id]) { dropped++; return; }
+      var qty = Math.min(catalog[id].max, Math.floor(Number(l && l.qty)));
       if (qty > 0 && !find(id)) lines.push({ id: id, qty: qty });
     });
     if (dropped) {
       notice(plural(dropped, 'item') + ' in your saved cart ' +
-        (dropped === 1 ? 'is' : 'are') + ' no longer on the menu and ' +
+        (dropped === 1 ? 'is' : 'are') + ' sold out or no longer on the menu and ' +
         (dropped === 1 ? 'was' : 'were') + ' removed.');
       save();
     }
@@ -205,7 +213,14 @@
   function add(id) {
     if (!catalog[id]) return;
     var line = find(id);
-    if (line) line.qty = Math.min(MAX_QTY, line.qty + 1);
+    if (line && line.qty >= catalog[id].max) {
+      live.textContent = '';
+      notice(catalog[id].max < MAX_QTY
+        ? 'That is all the ' + catalog[id].name + ' we have left today.'
+        : 'Order at most ' + MAX_QTY + ' of any one item.');
+      return;
+    }
+    if (line) line.qty += 1;
     else lines.push({ id: id, qty: 1 });
     save();
     render();
@@ -216,7 +231,7 @@
     var line = find(id);
     if (!line) return;
     if (qty <= 0) lines.splice(lines.indexOf(line), 1);
-    else line.qty = Math.min(MAX_QTY, qty);
+    else line.qty = Math.min(catalog[id].max, qty);
     save();
     render();
   }
@@ -250,7 +265,7 @@
     var plus = el('button', 'stepper__btn', '+');
     plus.type = 'button';
     plus.dataset.step = '1';
-    plus.disabled = line.qty >= MAX_QTY;
+    plus.disabled = line.qty >= item.max;
     plus.setAttribute('aria-label', 'One more ' + item.name);
     stepper.appendChild(minus);
     stepper.appendChild(qty);
@@ -357,6 +372,21 @@
       var line = find(id);
       if (line) lines.splice(lines.indexOf(line), 1);
       delete catalog[id];
+      // Grey the card as the server would now render it.
+      var card = document.querySelector('.card[data-id="' + id + '"]');
+      if (card) {
+        card.classList.add('card--soldout');
+        card.setAttribute('data-soldout', '');
+        var btn = card.querySelector('[data-add]');
+        if (btn) btn.hidden = true;
+      }
+    });
+    // Fewer left today than the cart held: take what is left.
+    Object.keys(quote.limits || {}).forEach(function (id) {
+      if (!catalog[id]) return;
+      catalog[id].max = Math.min(catalog[id].max, quote.limits[id]);
+      var line = find(id);
+      if (line) line.qty = Math.min(line.qty, catalog[id].max);
     });
     // Other types are quoted with no fee, which says nothing about delivery's.
     if (type === 'delivery' && typeof quote.delivery_fee === 'number') deliveryFee = quote.delivery_fee;

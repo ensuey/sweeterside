@@ -517,6 +517,145 @@ test('orders from before order types are kept as delivery orders', () => {
   ]);
 });
 
+/* ---------------------------- item stock ---------------------------- */
+
+/** A fresh item, so other tests' orders never count against its limit. */
+function stockItem(name, stock = {}) {
+  const item = menu.create({ ...base, name, price: 100 });
+  return menu.setStock(item.id, { availability: 'available', daily_limit: '', ...stock });
+}
+
+function orderOf(item, qty) {
+  return orderInput({ items: [{ id: item.id, qty }], expected_total: 100 * qty, cash: 1000 });
+}
+
+test('availability and the daily limit are validated', () => {
+  const item = stockItem('Stock Check');
+  assert.strictEqual(item.availability, 'available');
+  assert.strictEqual(item.daily_limit, null, 'blank means no limit');
+  assert.strictEqual(item.remaining, null);
+
+  const set = (input) => {
+    try { menu.setStock(item.id, input); return null; } catch (err) { return err.errors; }
+  };
+  assert.ok(set({ availability: 'gone' }).availability);
+  for (const bad of ['0', '-1', '2.5', 'ten', '10000']) {
+    assert.ok(set({ availability: 'available', daily_limit: bad }).daily_limit, `should reject ${bad}`);
+  }
+  assert.strictEqual(menu.setStock(item.id, { availability: 'sold_out', daily_limit: '12' }).daily_limit, 12);
+  assert.strictEqual(menu.setStock(999999, { availability: 'available' }), null);
+  menu.remove(item.id);
+});
+
+test('the menu hides items that are not available and greys sold-out ones', () => {
+  orders.setDeliveryFee(0);
+  const hidden = stockItem('Hidden Frappe', { availability: 'unavailable' });
+  const soldOut = stockItem('Gone Frappe', { availability: 'sold_out' });
+  const few = stockItem('Few Frappe', { daily_limit: '5' });
+  const many = stockItem('Many Frappe', { daily_limit: '6' });
+
+  const html = render.buildHtml();
+  assert.ok(!html.includes('Hidden Frappe'), 'not available is left off');
+  const card = (name) => html.split('<li class="card').find((c) => c.includes(`data-name="${name}"`));
+  assert.match(card('Gone Frappe'), /data-soldout/);
+  assert.match(card('Gone Frappe'), /Sold out/);
+  assert.ok(!card('Gone Frappe').includes('data-add'), 'a sold-out card has no Add button');
+  assert.match(card('Few Frappe'), /data-remaining="5"/);
+  assert.match(card('Few Frappe'), /Only 5 left today/);
+  assert.match(card('Many Frappe'), /data-remaining="6"/);
+  assert.ok(!card('Many Frappe').includes('left today'), 'more than 5 left says nothing');
+
+  // A hand-marked sold out item cannot be ordered.
+  assert.throws(() => orders.create(orderOf(soldOut, 1)),
+    (err) => err.status === 409 && err.body.quote.unavailable.includes(soldOut.id));
+  assert.throws(() => orders.create(orderOf(hidden, 1)),
+    (err) => err.status === 409 && err.body.quote.unavailable.includes(hidden.id));
+  [hidden, soldOut, few, many].forEach((i) => menu.remove(i.id));
+});
+
+test('a daily limit stops orders at capacity and frees up when an order is cancelled', () => {
+  orders.setDeliveryFee(0);
+  const item = stockItem('Limited Cake', { daily_limit: '3' });
+
+  const first = orders.create(orderOf(item, 2));
+  assert.strictEqual(menu.get(item.id).remaining, 1);
+
+  assert.throws(() => orders.create(orderOf(item, 2)), (err) => {
+    assert.strictEqual(err.status, 409);
+    assert.deepStrictEqual(err.body.quote.limits, { [item.id]: 1 });
+    assert.match(err.body.error, /Only 1 Limited Cake left today/);
+    return true;
+  });
+
+  orders.create(orderOf(item, 1));
+  const full = menu.get(item.id);
+  assert.strictEqual(full.remaining, 0);
+  assert.strictEqual(full.sold_out, true, 'at the limit it reads as sold out');
+  assert.strictEqual(full.availability, 'available', 'without changing what the admin set');
+  assert.throws(() => orders.create(orderOf(item, 1)),
+    (err) => err.status === 409 && err.body.quote.unavailable.includes(item.id));
+
+  orders.setStatus(first.id, 'cancelled');
+  assert.strictEqual(menu.get(item.id).remaining, 2, 'a cancelled order gives its quantity back');
+  menu.remove(item.id);
+});
+
+test('only today\'s orders, in Manila time, count against the limit', () => {
+  orders.setDeliveryFee(0);
+  const item = stockItem('Daily Pie', { daily_limit: '2' });
+  const order = orders.create(orderOf(item, 2));
+  assert.strictEqual(menu.get(item.id).sold_out, true);
+
+  // The same order seen from tomorrow (Manila) no longer counts.
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  assert.strictEqual(menu.get(item.id, { now: tomorrow }).remaining, 2);
+
+  // And an order from yesterday does not count today.
+  db.prepare("UPDATE orders SET created_at = datetime('now', '-1 day') WHERE id = ?").run(order.id);
+  assert.strictEqual(menu.get(item.id).remaining, 2);
+  menu.remove(item.id);
+});
+
+test('the Manila day starts at 16:00 UTC the day before', () => {
+  const { manilaDayStartSql, manilaMinutes } = require('../server/clock');
+  assert.strictEqual(manilaDayStartSql(new Date(Date.UTC(2026, 9, 23, 4, 0))), '2026-10-22 16:00:00');
+  assert.strictEqual(manilaDayStartSql(new Date(Date.UTC(2026, 9, 23, 15, 59))), '2026-10-22 16:00:00');
+  assert.strictEqual(manilaDayStartSql(new Date(Date.UTC(2026, 9, 23, 16, 0))), '2026-10-23 16:00:00');
+  assert.strictEqual(manilaMinutes(new Date(Date.UTC(2026, 9, 23, 16, 30))), 30);
+});
+
+test('items from before availability are kept available with no limit', () => {
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-migrate-stock-'));
+  const dbPath = path.join(dir, 'old.db');
+
+  // The items table as the release before item stock created it.
+  const { DatabaseSync } = require('node:sqlite');
+  const old = new DatabaseSync(dbPath);
+  old.exec(`CREATE TABLE categories (
+    id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, label TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO categories (id, slug, name, label) VALUES (1, 'drinks', 'Drinks', 'Drinks');
+    CREATE TABLE items (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+    image TEXT NOT NULL, alt TEXT NOT NULL DEFAULT '',
+    crop_x INTEGER, crop_y INTEGER, crop_w INTEGER, crop_h INTEGER,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO items (id, name, price, category_id, image) VALUES (5, 'Kept Frappe', 99, 1, 'assets/Menu Frappe.jpg');`);
+  old.close();
+
+  const out = execFileSync(process.execPath, ['--no-warnings', '-e', `
+    const menu = require(${JSON.stringify(path.join(__dirname, '..', 'server', 'menu'))});
+    const i = menu.get(5);
+    console.log(JSON.stringify([i.name, i.availability, i.daily_limit, i.sold_out]));`],
+  { env: { ...process.env, DB_PATH: dbPath }, encoding: 'utf8' });
+
+  assert.deepStrictEqual(JSON.parse(out), ['Kept Frappe', 'available', null, false]);
+});
+
 test('the order endpoints: public placing, admin-only reading', async () => {
   const { server } = require('../server/index');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -550,6 +689,14 @@ test('the order endpoints: public placing, admin-only reading', async () => {
     assert.strictEqual((await fetch(`${url}/api/orders`)).status, 401, 'orders list needs sign-in');
     assert.strictEqual((await fetch(`${url}/api/orders/1`, { method: 'PATCH' })).status, 401);
     assert.strictEqual((await fetch(`${url}/api/settings`, { method: 'PUT' })).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/items/1/stock`, { method: 'PATCH' })).status, 401,
+      'changing stock needs sign-in');
+
+    const page = await fetch(`${url}/admin/items`, { redirect: 'manual' });
+    assert.strictEqual(page.status, 302, 'the items page needs sign-in');
+    assert.match(page.headers.get('location'), /\/admin\/login$/);
+    assert.strictEqual((await fetch(`${url}/admin/items.html`)).status, 404,
+      'the admin page cannot be fetched as a static file');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

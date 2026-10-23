@@ -270,9 +270,20 @@ body[data-empty="true"] .section { display: none; }
   transition: background .2s var(--ease), color .2s var(--ease), transform .12s var(--ease);
 }
 .has-cart .card__foot { flex-wrap: wrap; }
+
+/* Sold out: still on the menu so people know it exists, but greyed. */
+.card--soldout .shot img { filter: grayscale(1); opacity: .6; }
+.card--soldout .card__name, .card--soldout .price { color: var(--ink-soft); }
+.card__soldout {
+  font-size: .75rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  color: #6B5330; background: var(--cream); border: 1px solid var(--line);
+  border-radius: var(--r-full); padding: .3rem .6rem;
+}
+.card__left { margin: 0; font-size: .875rem; font-weight: 700; color: var(--coral-ink); }
 .card__add:hover { background: #FDF1EE; }
 .card__add:active { transform: scale(.95); }
 .card__add.is-added { background: var(--coral-ink); color: #fff; }
+.has-cart .card__add[hidden] { display: none; }
 
 .sheet__add, .checkout__submit {
   min-height: 48px; padding: 0 var(--sp-5); cursor: pointer; width: 100%;
@@ -281,6 +292,7 @@ body[data-empty="true"] .section { display: none; }
   transition: filter .2s var(--ease), transform .12s var(--ease);
 }
 .sheet__add:hover, .checkout__submit:hover:not(:disabled) { filter: brightness(1.08); }
+.sheet[data-soldout] .sheet__add { display: none; }
 .sheet__add:active, .checkout__submit:active:not(:disabled) { transform: scale(.98); }
 .checkout__submit:disabled { opacity: .6; cursor: progress; }
 

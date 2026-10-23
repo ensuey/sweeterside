@@ -159,6 +159,22 @@ function migrateItems() {
 
 migrateItems();
 
+/* Availability and the daily limit came later. Every existing item starts
+   available with no limit. daily_limit NULL means unlimited. */
+const ITEM_STOCK_COLUMNS = {
+  availability: "TEXT NOT NULL DEFAULT 'available'", // available | unavailable | sold_out
+  daily_limit: 'INTEGER',
+};
+
+function migrateItemStock() {
+  const cols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
+  for (const [name, type] of Object.entries(ITEM_STOCK_COLUMNS)) {
+    if (!cols.includes(name)) db.exec(`ALTER TABLE items ADD COLUMN ${name} ${type}`);
+  }
+}
+
+migrateItemStock();
+
 /* Orders were delivery-only before pick-up and dine-in. Adding columns with
    defaults keeps every earlier order as a delivery order. Pick-up and dine-in
    orders store '' for the address (and phone, for dine-in) and 0 for cash. */
