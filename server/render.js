@@ -83,7 +83,6 @@ function buildHtml(items = menu.list(), cats = categories.list()) {
 
   return template
     .replace('<!--DELIVERY_FEE-->', String(orders.getDeliveryFee()))
-    .replace('<!--MESSENGER_PAGE-->', esc(orders.getMessengerPage()))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
     .replace('<!--SECTIONS-->', sections + empty);
 }
