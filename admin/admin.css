@@ -328,6 +328,32 @@ a { color: var(--navy); }
 .promo__note { margin: 0; font-size: .875rem; font-weight: 700; color: var(--ok); min-height: 1.3em; }
 .promo__note:empty { display: none; }
 
+/* Shop open / closed: the switch on the Orders page, and a pill in the top bar. */
+.shop {
+  display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem;
+  margin-bottom: 2rem; padding: 1rem 1.2rem; border-radius: var(--r-md);
+  background: #EEF6F0; border: 1px solid #CFE6D7;
+}
+.shop[data-open="0"] { background: #FFF1EC; border-color: #F0D2CC; }
+.shop__main { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem 1rem; }
+.shop__title { font-size: 1.25rem; }
+.shop__switch { display: inline-flex; padding: 3px; border-radius: var(--r-full); background: var(--surface); border: 1.5px solid var(--line); }
+.shop__btn {
+  min-height: 40px; min-width: 84px; padding: 0 1rem; cursor: pointer; border: 0; border-radius: var(--r-full);
+  font: 700 .9375rem "Nunito", sans-serif; color: var(--ink-soft); background: none;
+}
+.shop__btn[data-shop="open"][aria-pressed="true"] { color: #fff; background: var(--ok); }
+.shop__btn[data-shop="closed"][aria-pressed="true"] { color: #fff; background: var(--danger); }
+.shop__btn:disabled { cursor: wait; }
+.shop__state { margin: 0; flex-basis: 100%; font-size: .9375rem; font-weight: 600; color: var(--ink-soft); }
+.shop__note { flex: 1 1 18rem; max-width: 30rem; }
+.shop-pill {
+  padding: .25rem .7rem; border-radius: var(--r-full); font-size: .8125rem; font-weight: 700; text-decoration: none;
+  color: #1F5A3A; background: #DDF0E3;
+}
+.shop-pill[data-open="0"] { color: #fff; background: var(--danger); }
+.shop-pill[hidden] { display: none; }
+
 /* Nav count of new cake bookings. */
 .nav__n {
   min-width: 1.4em; margin-left: .35rem; padding: 0 .35rem; border-radius: var(--r-full);

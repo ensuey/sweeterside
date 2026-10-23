@@ -84,6 +84,19 @@ img { max-width: 100%; }
   margin: var(--sp-3) auto 0; max-width: 46ch; color: #6B5330;
   font-size: clamp(1rem, 2.6vw, 1.125rem);
 }
+/* Open or closed, under the tagline. */
+.status {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--sp-2);
+  margin: var(--sp-4) auto 0; max-width: 46ch; font-size: .9375rem; font-weight: 600; color: #6B5330;
+}
+.status__pill {
+  display: inline-flex; align-items: center; gap: .4em; padding: .3rem .75rem; border-radius: var(--r-full);
+  font-size: .8125rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+}
+.status__pill::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: currentColor; }
+.status--open .status__pill { color: #1F5A3A; background: #DDF0E3; }
+.status--closed .status__pill { color: #fff; background: #6B5330; }
+
 /* The link to the custom cake page. */
 .hero__cta {
   display: inline-flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-4);

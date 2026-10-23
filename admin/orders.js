@@ -162,6 +162,50 @@ function showSettings(s) {
   $('pickup-open').value = s.pickup_open;
   $('pickup-close').value = s.pickup_close;
   ORDER_TYPES.forEach((t) => { $(`on-${t}`).checked = s[`${t}_enabled`]; });
+  showShop(s);
+}
+
+/* ---------------------------- open / closed ---------------------------- */
+
+function showShop(s) {
+  $('shop').dataset.open = s.shop_open ? '1' : '0';
+  document.querySelectorAll('[data-shop]').forEach((btn) => {
+    btn.setAttribute('aria-pressed', String((btn.dataset.shop === 'open') === s.shop_open));
+  });
+  $('shop-state').textContent = s.shop_open
+    ? 'Customers can order from the menu.'
+    : 'Customers can browse the menu but not order. Cake bookings still work.';
+  // Do not overwrite a note being typed.
+  if (document.activeElement !== $('closed-note')) $('closed-note').value = s.closed_note;
+  showShopPill(s.shop_open);
+}
+
+async function setShopOpen(open) {
+  document.querySelectorAll('[data-shop]').forEach((btn) => { btn.disabled = true; });
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { shop_open: open } });
+    showShop(s);
+    toast(open
+      ? 'Shop is open. Customers can order.'
+      : 'Shop is closed. Customers can browse but not order.');
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    document.querySelectorAll('[data-shop]').forEach((btn) => { btn.disabled = false; });
+  }
+}
+
+async function saveClosedNote() {
+  const err = $('closed-note-err');
+  err.hidden = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { closed_note: $('closed-note').value } });
+    $('closed-note').value = s.closed_note;
+    toast(s.closed_note ? 'Closed note saved.' : 'Closed note cleared. The menu shows the usual line.');
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+  }
 }
 
 async function loadSettings() {
@@ -221,6 +265,14 @@ document.querySelectorAll('.tab[data-show]').forEach((tab) => {
 });
 
 $('fee-form').addEventListener('submit', saveSettings);
+
+document.querySelectorAll('[data-shop]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const open = btn.dataset.shop === 'open';
+    if (btn.getAttribute('aria-pressed') !== 'true') setShopOpen(open);
+  });
+});
+$('closed-note').addEventListener('change', saveClosedNote);
 
 adminBoot(async () => {
   await Promise.all([loadOrders(), loadSettings()]);

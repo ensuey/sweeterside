@@ -78,6 +78,15 @@ function showCakeCount(n) {
   badge.setAttribute('aria-label', `${plural(n, 'new booking')}`);
 }
 
+/** "Shop open" / "Shop closed" in the top bar, linking to the switch. */
+function showShopPill(open) {
+  const pill = $('shop-pill');
+  if (!pill) return;
+  pill.textContent = open ? 'Shop open' : 'Shop closed';
+  pill.dataset.open = open ? '1' : '0';
+  pill.hidden = false;
+}
+
 /** Sign in check, then the page's own loading. */
 async function adminBoot(load) {
   try {
@@ -85,6 +94,7 @@ async function adminBoot(load) {
     state.csrf = session.csrf;
     $('who').textContent = session.email;
     api('/api/cakes/counts').then((c) => showCakeCount(c.new)).catch(() => {});
+    api('/api/settings').then((s) => showShopPill(s.shop_open)).catch(() => {});
     await load();
   } catch (err) {
     pageError(err.message);

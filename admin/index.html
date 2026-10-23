@@ -24,6 +24,7 @@
       <a href="/admin/cakes">Cakes <span class="nav__n" id="nav-cakes-n" hidden></span></a>
     </nav>
     <div class="topbar__spacer"></div>
+    <a class="shop-pill" id="shop-pill" href="/admin#shop" hidden></a>
     <span class="topbar__user" id="who"></span>
     <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
     <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
@@ -32,6 +33,23 @@
 
 <main class="admin">
   <p class="alert" id="page-error" role="alert" hidden></p>
+
+  <!-- Closed: customers can browse the menu but not order. Cake bookings are not affected. -->
+  <section class="shop" id="shop" aria-labelledby="shop-title">
+    <div class="shop__main">
+      <h2 class="shop__title" id="shop-title">Shop</h2>
+      <div class="shop__switch" role="group" aria-label="Shop open or closed">
+        <button class="shop__btn" type="button" data-shop="open" aria-pressed="false">Open</button>
+        <button class="shop__btn" type="button" data-shop="closed" aria-pressed="false">Closed</button>
+      </div>
+      <p class="shop__state" id="shop-state"></p>
+    </div>
+    <div class="field shop__note">
+      <label for="closed-note">Closed note <span class="hint">(shown on the menu while closed, e.g. Back tomorrow at 10 AM)</span></label>
+      <input id="closed-note" type="text" maxlength="120" placeholder="We're closed right now. You can still look through the menu.">
+      <p class="field__err" id="closed-note-err" hidden></p>
+    </div>
+  </section>
 
   <section class="orders" aria-labelledby="orders-title">
     <div class="admin__head">

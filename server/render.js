@@ -100,6 +100,15 @@ function chipsHtml(groups, total) {
   ].join('\n');
 }
 
+/** Open or closed, shown in the hero. Rendered here so it shows without JavaScript. */
+function shopStatusHtml(open, note) {
+  if (open) {
+    return '<p class="status status--open"><span class="status__pill">Open now</span> Tap Add on anything you like to order.</p>';
+  }
+  const text = note || "We're closed right now. You can still look through the menu.";
+  return `<p class="status status--closed"><span class="status__pill">Closed</span> ${esc(text)}</p>`;
+}
+
 function buildHtml(allItems = menu.list(), cats = categories.list()) {
   const template = fs.readFileSync(TEMPLATE, 'utf8');
   // Items marked not available are left off the menu entirely.
@@ -117,7 +126,10 @@ function buildHtml(allItems = menu.list(), cats = categories.list()) {
     : '';
 
   const hours = orders.pickupHours();
+  const open = orders.isShopOpen();
   return template
+    .replace('<!--SHOP_OPEN-->', open ? '1' : '0')
+    .replace('<!--SHOP_STATUS-->', shopStatusHtml(open, orders.closedNote()))
     .replace('<!--DELIVERY_FEE-->', String(orders.getDeliveryFee()))
     .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
