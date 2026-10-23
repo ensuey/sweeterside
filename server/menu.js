@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const { db } = require('./db');
 const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
+const { manilaDayStartSql } = require('./clock');
 
 const MAX_PRICE = 100000;
 const NAME_MAX = 80;
@@ -126,20 +127,79 @@ function validate(input) {
   };
 }
 
+/* ---------------------------- stock ---------------------------- */
+
+// available: on the menu. unavailable: hidden from the menu. sold_out: shown
+// greyed out and cannot be ordered, until the admin changes it back.
+const AVAILABILITY = ['available', 'unavailable', 'sold_out'];
+const LIMIT_MAX = 9999;
+
+/**
+ * Quantity of each item on today's orders (Manila time), leaving out
+ * cancelled ones, so cancelling an order frees its quantity again.
+ * @returns Map(item_id -> qty)
+ */
+function soldToday(now = new Date()) {
+  const rows = db.prepare(`
+    SELECT oi.item_id, SUM(oi.qty) AS qty
+    FROM order_items oi JOIN orders o ON o.id = oi.order_id
+    WHERE o.status <> 'cancelled' AND o.created_at >= ? AND oi.item_id IS NOT NULL
+    GROUP BY oi.item_id`).all(manilaDayStartSql(now));
+  return new Map(rows.map((r) => [r.item_id, r.qty]));
+}
+
+/**
+ * Adds sold_today, remaining (null when unlimited) and sold_out, which is
+ * true when marked sold out or when today's limit is used up. The limit
+ * comes back by itself at midnight because tomorrow's count starts at zero.
+ */
+function withStock(item, sold) {
+  const sold_today = sold.get(item.id) || 0;
+  const remaining = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
+  return { ...item, sold_today, remaining, sold_out: item.availability === 'sold_out' || remaining === 0 };
+}
+
+/** @returns { availability, daily_limit } or throws ValidationError */
+function validateStock(input) {
+  const errors = {};
+  const availability = String(input.availability ?? '');
+  if (!AVAILABILITY.includes(availability)) errors.availability = 'Choose available, not available or sold out.';
+
+  let dailyLimit = intOrNull(input.daily_limit);
+  if (Number.isNaN(dailyLimit) || (dailyLimit !== null && (dailyLimit < 1 || dailyLimit > LIMIT_MAX))) {
+    errors.daily_limit = `Enter a whole number from 1 to ${LIMIT_MAX}, or leave it blank for no limit.`;
+    dailyLimit = null;
+  }
+
+  if (Object.keys(errors).length) throw new ValidationError(errors);
+  return { availability, daily_limit: dailyLimit };
+}
+
+function setStock(id, input) {
+  if (!get(id)) return null;
+  const { availability, daily_limit } = validateStock(input);
+  db.prepare(`UPDATE items SET availability = ?, daily_limit = ?, updated_at = datetime('now')
+              WHERE id = ?`).run(availability, daily_limit, Number(id));
+  return get(id);
+}
+
 /* ---------------------------- queries ---------------------------- */
 
 const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
-                       i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position
+                       i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position,
+                       i.availability, i.daily_limit
                 FROM items i`;
 
 /** Items in menu order: by category position, then item position. */
-function list() {
+function list({ now } = {}) {
+  const sold = soldToday(now);
   return db.prepare(`${SELECT} JOIN categories c ON c.id = i.category_id
-    ORDER BY c.position, c.id, i.position, i.id`).all();
+    ORDER BY c.position, c.id, i.position, i.id`).all().map((item) => withStock(item, sold));
 }
 
-function get(id) {
-  return db.prepare(`${SELECT} WHERE i.id = ?`).get(Number(id)) || null;
+function get(id, { now } = {}) {
+  const item = db.prepare(`${SELECT} WHERE i.id = ?`).get(Number(id));
+  return item ? withStock(item, soldToday(now)) : null;
 }
 
 function create(input) {
@@ -231,6 +291,6 @@ function availableImages() {
 
 module.exports = {
   ValidationError,
-  list, get, create, update, remove, reorder,
+  AVAILABILITY, list, get, create, update, remove, reorder, setStock,
   availableImages, resolveImage, validate,
 };

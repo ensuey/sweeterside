@@ -22,10 +22,12 @@ npm start                 # http://127.0.0.1:3000
 ```
 
 - Menu:  <http://127.0.0.1:3000/>
-- Admin: <http://127.0.0.1:3000/admin>
+- Admin, orders: <http://127.0.0.1:3000/admin>
+- Admin, items:  <http://127.0.0.1:3000/admin/items>
 
-`npm test` runs the test suite (35 tests covering password hashing, CSRF,
-validation, path containment, categories, orders and the database migration).
+`npm test` runs the test suite (41 tests covering password hashing, CSRF,
+validation, path containment, categories, orders, item stock and the database
+migrations).
 
 ### Changing the admin password
 
@@ -39,12 +41,17 @@ server/
   index.js       HTTP server, routing, static files, uploads
   db.js          SQLite schema and the first-run seed
   auth.js        scrypt hashing, sessions, CSRF, login throttling
-  menu.js        item validation and CRUD
+  menu.js        item validation, CRUD, availability and daily limits
   categories.js  category validation, CRUD and ordering
-  orders.js      delivery orders, pricing and the delivery fee
+  orders.js      orders, pricing, order types and their settings
+  clock.js       Manila time: pick-up slots and "today" for daily limits
   render.js      builds the customer page from the database
   imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
-admin/           login page and dashboard
+admin/
+  common.js      shared by both pages: API calls, toasts, sign-in, sign-out
+  index.html     Orders page (orders.js): the queue and ordering settings
+  items.html     Items page (items.js): items, stock and categories
+  login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
 test/            test suite
@@ -122,6 +129,32 @@ What the server does not trust:
 
 Ordering needs the server running. On static hosting the menu still shows,
 but placing an order fails with a connection message.
+
+## Items page: availability and daily limits
+
+The admin has two pages, **Orders** and **Items**, linked from the top bar.
+On the Items page each item row has two controls that save as soon as they
+change:
+
+| Availability | On the customer menu |
+|---|---|
+| **Available** | shown and can be ordered |
+| **Not available** | hidden, e.g. seasonal or off the menu for now |
+| **Sold out** | shown greyed with a "Sold out" badge, cannot be added |
+
+A manual **Sold out** stays until it is changed back.
+
+**Max per day** is how many of the item can be ordered in a day, for
+capacity or stock. Leave it blank for no limit. The count is the quantity on
+today's orders, in Manila time, not counting cancelled ones, so cancelling an
+order gives its quantity back. When the limit is used up the item reads as
+sold out for the rest of the day, and comes back by itself at midnight. Each
+row shows today's count, e.g. "7 / 20 sold today".
+
+Customers see "Only 3 left today" once 5 or fewer are left. The cart will not
+go past what is left, and the server checks again when the order is placed,
+so two customers cannot both take the last one: the second is told how many
+are left and their cart is cut down to that.
 
 ## How the photos work
 

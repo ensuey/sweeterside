@@ -318,9 +318,11 @@ async function route(req, res) {
     return sendHtml(res, 200, html.replace('<!--SETUP-->', banner));
   }
 
-  if (pathname === '/admin' && method === 'GET') {
+  // Two admin pages: orders (with the ordering settings) and items.
+  const adminPages = { '/admin': 'index.html', '/admin/items': 'items.html' };
+  if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
-    return serveFile(req, res, path.join(ROOT, 'admin', 'index.html'), { cache: 'no-store' })
+    return serveFile(req, res, path.join(ROOT, 'admin', adminPages[pathname]), { cache: 'no-store' })
       || send(res, 404, 'Not found');
   }
 
@@ -341,6 +343,16 @@ async function route(req, res) {
     const body = await readJson(req);
     if (!Array.isArray(body.ids)) return sendJson(res, 400, { error: 'Expected an "ids" array.' });
     return afterMutation(res, 200, { items: menu.reorder(body.ids) });
+  }
+
+  // Availability and the daily limit are saved on their own, straight from
+  // the items list, without resubmitting the whole item.
+  const stockMatch = pathname.match(/^\/api\/items\/(\d+)\/stock$/);
+  if (stockMatch && (method === 'PATCH' || method === 'PUT')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const item = menu.setStock(Number(stockMatch[1]), await readJson(req));
+    if (!item) return sendJson(res, 404, { error: 'That item no longer exists.' });
+    return afterMutation(res, 200, { item });
   }
 
   const itemMatch = pathname.match(/^\/api\/items\/(\d+)$/);

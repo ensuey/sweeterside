@@ -23,21 +23,35 @@ function encPath(p) {
   return String(p).split('/').map(encodeURIComponent).join('/');
 }
 
+// Below this many left today, customers are told how many remain.
+const FEW_LEFT = 5;
+
 function cardHtml(item, category) {
   const hasCrop = item.crop_w != null && item.crop_h != null;
   const shotAttrs = hasCrop
     ? ` class="shot" style="--x:${item.crop_x}; --y:${item.crop_y}; --w:${item.crop_w}; --h:${item.crop_h}"`
     : ' class="shot shot--plain"';
 
-  return `      <li class="card" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.price}">
+  // Sold out (by hand, or today's limit is used up): shown, but cannot be added.
+  // Otherwise data-remaining tells the cart how many it may take today.
+  const stockAttr = item.sold_out ? ' data-soldout'
+    : item.remaining !== null ? ` data-remaining="${item.remaining}"` : '';
+  const action = item.sold_out
+    ? '<span class="card__soldout">Sold out</span>'
+    : `<button class="card__add" type="button" data-add>Add<span class="vh"> ${esc(item.name)} to cart</span></button>`;
+  const fewLeft = !item.sold_out && item.remaining !== null && item.remaining <= FEW_LEFT
+    ? `\n          <p class="card__left">Only ${item.remaining} left today</p>`
+    : '';
+
+  return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.price}"${stockAttr}>
         <div${shotAttrs}>
           <img src="${esc(encPath(item.image))}" alt="${esc(item.alt || item.name)}">
         </div>
         <div class="card__body">
-          <h3 class="card__name">${esc(item.name)}</h3>
+          <h3 class="card__name">${esc(item.name)}</h3>${fewLeft}
           <div class="card__foot">
             <span class="price"><small>Php</small> ${item.price}</span>
-            <button class="card__add" type="button" data-add>Add<span class="vh"> ${esc(item.name)} to cart</span></button>
+            ${action}
             <button class="card__btn" type="button">View ${esc(item.name)}</button>
           </div>
         </div>
@@ -67,8 +81,10 @@ function chipsHtml(groups, total) {
   ].join('\n');
 }
 
-function buildHtml(items = menu.list(), cats = categories.list()) {
+function buildHtml(allItems = menu.list(), cats = categories.list()) {
   const template = fs.readFileSync(TEMPLATE, 'utf8');
+  // Items marked not available are left off the menu entirely.
+  const items = allItems.filter((i) => i.availability !== 'unavailable');
 
   // Empty categories get neither a section nor a filter chip.
   const groups = cats

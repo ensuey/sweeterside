@@ -144,6 +144,13 @@ a { color: var(--navy); }
 .topbar__logo { width: 38px; height: 38px; border-radius: 50%; }
 .topbar__title { font-size: 1.15rem; }
 .topbar__spacer { flex: 1; }
+.topbar__nav { display: flex; gap: .25rem; }
+.topbar__nav a {
+  min-height: 38px; display: inline-flex; align-items: center; padding: 0 .9rem;
+  font-weight: 700; font-size: .9375rem; color: var(--ink); text-decoration: none; border-radius: var(--r-full);
+}
+.topbar__nav a:hover { background: var(--cream); }
+.topbar__nav a[aria-current="page"] { background: var(--ink); color: #fff; }
 .topbar__user { font-size: .875rem; color: var(--ink-soft); }
 
 /* ---------------- admin body ---------------- */
@@ -245,8 +252,28 @@ a { color: var(--navy); }
 .row-item__meta { font-size: .875rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .row-item__actions { display: flex; gap: .4rem; flex-shrink: 0; }
 .row-item__move { min-width: 36px; padding: 0; font-size: 1rem; }
-@media (max-width: 520px) {
+.row-item__today { font-size: .8125rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.row-item__today.is-full { color: var(--danger); font-weight: 700; }
+
+/* Availability and the daily limit, saved straight from the row. */
+.row-item__stock { display: flex; gap: .6rem; flex-shrink: 0; }
+.stock__field { display: flex; flex-direction: column; gap: .2rem; font-size: .75rem; font-weight: 700; color: var(--ink-soft); }
+.stock__field select, .stock__field input {
+  min-height: 38px; padding: .3rem .6rem; font: inherit; font-size: .875rem; font-weight: 600; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-sm);
+}
+.stock__field input { width: 7rem; }
+.stock__field select:focus, .stock__field input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(62,94,126,.16); }
+
+/* Hidden from the menu: dimmed. Sold out: a warm tint. */
+.row-item[data-availability="unavailable"] { opacity: .6; }
+.row-item[data-availability="sold_out"] { background: #FFF7F5; border-color: #F0D2CC; }
+
+@media (max-width: 720px) {
   .row-item { flex-wrap: wrap; }
+  .row-item__stock { width: 100%; }
+  .stock__field { flex: 1; }
+  .stock__field input { width: 100%; }
   .row-item__actions { width: 100%; justify-content: flex-end; }
 }
 
