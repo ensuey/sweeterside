@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- Amounts are whole pesos, copied at order time so later price changes do
 -- not rewrite what the customer was charged. The order type columns are added
--- by migrateOrders(), so new and old databases take the same path.
+-- by addMissingColumns(), so new and old databases take the same path.
 CREATE TABLE IF NOT EXISTS orders (
   id            INTEGER PRIMARY KEY,
   customer_name TEXT    NOT NULL,
@@ -166,14 +166,24 @@ const ITEM_STOCK_COLUMNS = {
   daily_limit: 'INTEGER',
 };
 
-function migrateItemStock() {
-  const cols = db.prepare('PRAGMA table_info(items)').all().map((c) => c.name);
-  for (const [name, type] of Object.entries(ITEM_STOCK_COLUMNS)) {
-    if (!cols.includes(name)) db.exec(`ALTER TABLE items ADD COLUMN ${name} ${type}`);
+/* Promotions came later still: a best seller badge and a sale price, kept as
+   the rule (percent or amount off) so the full price is never lost. */
+const ITEM_PROMO_COLUMNS = {
+  best_seller: 'INTEGER NOT NULL DEFAULT 0',
+  sale_type: "TEXT NOT NULL DEFAULT ''", // '' (no sale) | percent | amount
+  sale_value: 'INTEGER',
+};
+
+/** Add any of `columns` that `table` does not have yet. */
+function addMissingColumns(table, columns) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  for (const [name, type] of Object.entries(columns)) {
+    if (!cols.includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
   }
 }
 
-migrateItemStock();
+addMissingColumns('items', ITEM_STOCK_COLUMNS);
+addMissingColumns('items', ITEM_PROMO_COLUMNS);
 
 /* Orders were delivery-only before pick-up and dine-in. Adding columns with
    defaults keeps every earlier order as a delivery order. Pick-up and dine-in
@@ -182,16 +192,28 @@ const ORDER_COLUMNS = {
   order_type: "TEXT NOT NULL DEFAULT 'delivery'",
   table_no: "TEXT NOT NULL DEFAULT ''",
   pickup_at: "TEXT NOT NULL DEFAULT ''", // 'asap' or 'HH:MM', Manila time, same day
+  // A voucher takes `discount` off the items: total = subtotal - discount + delivery_fee.
+  voucher_code: "TEXT NOT NULL DEFAULT ''",
+  discount: 'INTEGER NOT NULL DEFAULT 0',
 };
 
-function migrateOrders() {
-  const cols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
-  for (const [name, type] of Object.entries(ORDER_COLUMNS)) {
-    if (!cols.includes(name)) db.exec(`ALTER TABLE orders ADD COLUMN ${name} ${type}`);
-  }
-}
+addMissingColumns('orders', ORDER_COLUMNS);
 
-migrateOrders();
+/* Voucher codes customers type at checkout. Codes are stored in upper case;
+   the dates are Manila calendar days, both included, and either may be open. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS vouchers (
+  id          INTEGER PRIMARY KEY,
+  code        TEXT    NOT NULL UNIQUE,
+  kind        TEXT    NOT NULL CHECK (kind IN ('percent','amount')),
+  value       INTEGER NOT NULL,
+  max_off     INTEGER,            -- percent vouchers only: the most it takes off, in pesos
+  valid_from  TEXT,               -- 'YYYY-MM-DD' or NULL
+  valid_until TEXT,               -- 'YYYY-MM-DD' or NULL
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+)`);
 
 /* ---------- First-run seed: the nine items from the printed posters ---------- */
 

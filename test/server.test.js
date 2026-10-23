@@ -656,6 +656,225 @@ test('items from before availability are kept available with no limit', () => {
   assert.deepStrictEqual(JSON.parse(out), ['Kept Frappe', 'available', null, false]);
 });
 
+/* ---------------------------- promotions ---------------------------- */
+
+const vouchers = require('../server/vouchers');
+
+function itemErrors(input) {
+  try { menu.validate(input); return null; } catch (err) { return err.errors; }
+}
+
+test('a sale is a percentage or an amount off, and never takes the price to zero', () => {
+  assert.ok(itemErrors({ ...base, sale_type: 'half' }).sale);
+  assert.ok(itemErrors({ ...base, sale_type: 'percent', sale_value: '' }).sale);
+  assert.ok(itemErrors({ ...base, sale_type: 'percent', sale_value: 0 }).sale);
+  assert.ok(itemErrors({ ...base, sale_type: 'percent', sale_value: 91 }).sale);
+  assert.ok(itemErrors({ ...base, sale_type: 'amount', sale_value: 100 }).sale, 'not the whole Php 100');
+  assert.strictEqual(itemErrors({ ...base, sale_type: 'amount', sale_value: 99 }), null);
+
+  const none = menu.validate({ ...base, sale_type: '', sale_value: 50 });
+  assert.strictEqual(none.sale_value, null, 'no sale clears the value');
+
+  assert.strictEqual(menu.salePrice({ price: 129, sale_type: 'percent', sale_value: 20 }), 103, 'rounded');
+  assert.strictEqual(menu.salePrice({ price: 129, sale_type: 'amount', sale_value: 30 }), 99);
+  assert.strictEqual(menu.salePrice({ price: 129, sale_type: '', sale_value: null }), 129);
+});
+
+test('best sellers get a badge and sale items show the old price and charge the new one', () => {
+  orders.setDeliveryFee(0);
+  const star = menu.create({ ...base, name: 'Star Frappe', price: 120, best_seller: true });
+  const sale = menu.create({ ...base, name: 'Sale Frappe', price: 129, sale_type: 'percent', sale_value: 20 });
+  const plain = menu.create({ ...base, name: 'Plain Frappe', price: 90 });
+  assert.strictEqual(star.best_seller, true);
+  assert.strictEqual(sale.sale_price, 103);
+
+  const html = render.buildHtml();
+  const card = (name) => html.split('<li class="card').find((c) => c.includes(`data-name="${name}"`));
+  assert.match(card('Star Frappe'), /data-best/);
+  assert.match(card('Star Frappe'), /Best seller/);
+  assert.match(card('Sale Frappe'), /data-price="103"/, 'the cart charges the sale price');
+  assert.match(card('Sale Frappe'), /data-was="129"/);
+  assert.match(card('Sale Frappe'), /<s class="price__was">.*Php 129<\/s>/);
+  assert.match(card('Sale Frappe'), /20% off/);
+  for (const marker of ['data-best', 'data-was', 'price__was', 'card__sale']) {
+    assert.ok(!card('Plain Frappe').includes(marker), `a plain item has no ${marker}`);
+  }
+
+  const order = orders.create(orderInput({ items: [{ id: sale.id, qty: 2 }], expected_total: 206, cash: 300 }));
+  assert.strictEqual(order.subtotal, 206);
+  assert.deepStrictEqual(order.items.map((l) => l.price), [103], 'the order keeps the price charged');
+
+  // Taking the item off sale changes what the next order is charged.
+  menu.update(sale.id, { ...base, name: 'Sale Frappe', price: 129 });
+  assert.throws(() => orders.create(orderInput({ items: [{ id: sale.id, qty: 1 }], expected_total: 103 })),
+    (err) => err.status === 409 && err.body.quote.total === 129);
+  [star, sale, plain].forEach((i) => menu.remove(i.id));
+});
+
+function voucherErrors(input, id) {
+  try { vouchers.validate(input, id); return null; } catch (err) { return err.errors; }
+}
+
+test('vouchers are validated: code, amount and dates', () => {
+  const ok = { code: 'sweet10', kind: 'percent', value: 10 };
+  assert.strictEqual(vouchers.validate(ok).code, 'SWEET10', 'stored in upper case');
+  for (const code of ['', 'ab', 'has space', 'x'.repeat(21), 'semi;colon']) {
+    assert.ok(voucherErrors({ ...ok, code }).code, `should reject code ${code}`);
+  }
+  assert.ok(voucherErrors({ ...ok, kind: 'free' }).kind);
+  assert.ok(voucherErrors({ ...ok, value: 0 }).value);
+  assert.ok(voucherErrors({ ...ok, value: 101 }).value);
+  assert.ok(voucherErrors({ ...ok, kind: 'amount', value: '' }).value);
+  assert.ok(voucherErrors({ ...ok, max_off: 0 }).max_off);
+  assert.strictEqual(vouchers.validate({ ...ok, kind: 'amount', value: 50, max_off: 20 }).max_off, null,
+    'the cap is only for percentages');
+  assert.ok(voucherErrors({ ...ok, valid_from: '2026-02-30' }).valid_from, 'not a real day');
+  assert.ok(voucherErrors({ ...ok, valid_from: '2026-11-10', valid_until: '2026-11-01' }).valid_until);
+
+  const made = vouchers.create(ok);
+  assert.ok(voucherErrors({ ...ok, code: 'Sweet10' }).code, 'codes are unique ignoring case');
+  assert.strictEqual(voucherErrors({ ...ok, value: 15 }, made.id), null, 'its own code is not a clash');
+  vouchers.remove(made.id);
+});
+
+test('a voucher code is checked against the day and works out the discount', () => {
+  const pct = vouchers.create({ code: 'TENOFF', kind: 'percent', value: 10, max_off: 20 });
+  const amt = vouchers.create({ code: 'FIFTY', kind: 'amount', value: 50 });
+  const dated = vouchers.create({
+    code: 'NOV', kind: 'amount', value: 10, valid_from: '2026-11-01', valid_until: '2026-11-30',
+  });
+
+  assert.deepStrictEqual(vouchers.check(' tenoff ', 150), { code: 'TENOFF', label: '10% off (up to Php 20)', discount: 15 });
+  assert.strictEqual(vouchers.check('TENOFF', 400).discount, 20, 'capped');
+  assert.strictEqual(vouchers.check('FIFTY', 30).discount, 30, 'never more than the items');
+  assert.throws(() => vouchers.check('NOPE', 100), (e) => /don't know/.test(e.errors.voucher));
+
+  // Manila is UTC+8: 16:00 UTC on 31 Oct is already 1 Nov in Manila.
+  const at = (iso) => new Date(iso);
+  assert.throws(() => vouchers.check('NOV', 100, at('2026-10-31T15:59:00Z')),
+    (e) => /starts on 1 Nov 2026/.test(e.errors.voucher));
+  assert.strictEqual(vouchers.check('NOV', 100, at('2026-10-31T16:00:00Z')).discount, 10);
+  assert.strictEqual(vouchers.check('NOV', 100, at('2026-11-30T15:59:00Z')).discount, 10, 'the last day counts');
+  assert.throws(() => vouchers.check('NOV', 100, at('2026-11-30T16:00:00Z')),
+    (e) => /expired/.test(e.errors.voucher));
+
+  vouchers.setActive(amt.id, false);
+  assert.throws(() => vouchers.check('FIFTY', 100), (e) => /not available/.test(e.errors.voucher));
+  [pct, amt, dated].forEach((v) => vouchers.remove(v.id));
+});
+
+test('an order with a voucher takes it off the items, not the delivery fee', () => {
+  orders.setDeliveryFee(40);
+  const v = vouchers.create({ code: 'ORDER50', kind: 'amount', value: 50 });
+
+  // Cart: 2 Matcha (258) + 1 sandwich (85) = 343, minus 50, plus the fee of 40.
+  const order = orders.create(orderInput({ voucher: 'order50', expected_total: 343 - 50 + 40 }));
+  assert.strictEqual(order.discount, 50);
+  assert.strictEqual(order.voucher_code, 'ORDER50');
+  assert.strictEqual(order.delivery_fee, 40);
+  assert.strictEqual(order.total, 333);
+  assert.strictEqual(order.change_due, 500 - 333);
+  assert.strictEqual(vouchers.get(v.id).uses, 1);
+
+  // Turned off after the customer applied it: refused, and the code is dropped.
+  vouchers.setActive(v.id, false);
+  assert.throws(() => orders.create(orderInput({ voucher: 'ORDER50', expected_total: 333 })), (err) => {
+    assert.strictEqual(err.status, 409);
+    assert.strictEqual(err.body.quote.voucher, null);
+    assert.strictEqual(err.body.quote.total, 383, 'the new total without the voucher');
+    assert.match(err.body.error, /not available/);
+    return true;
+  });
+
+  orders.setStatus(order.id, 'cancelled');
+  assert.strictEqual(vouchers.get(v.id).uses, 0, 'cancelled orders do not count as uses');
+  vouchers.remove(v.id);
+  assert.strictEqual(orders.get(order.id).voucher_code, 'ORDER50', 'deleting keeps the code on past orders');
+  orders.setDeliveryFee(0);
+});
+
+test('items and orders from before promotions get empty promotion fields', () => {
+  const { execFileSync } = require('node:child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-migrate-promo-'));
+  const dbPath = path.join(dir, 'old.db');
+
+  const { DatabaseSync } = require('node:sqlite');
+  const old = new DatabaseSync(dbPath);
+  old.exec(`CREATE TABLE categories (
+    id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL, label TEXT NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO categories (id, slug, name, label) VALUES (1, 'drinks', 'Drinks', 'Drinks');
+    CREATE TABLE items (
+    id INTEGER PRIMARY KEY, name TEXT NOT NULL, price INTEGER NOT NULL,
+    category_id INTEGER NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
+    image TEXT NOT NULL, alt TEXT NOT NULL DEFAULT '',
+    crop_x INTEGER, crop_y INTEGER, crop_w INTEGER, crop_h INTEGER,
+    position INTEGER NOT NULL DEFAULT 0,
+    availability TEXT NOT NULL DEFAULT 'available', daily_limit INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO items (id, name, price, category_id, image) VALUES (5, 'Kept Frappe', 99, 1, 'assets/Menu Frappe.jpg');
+    CREATE TABLE orders (
+    id INTEGER PRIMARY KEY, customer_name TEXT NOT NULL, phone TEXT NOT NULL, address TEXT NOT NULL,
+    subtotal INTEGER NOT NULL, delivery_fee INTEGER NOT NULL, total INTEGER NOT NULL,
+    cash INTEGER NOT NULL, change_due INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'new'
+      CHECK (status IN ('new','preparing','delivering','completed','cancelled')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    order_type TEXT NOT NULL DEFAULT 'delivery', table_no TEXT NOT NULL DEFAULT '', pickup_at TEXT NOT NULL DEFAULT '');
+    INSERT INTO orders (id, customer_name, phone, address, subtotal, delivery_fee, total, cash, change_due)
+    VALUES (3, 'Old Customer', '09170000000', '1 Old St', 100, 40, 140, 200, 60);`);
+  old.close();
+
+  const out = execFileSync(process.execPath, ['--no-warnings', '-e', `
+    const menu = require(${JSON.stringify(path.join(__dirname, '..', 'server', 'menu'))});
+    const orders = require(${JSON.stringify(path.join(__dirname, '..', 'server', 'orders'))});
+    const i = menu.get(5);
+    const o = orders.get(3);
+    console.log(JSON.stringify([i.best_seller, i.sale_type, i.sale_price, o.voucher_code, o.discount, o.total]));`],
+  { env: { ...process.env, DB_PATH: dbPath }, encoding: 'utf8' });
+
+  assert.deepStrictEqual(JSON.parse(out), [false, '', 99, '', 0, 140]);
+});
+
+test('the voucher endpoints: public checking with a limit, admin-only managing', async () => {
+  const { server } = require('../server/index');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const v = vouchers.create({ code: 'CHECKME', kind: 'percent', value: 10 });
+  try {
+    const check = (body, headers = { 'Content-Type': 'application/json' }) =>
+      fetch(`${url}/api/vouchers/check`, { method: 'POST', headers, body: JSON.stringify(body) });
+
+    const ok = await check({ code: 'checkme', type: 'dinein', items: orderInput().items });
+    assert.strictEqual(ok.status, 200);
+    const data = await ok.json();
+    assert.strictEqual(data.voucher.code, 'CHECKME');
+    assert.strictEqual(data.discount, 34, '10% of 343, rounded');
+    assert.strictEqual(data.total, 343 - 34, 'dine-in has no fee');
+
+    const unknown = await check({ code: 'NOPE', items: orderInput().items });
+    assert.strictEqual(unknown.status, 422);
+    assert.match((await unknown.json()).fields.voucher, /don't know/);
+
+    assert.strictEqual((await check({ code: 'CHECKME' }, { 'Content-Type': 'text/plain' })).status, 415);
+
+    // Two checks used above; the 21st check in ten minutes is refused.
+    for (let i = 0; i < 18; i++) await check({ code: 'NOPE', items: orderInput().items });
+    assert.strictEqual((await check({ code: 'CHECKME', items: orderInput().items })).status, 429);
+
+    assert.strictEqual((await fetch(`${url}/api/vouchers`)).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/vouchers`, { method: 'POST' })).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/vouchers/${v.id}`, { method: 'DELETE' })).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/vouchers/${v.id}/active`, { method: 'PATCH' })).status, 401);
+    const page = await fetch(`${url}/admin/vouchers`, { redirect: 'manual' });
+    assert.strictEqual(page.status, 302, 'the vouchers page needs sign-in');
+  } finally {
+    vouchers.remove(v.id);
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('the order endpoints: public placing, admin-only reading', async () => {
   const { server } = require('../server/index');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

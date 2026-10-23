@@ -280,6 +280,23 @@ body[data-empty="true"] .section { display: none; }
   border-radius: var(--r-full); padding: .3rem .6rem;
 }
 .card__left { margin: 0; font-size: .875rem; font-weight: 700; color: var(--coral-ink); }
+
+/* Promotions: a best seller ribbon on the photo, and a sale price. */
+.card__badge {
+  position: absolute; top: var(--sp-3); left: var(--sp-3); z-index: 1;
+  padding: .3rem .6rem; border-radius: var(--r-full);
+  font-size: .75rem; font-weight: 700; letter-spacing: .02em;
+  color: #5A3A00; background: #FFD66B; box-shadow: 0 2px 6px rgba(90,58,0,.18);
+}
+.card__sale {
+  margin: 0; align-self: flex-start; padding: .15rem .5rem; border-radius: var(--r-full);
+  font-size: .8125rem; font-weight: 700; color: #fff; background: var(--coral-ink);
+}
+.price__was {
+  font-family: "Nunito", sans-serif; font-size: .8125rem; font-weight: 600;
+  color: var(--ink-soft); text-decoration-thickness: 1.5px; margin-right: .2em;
+}
+.card--soldout .card__sale { background: var(--ink-soft); }
 .card__add:hover { background: #FDF1EE; }
 .card__add:active { transform: scale(.95); }
 .card__add.is-added { background: var(--coral-ink); color: #fff; }
@@ -338,6 +355,35 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .cart__notice[hidden], .cart__alert[hidden], .cart__sum[hidden], .checkout[hidden] { display: none; }
 .cart__closed { margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); background: var(--cream); border: 1px solid var(--line); font-weight: 600; }
 .cart__closed[hidden], .cart__sum div[hidden], .checkout [data-for][hidden] { display: none; }
+
+/* Voucher code entry, above the totals. */
+.voucher { display: flex; flex-direction: column; gap: var(--sp-2); }
+.voucher[hidden], .voucher__entry[hidden], .voucher__applied[hidden] { display: none; }
+.voucher__entry { display: flex; flex-direction: column; gap: var(--sp-1); }
+.voucher__entry label { font-weight: 700; font-size: .9375rem; }
+.voucher__row { display: flex; gap: var(--sp-2); }
+.voucher__row input {
+  flex: 1; min-width: 0; min-height: 44px; padding: 0 var(--sp-4);
+  font: inherit; font-size: 1rem; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: var(--r-full);
+}
+.voucher__row input::placeholder { text-transform: none; letter-spacing: 0; }
+.voucher__row input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 4px rgba(62,94,126,.14); }
+.voucher__apply, .voucher__remove {
+  min-height: 44px; padding: 0 var(--sp-4); cursor: pointer;
+  font: 700 .9375rem "Nunito", sans-serif; color: var(--coral-ink);
+  background: var(--surface); border: 1.5px solid var(--coral-ink); border-radius: var(--r-full);
+}
+.voucher__apply:hover, .voucher__remove:hover { background: #FDF1EE; }
+.voucher__apply:disabled { opacity: .5; cursor: wait; }
+.voucher__applied {
+  margin: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border-radius: var(--r-md);
+  background: #EEF6F0; border: 1px solid #CFE6D7; color: #1F5A3A; font-weight: 700;
+}
+.voucher__remove { min-height: 36px; font-size: .875rem; }
+#cart-discount, #done-discount { color: #2E7D52; }
 
 .cart__lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .cline {

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vouchers — Sweeter Side admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <img class="topbar__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+    <h1 class="topbar__title">Menu admin</h1>
+    <nav class="topbar__nav" aria-label="Admin pages">
+      <a href="/admin">Orders</a>
+      <a href="/admin/items">Items</a>
+      <a href="/admin/vouchers" aria-current="page">Vouchers</a>
+    </nav>
+    <div class="topbar__spacer"></div>
+    <span class="topbar__user" id="who"></span>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
+    <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+  </div>
+</header>
+
+<main class="admin">
+  <div class="admin__head">
+    <div>
+      <h2 class="admin__title">Vouchers</h2>
+      <p class="admin__sub" id="summary">Loading…</p>
+    </div>
+    <button class="btn btn--primary" type="button" id="add">Add voucher</button>
+  </div>
+
+  <p class="alert" id="page-error" role="alert" hidden></p>
+
+  <ul class="rows" id="vouchers"></ul>
+
+  <p class="empty-note" id="empty" hidden>
+    No vouchers yet. Use <strong>Add voucher</strong> to make a code customers can type at checkout.
+  </p>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- ---------- Add / edit ---------- -->
+<dialog class="modal modal--sm" id="editor" aria-labelledby="editor-title">
+  <form method="dialog" class="modal__form" id="editor-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="editor-title">Add voucher</h2>
+      <button class="icon-btn" type="button" id="editor-close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="modal__body">
+      <p class="alert" id="editor-error" role="alert" hidden></p>
+
+      <div class="field">
+        <label for="v-code">Code <span class="hint">(what customers type, e.g. SWEET10)</span></label>
+        <input id="v-code" name="code" type="text" maxlength="20" autocomplete="off" spellcheck="false" autocapitalize="characters" required>
+        <p class="field__err" data-err="code" hidden></p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="v-kind">Takes off</label>
+          <select id="v-kind" name="kind">
+            <option value="percent">% of the items</option>
+            <option value="amount">Php amount</option>
+          </select>
+          <p class="field__err" data-err="kind" hidden></p>
+        </div>
+        <div class="field">
+          <label for="v-value">How much <span class="hint" id="v-unit">(%)</span></label>
+          <input id="v-value" name="value" type="number" min="1" step="1" inputmode="numeric" required>
+          <p class="field__err" data-err="value" hidden></p>
+        </div>
+      </div>
+
+      <div class="field" id="v-max-field">
+        <label for="v-max">At most (Php) <span class="hint">(blank for no cap)</span></label>
+        <input id="v-max" name="max_off" type="number" min="1" step="1" inputmode="numeric">
+        <p class="field__err" data-err="max_off" hidden></p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="v-from">First day <span class="hint">(optional)</span></label>
+          <input id="v-from" name="valid_from" type="date">
+          <p class="field__err" data-err="valid_from" hidden></p>
+        </div>
+        <div class="field">
+          <label for="v-until">Last day <span class="hint">(optional)</span></label>
+          <input id="v-until" name="valid_until" type="date">
+          <p class="field__err" data-err="valid_until" hidden></p>
+        </div>
+      </div>
+
+      <p class="hint">Vouchers take money off the items only, never the delivery fee. Days are Manila time and both days count.</p>
+    </div>
+
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="editor-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit" id="editor-save">Add voucher</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- Delete confirmation ---------- -->
+<dialog class="modal modal--sm" id="confirm" aria-labelledby="confirm-title">
+  <div class="modal__head">
+    <h2 class="modal__title" id="confirm-title">Delete this voucher?</h2>
+  </div>
+  <div class="modal__body">
+    <p id="confirm-text"></p>
+  </div>
+  <div class="modal__foot">
+    <button class="btn btn--ghost" type="button" id="confirm-cancel">Keep it</button>
+    <button class="btn btn--danger" type="button" id="confirm-ok">Delete</button>
+  </div>
+</dialog>
+
+<script src="/admin/common.js" defer></script>
+<script src="/admin/vouchers.js" defer></script>
+</body>
+</html>

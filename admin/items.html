@@ -20,6 +20,7 @@
     <nav class="topbar__nav" aria-label="Admin pages">
       <a href="/admin">Orders</a>
       <a href="/admin/items" aria-current="page">Items</a>
+      <a href="/admin/vouchers">Vouchers</a>
     </nav>
     <div class="topbar__spacer"></div>
     <span class="topbar__user" id="who"></span>
@@ -136,6 +137,27 @@
           <button class="btn btn--ghost btn--sm" type="button" id="crop-clear">Clear crop</button>
         </div>
         <p class="field__err" data-err="crop" hidden></p>
+      </fieldset>
+
+      <fieldset class="crop promo">
+        <legend>Promotion</legend>
+        <label class="promo__check"><input type="checkbox" id="f-best"> Best seller <span class="hint">(shows a badge on the menu)</span></label>
+        <div class="row">
+          <div class="field">
+            <label for="f-sale-type">Sale</label>
+            <select id="f-sale-type" name="sale_type">
+              <option value="">No sale</option>
+              <option value="percent">% off</option>
+              <option value="amount">Php off</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="f-sale-value">Discount <span class="hint" id="sale-unit"></span></label>
+            <input id="f-sale-value" name="sale_value" type="number" min="1" step="1" inputmode="numeric">
+          </div>
+        </div>
+        <p class="promo__note" id="sale-note"></p>
+        <p class="field__err" data-err="sale" hidden></p>
       </fieldset>
 
       <div class="preview">

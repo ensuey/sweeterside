@@ -226,6 +226,7 @@ a { color: var(--navy); }
 .order__sum dt { color: var(--ink-soft); }
 .order__sum dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .order__sum .is-total { color: var(--ink); font-weight: 700; }
+.order__sum .order__discount { color: var(--ok); }
 .order__change {
   grid-column: 1 / -1; margin-top: .35rem; padding: .5rem .7rem; border-radius: var(--r-sm);
   background: #EEF6F0; color: #1F5A3A; font-weight: 700;
@@ -319,6 +320,37 @@ a { color: var(--navy); }
 .crop { border: 1px solid var(--line); border-radius: var(--r-md); padding: .9rem; margin: 0; }
 .crop legend { padding: 0 .4rem; }
 .crop__note { margin: 0 0 .6rem; font-size: .8125rem; color: var(--ink-soft); }
+
+/* Promotion fields in the item editor. */
+.promo { display: flex; flex-direction: column; gap: .8rem; }
+.promo__check { min-height: 40px; display: inline-flex; align-items: center; gap: .5rem; font-weight: 700; cursor: pointer; }
+.promo__check input { width: 18px; height: 18px; accent-color: var(--coral-ink); }
+.promo__note { margin: 0; font-size: .875rem; font-weight: 700; color: var(--ok); min-height: 1.3em; }
+.promo__note:empty { display: none; }
+
+/* Voucher rows. */
+.voucher-row__code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; }
+.voucher-row__status {
+  flex-shrink: 0; padding: .2rem .6rem; border-radius: var(--r-full); font-size: .8125rem; font-weight: 700;
+  background: #EEF6F0; color: #1F5A3A;
+}
+.voucher-row[data-status="off"] .voucher-row__status { background: #F1ECE2; color: var(--ink-soft); }
+.voucher-row[data-status="expired"] .voucher-row__status { background: #FDE3DE; color: #8E2C1D; }
+.voucher-row[data-status="scheduled"] .voucher-row__status { background: #EAF1F7; color: var(--navy); }
+.voucher-row[data-status="off"], .voucher-row[data-status="expired"] { opacity: .75; }
+.voucher-row__switch { flex-shrink: 0; min-height: 40px; display: inline-flex; align-items: center; gap: .4rem; font-weight: 700; cursor: pointer; }
+.voucher-row__switch input { width: 18px; height: 18px; accent-color: var(--coral-ink); }
+.field[hidden] { display: none; }
+
+/* Promotion chips on item rows. */
+.row-item__chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.row-item__chips:empty { display: none; }
+.chip-best, .chip-sale {
+  padding: .1rem .5rem; border-radius: var(--r-full); font-size: .75rem; font-weight: 700;
+}
+.chip-best { background: #FFE9A8; color: #5A3A00; }
+.chip-sale { background: #FDE3DE; color: #8E2C1D; }
+.chip-sale s { font-weight: 600; opacity: .75; }
 .crop__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; align-items: end; }
 .crop__grid .btn { grid-column: 1 / -1; justify-self: start; }
 @media (max-width: 460px) { .crop__grid { grid-template-columns: repeat(2, 1fr); } }

@@ -13,6 +13,7 @@ const auth = require('./auth');
 const menu = require('./menu');
 const categories = require('./categories');
 const orders = require('./orders');
+const vouchers = require('./vouchers');
 const render = require('./render');
 const imagesize = require('./imagesize');
 
@@ -118,26 +119,33 @@ function clientIp(req) {
   return req.socket.remoteAddress || 'unknown';
 }
 
+/** Allow `limit` events per IP address in a sliding window of `windowMs`. */
+function rateLimiter(limit, windowMs) {
+  const log = new Map(); // ip -> timestamps
+  return {
+    limited(ip) {
+      const now = Date.now();
+      const recent = (log.get(ip) || []).filter((t) => now - t < windowMs);
+      if (recent.length) log.set(ip, recent);
+      else log.delete(ip);
+      return recent.length >= limit;
+    },
+    record(ip) {
+      const list = log.get(ip) || [];
+      list.push(Date.now());
+      log.set(ip, list);
+    },
+  };
+}
+
 /* Placing an order is the one public write. Cap how many orders one address
    can place, so a script cannot flood the kitchen. Only placed orders count:
    a customer fixing a typo in the form is never locked out. */
-const ORDER_LIMIT = 5;
-const ORDER_WINDOW_MS = 10 * 60 * 1000;
-const orderLog = new Map(); // ip -> timestamps of placed orders
+const orderLimiter = rateLimiter(5, 10 * 60 * 1000);
 
-function orderRateLimited(ip) {
-  const now = Date.now();
-  const recent = (orderLog.get(ip) || []).filter((t) => now - t < ORDER_WINDOW_MS);
-  if (recent.length) orderLog.set(ip, recent);
-  else orderLog.delete(ip);
-  return recent.length >= ORDER_LIMIT;
-}
-
-function recordOrder(ip) {
-  const list = orderLog.get(ip) || [];
-  list.push(Date.now());
-  orderLog.set(ip, list);
-}
+/* Checking a voucher code is public too. Every check counts, so nobody can
+   try codes one after another until one works. */
+const voucherLimiter = rateLimiter(20, 10 * 60 * 1000);
 
 /* ---------------------------- static ---------------------------- */
 
@@ -318,8 +326,8 @@ async function route(req, res) {
     return sendHtml(res, 200, html.replace('<!--SETUP-->', banner));
   }
 
-  // Two admin pages: orders (with the ordering settings) and items.
-  const adminPages = { '/admin': 'index.html', '/admin/items': 'items.html' };
+  // The admin pages: orders (with the ordering settings), items and vouchers.
+  const adminPages = { '/admin': 'index.html', '/admin/items': 'items.html', '/admin/vouchers': 'vouchers.html' };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
     return serveFile(req, res, path.join(ROOT, 'admin', adminPages[pathname]), { cache: 'no-store' })
@@ -413,22 +421,81 @@ async function route(req, res) {
       return sendJson(res, 415, { error: 'Send the order as JSON.' });
     }
     const ip = clientIp(req);
-    if (orderRateLimited(ip)) {
+    if (orderLimiter.limited(ip)) {
       return sendJson(res, 429, {
         error: 'You have placed several orders in the last few minutes. Please call us to add more.',
       });
     }
     const order = orders.create(await readJson(req));
-    recordOrder(ip);
-    console.log(`[order] #${order.id} ${order.order_type} Php ${order.total} — ${order.items.length} line(s)`);
+    orderLimiter.record(ip);
+    console.log(`[order] #${order.id} ${order.order_type} Php ${order.total} — ${order.items.length} line(s)`
+      + (order.voucher_code ? ` — voucher ${order.voucher_code} -${order.discount}` : ''));
     return sendJson(res, 201, {
       order: {
         id: order.id, order_type: order.order_type, items: order.items, subtotal: order.subtotal,
+        voucher_code: order.voucher_code, discount: order.discount,
         delivery_fee: order.delivery_fee, total: order.total,
         cash: order.cash, change_due: order.change_due,
         table_no: order.table_no, pickup_at: order.pickup_at,
       },
     });
+  }
+
+  /* ---- vouchers: checking a code is public, managing them is admin-only ---- */
+  if (pathname === '/api/vouchers/check' && method === 'POST') {
+    if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
+      return sendJson(res, 415, { error: 'Send the code as JSON.' });
+    }
+    const ip = clientIp(req);
+    if (voucherLimiter.limited(ip)) {
+      return sendJson(res, 429, { error: 'Too many codes tried. Please wait a few minutes and try again.' });
+    }
+    voucherLimiter.record(ip);
+    const body = await readJson(req);
+    // Priced exactly as the order will be, so the total shown is the total charged.
+    const q = orders.quote(body.items, body.type === undefined ? 'delivery' : String(body.type),
+      new Date(), body.code);
+    if (q.voucherError) throw new menu.ValidationError({ voucher: q.voucherError });
+    if (!q.voucher) throw new menu.ValidationError({ voucher: 'Enter a voucher code.' });
+    return sendJson(res, 200, {
+      voucher: q.voucher, subtotal: q.subtotal, discount: q.discount,
+      delivery_fee: q.delivery_fee, total: q.total,
+    });
+  }
+
+  if (pathname === '/api/vouchers' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { vouchers: vouchers.list() });
+  }
+
+  if (pathname === '/api/vouchers' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    return sendJson(res, 201, { voucher: vouchers.create(await readJson(req)) });
+  }
+
+  const voucherActiveMatch = pathname.match(/^\/api\/vouchers\/(\d+)\/active$/);
+  if (voucherActiveMatch && (method === 'PATCH' || method === 'PUT')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const body = await readJson(req);
+    const voucher = vouchers.setActive(Number(voucherActiveMatch[1]), body.active === true);
+    if (!voucher) return sendJson(res, 404, { error: 'That voucher no longer exists.' });
+    return sendJson(res, 200, { voucher });
+  }
+
+  const voucherMatch = pathname.match(/^\/api\/vouchers\/(\d+)$/);
+  if (voucherMatch) {
+    const id = Number(voucherMatch[1]);
+    if (method === 'PUT' || method === 'PATCH') {
+      if (!requireApiAuth(req, res, { csrf: true })) return;
+      const voucher = vouchers.update(id, await readJson(req));
+      if (!voucher) return sendJson(res, 404, { error: 'That voucher no longer exists.' });
+      return sendJson(res, 200, { voucher });
+    }
+    if (method === 'DELETE') {
+      if (!requireApiAuth(req, res, { csrf: true })) return;
+      if (!vouchers.remove(id)) return sendJson(res, 404, { error: 'That voucher no longer exists.' });
+      return sendJson(res, 200, { ok: true });
+    }
   }
 
   if (pathname === '/api/orders' && method === 'GET') {

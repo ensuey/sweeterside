@@ -26,6 +26,11 @@ function encPath(p) {
 // Below this many left today, customers are told how many remain.
 const FEW_LEFT = 5;
 
+/** '20% off' or 'Php 30 off' */
+function saleLabel(item) {
+  return item.sale_type === 'percent' ? `${item.sale_value}% off` : `Php ${item.price - item.sale_price} off`;
+}
+
 function cardHtml(item, category) {
   const hasCrop = item.crop_w != null && item.crop_h != null;
   const shotAttrs = hasCrop
@@ -43,14 +48,26 @@ function cardHtml(item, category) {
     ? `\n          <p class="card__left">Only ${item.remaining} left today</p>`
     : '';
 
-  return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.price}"${stockAttr}>
+  // data-price is what the cart charges, so on sale it is the sale price;
+  // data-was keeps the full price for the detail popup.
+  const onSale = item.sale_price < item.price;
+  const promoAttrs = (item.best_seller ? ' data-best' : '') + (onSale ? ` data-was="${item.price}"` : '');
+  const badge = item.best_seller ? '\n        <span class="card__badge">★ Best seller</span>' : '';
+  const saleTag = onSale
+    ? `\n          <p class="card__sale">${saleLabel(item)}</p>`
+    : '';
+  const price = onSale
+    ? `<span class="price"><s class="price__was"><span class="vh">Was </span>Php ${item.price}</s> <small>Php</small> ${item.sale_price}</span>`
+    : `<span class="price"><small>Php</small> ${item.price}</span>`;
+
+  return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.sale_price}"${promoAttrs}${stockAttr}>${badge}
         <div${shotAttrs}>
           <img src="${esc(encPath(item.image))}" alt="${esc(item.alt || item.name)}">
         </div>
         <div class="card__body">
-          <h3 class="card__name">${esc(item.name)}</h3>${fewLeft}
+          <h3 class="card__name">${esc(item.name)}</h3>${saleTag}${fewLeft}
           <div class="card__foot">
-            <span class="price"><small>Php</small> ${item.price}</span>
+            ${price}
             ${action}
             <button class="card__btn" type="button">View ${esc(item.name)}</button>
           </div>

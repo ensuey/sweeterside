@@ -35,6 +35,26 @@ function todayText(item) {
   return `${item.sold_today} / ${item.daily_limit} sold today`;
 }
 
+/** "★ Best seller" and "On sale ~~129~~ 103" chips for a row. */
+function promoChips(item) {
+  const chips = [];
+  if (item.best_seller) chips.push('<span class="chip-best">★ Best seller</span>');
+  if (item.sale_price < item.price) {
+    chips.push(`<span class="chip-sale">On sale <s>${item.price}</s> ${item.sale_price}</span>`);
+  }
+  return chips.join('');
+}
+
+/** What the editor's sale fields would make the price, or null for no sale. */
+function editorSalePrice() {
+  const price = Number($('f-price').value);
+  const kind = $('f-sale-type').value;
+  const value = Number($('f-sale-value').value);
+  if (!kind || !Number.isInteger(price) || !Number.isInteger(value) || value < 1) return null;
+  if (kind === 'percent') return value > 90 ? null : Math.round((price * (100 - value)) / 100);
+  return value >= price ? null : price - value;
+}
+
 function rowHtml(item) {
   const { cls, style } = shotStyle(item);
   const options = Object.entries(AVAILABILITY_LABEL)
@@ -49,6 +69,7 @@ function rowHtml(item) {
       <div class="row-item__main">
         <span class="row-item__name"></span>
         <span class="row-item__meta">Php ${item.price}</span>
+        <span class="row-item__chips">${promoChips(item)}</span>
         <span class="row-item__today${limitReached ? ' is-full' : ''}">${todayText(item)}</span>
       </div>
       <div class="row-item__stock">
@@ -188,7 +209,14 @@ function updatePreview() {
 
   img.src = imagePath ? `/${encPath(imagePath)}` : '';
   $('preview-name').textContent = $('f-name').value || 'Item name';
-  $('preview-price').textContent = `Php ${$('f-price').value || 0}`;
+  const sale = editorSalePrice();
+  const kind = $('f-sale-type').value;
+  $('f-sale-value').disabled = !kind;
+  $('sale-unit').textContent = kind === 'percent' ? '(%)' : kind === 'amount' ? '(Php)' : '';
+  $('sale-note').textContent = sale === null ? '' : `Sale price: Php ${sale} (was Php ${$('f-price').value})`;
+  $('preview-price').textContent = sale === null
+    ? `Php ${$('f-price').value || 0}`
+    : `Php ${sale}  (was ${$('f-price').value})`;
 
   $('crop-note').textContent = meta
     ? `Photo is ${meta.width}×${meta.height} pixels.`
@@ -237,6 +265,9 @@ function openEditor(item) {
   $('f-cy').value = item && item.crop_y != null ? item.crop_y : '';
   $('f-cw').value = item && item.crop_w != null ? item.crop_w : '';
   $('f-ch').value = item && item.crop_h != null ? item.crop_h : '';
+  $('f-best').checked = !!(item && item.best_seller);
+  $('f-sale-type').value = item ? item.sale_type : '';
+  $('f-sale-value').value = item && item.sale_value != null ? item.sale_value : '';
 
   updatePreview();
   editor.showModal();
@@ -257,6 +288,9 @@ async function saveItem(event) {
     crop_y: $('f-cy').value,
     crop_w: $('f-cw').value,
     crop_h: $('f-ch').value,
+    best_seller: $('f-best').checked,
+    sale_type: $('f-sale-type').value,
+    sale_value: $('f-sale-type').value ? $('f-sale-value').value : '',
   };
 
   const save = $('editor-save');
@@ -482,9 +516,10 @@ $('editor-cancel').addEventListener('click', () => editor.close());
 $('confirm-cancel').addEventListener('click', () => confirmDialog.close());
 $('confirm-ok').addEventListener('click', doDelete);
 
-['f-name', 'f-price', 'f-image', 'f-cx', 'f-cy', 'f-cw', 'f-ch']
+['f-name', 'f-price', 'f-image', 'f-cx', 'f-cy', 'f-cw', 'f-ch', 'f-sale-value']
   .forEach((id) => $(id).addEventListener('input', updatePreview));
 $('f-image').addEventListener('change', updatePreview);
+$('f-sale-type').addEventListener('change', updatePreview);
 
 $('crop-clear').addEventListener('click', () => {
   ['f-cx', 'f-cy', 'f-cw', 'f-ch'].forEach((id) => { $(id).value = ''; });
