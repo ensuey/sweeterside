@@ -22,13 +22,15 @@ npm start                 # http://127.0.0.1:3000
 ```
 
 - Menu:  <http://127.0.0.1:3000/>
+- Custom cake booking: <http://127.0.0.1:3000/cakes>
 - Admin, orders: <http://127.0.0.1:3000/admin>
 - Admin, items:  <http://127.0.0.1:3000/admin/items>
 - Admin, vouchers: <http://127.0.0.1:3000/admin/vouchers>
+- Admin, cakes: <http://127.0.0.1:3000/admin/cakes>
 
-`npm test` runs the test suite (48 tests covering password hashing, CSRF,
-validation, path containment, categories, orders, item stock, promotions and
-the database migrations).
+`npm test` runs the test suite (54 tests covering password hashing, CSRF,
+validation, path containment, categories, orders, item stock, promotions,
+cake bookings and the database migrations).
 
 ### Changing the admin password
 
@@ -46,17 +48,20 @@ server/
   categories.js  category validation, CRUD and ordering
   orders.js      orders, pricing, order types and their settings
   vouchers.js    voucher codes: validation, CRUD and checking a code
-  clock.js       Manila time: pick-up slots, daily limits, voucher dates
-  render.js      builds the customer page from the database
+  cakes.js       custom cake bookings: settings, open days, photos, requests
+  clock.js       Manila time: pick-up slots, daily limits, voucher and cake dates
+  render.js      builds the customer pages (menu, cakes) from the database
   imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
 admin/
   common.js      shared by every page: API calls, toasts, sign-in, sign-out
   index.html     Orders page (orders.js): the queue and ordering settings
   items.html     Items page (items.js): items, stock, promotions, categories
   vouchers.html  Vouchers page (vouchers.js): voucher codes
+  cakes.html     Cakes page (cakes.js): cake bookings and booking settings
   login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
+  cakes.html     custom cake booking page; the server fills in sizes and days
 test/            test suite
 data/            SQLite database (gitignored, created on first run)
 assets/          images, customer CSS and JS; uploads/ is gitignored
@@ -191,6 +196,43 @@ placed. If the code stopped working in between, for example it was turned off,
 the order is refused, the code is dropped and the customer sees the new total.
 Order cards in the admin show the code used and the discount.
 
+## Custom cake bookings
+
+Customers book a custom cake at **`/cakes`**, linked from the menu's header
+and footer. They choose:
+
+- a **size**, shown with its starting price ("from Php 1,200")
+- a **flavour**, or "Other" and say which in the notes
+- an optional occasion, message on the cake, design notes and one
+  **reference photo** (JPEG, PNG or WebP, up to 5 MB)
+- the **day** they need it, and **pick-up or delivery** (with an address)
+- their name and phone
+
+Nothing is charged online. The request lands on the admin **Cakes** page, and
+the nav shows how many are new on every admin page. Dachel calls the
+customer, then records on the booking:
+
+- the **status**: New request → Price quoted → Confirmed → Completed, or Declined
+- the **price quoted**, needed before Quoted, Confirmed or Completed
+- **deposit received** and its amount, which can't be more than the price
+- a private **note**
+
+**Which days can be booked** is set under *Booking settings* on the same page:
+
+- **Days of notice**, e.g. 3: the earliest day is today plus 3, in Manila time.
+  Bookings are taken up to 90 days after that.
+- **Cakes per day**, e.g. 2: once a day has that many bookings (not counting
+  declined ones) it can't be picked. Blank means no limit. The server checks
+  again when the request is sent, so two people can't take the last slot.
+- **Sizes and starting prices**, one per line as `Name | price`, and
+  **flavours**, one per line.
+
+**Reference photos are private.** They are stored in `/data/cake-photos` on
+the volume, never under `/assets`, and only a signed-in admin can open them.
+Photos uploaded for a request that was never sent are deleted after a day.
+The public endpoints are rate-limited: 5 photos and 3 requests per IP address
+every 10 minutes.
+
 ## How the photos work
 
 The original two menu posters (1021×1434) double as sprite sheets. An item can
@@ -241,8 +283,8 @@ A `Dockerfile` is included and works on Fly.io, Railway, Render or any VPS.
 
 ### The one thing that will bite you
 
-The SQLite database and uploaded photos live in `/data`. **Mount a volume
-there.** Containers get a fresh filesystem on every deploy, so without a volume
+The SQLite database, uploaded photos and cake reference photos live in
+`/data`. **Mount a volume there.** Containers get a fresh filesystem on every deploy, so without a volume
 the menu silently resets to the nine seeded items and uploaded photos vanish.
 
 Also keep it to **exactly one machine**. SQLite allows one writer; two

@@ -14,6 +14,7 @@ const menu = require('./menu');
 const categories = require('./categories');
 const orders = require('./orders');
 const vouchers = require('./vouchers');
+const cakes = require('./cakes');
 const render = require('./render');
 const imagesize = require('./imagesize');
 
@@ -146,6 +147,14 @@ const orderLimiter = rateLimiter(5, 10 * 60 * 1000);
 /* Checking a voucher code is public too. Every check counts, so nobody can
    try codes one after another until one works. */
 const voucherLimiter = rateLimiter(20, 10 * 60 * 1000);
+
+/* Cake bookings and their reference photos are public writes as well. */
+const cakeLimiter = rateLimiter(3, 10 * 60 * 1000);
+const cakePhotoLimiter = rateLimiter(5, 10 * 60 * 1000);
+
+function isJson(req) {
+  return String(req.headers['content-type'] || '').startsWith('application/json');
+}
 
 /* ---------------------------- static ---------------------------- */
 
@@ -301,6 +310,10 @@ async function route(req, res) {
     return sendHtml(res, 200, render.buildHtml(), { 'Cache-Control': 'no-cache' });
   }
 
+  if (pathname === '/cakes' && (method === 'GET' || method === 'HEAD')) {
+    return sendHtml(res, 200, render.buildCakesHtml(), { 'Cache-Control': 'no-cache' });
+  }
+
   /* ---- health check (for the hosting platform) ---- */
   if (pathname === '/healthz' && (method === 'GET' || method === 'HEAD')) {
     return sendJson(res, 200, { ok: true, items: menu.list().length });
@@ -326,8 +339,11 @@ async function route(req, res) {
     return sendHtml(res, 200, html.replace('<!--SETUP-->', banner));
   }
 
-  // The admin pages: orders (with the ordering settings), items and vouchers.
-  const adminPages = { '/admin': 'index.html', '/admin/items': 'items.html', '/admin/vouchers': 'vouchers.html' };
+  // The admin pages: orders (with the ordering settings), items, vouchers and cakes.
+  const adminPages = {
+    '/admin': 'index.html', '/admin/items': 'items.html',
+    '/admin/vouchers': 'vouchers.html', '/admin/cakes': 'cakes.html',
+  };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
     return serveFile(req, res, path.join(ROOT, 'admin', adminPages[pathname]), { cache: 'no-store' })
@@ -528,6 +544,84 @@ async function route(req, res) {
     return afterMutation(res, 200, settings);
   }
 
+  /* ---- cake bookings: requesting is public, managing them is admin-only ---- */
+  if (pathname === '/api/cakes/availability' && method === 'GET') {
+    return sendJson(res, 200, cakes.availability());
+  }
+
+  if (pathname === '/api/cakes/photo' && method === 'POST') {
+    const ip = clientIp(req);
+    if (cakePhotoLimiter.limited(ip)) {
+      return sendJson(res, 429, { error: 'Too many photos sent. Please wait a few minutes.' });
+    }
+    const buf = await readBody(req, MAX_UPLOAD);
+    if (!buf.length) return sendJson(res, 400, { error: 'No photo received.' });
+    // Trust the bytes, not the filename or the declared type.
+    const token = cakes.savePhoto(buf);
+    if (!token) return sendJson(res, 400, { error: 'That file is not a JPEG, PNG or WebP photo.' });
+    cakePhotoLimiter.record(ip);
+    return sendJson(res, 201, { photo: token });
+  }
+
+  if (pathname === '/api/cakes' && method === 'POST') {
+    if (!isJson(req)) return sendJson(res, 415, { error: 'Send the booking as JSON.' });
+    const ip = clientIp(req);
+    if (cakeLimiter.limited(ip)) {
+      return sendJson(res, 429, {
+        error: 'You have sent several cake requests in the last few minutes. Please call us to add more.',
+      });
+    }
+    const booking = cakes.create(await readJson(req));
+    cakeLimiter.record(ip);
+    console.log(`[cake] #${booking.id} for ${booking.needed_on} — ${booking.size}`);
+    return sendJson(res, 201, { booking: { id: booking.id, needed_on: booking.needed_on, size: booking.size } });
+  }
+
+  if (pathname === '/api/cakes' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, {
+      bookings: cakes.list(url.searchParams.get('show') || 'upcoming'),
+      counts: cakes.counts(),
+    });
+  }
+
+  if (pathname === '/api/cakes/counts' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, cakes.counts());
+  }
+
+  const cakePhotoMatch = pathname.match(/^\/api\/cakes\/(\d+)\/photo$/);
+  if (cakePhotoMatch && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    const booking = cakes.get(Number(cakePhotoMatch[1]));
+    const abs = booking && booking.photo ? cakes.photoPath(booking.photo) : null;
+    if (!abs) return sendJson(res, 404, { error: 'No photo for that booking.' });
+    const buf = fs.readFileSync(abs);
+    const info = imagesize.fromBuffer(buf);
+    return send(res, 200, buf, {
+      'Content-Type': info ? `image/${info.type}` : 'application/octet-stream',
+      'Cache-Control': 'private, no-store',
+    });
+  }
+
+  const cakeMatch = pathname.match(/^\/api\/cakes\/(\d+)$/);
+  if (cakeMatch && (method === 'PATCH' || method === 'PUT')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const booking = cakes.update(Number(cakeMatch[1]), await readJson(req));
+    if (!booking) return sendJson(res, 404, { error: 'That booking no longer exists.' });
+    return sendJson(res, 200, { booking });
+  }
+
+  if (pathname === '/api/cake-settings' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, cakes.settings());
+  }
+
+  if (pathname === '/api/cake-settings' && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    return sendJson(res, 200, cakes.updateSettings(await readJson(req)));
+  }
+
   /* ---- images ---- */
   if (pathname === '/api/images' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
@@ -585,6 +679,14 @@ if (require.main === module) {
   } catch (err) {
     console.warn('Could not rewrite index.html:', err.message);
   }
+
+  // Photos uploaded for a cake request that was never sent are cleared after a day.
+  const sweepPhotos = () => {
+    try { cakes.removeStrayPhotos(); } catch (err) { console.warn('Could not clear stray cake photos:', err.message); }
+  };
+  sweepPhotos();
+  setInterval(sweepPhotos, 60 * 60 * 1000).unref();
+
   server.listen(PORT, HOST, () => {
     console.log(`Menu   http://${HOST}:${PORT}/`);
     console.log(`Admin  http://${HOST}:${PORT}/admin`);

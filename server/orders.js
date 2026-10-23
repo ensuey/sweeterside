@@ -447,6 +447,6 @@ function setStatus(id, status) {
 
 module.exports = {
   STATUSES, ORDER_TYPES, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
-  settings, updateSettings, normalisePhone,
+  settings, updateSettings, normalisePhone, getSetting, saveSetting,
   quote, create, get, list, counts, setStatus,
 };

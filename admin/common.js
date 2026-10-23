@@ -69,12 +69,22 @@ function money(n) {
   return `Php ${Number(n).toLocaleString('en-US')}`;
 }
 
+/** New cake bookings, shown next to "Cakes" in the nav on every page. */
+function showCakeCount(n) {
+  const badge = $('nav-cakes-n');
+  if (!badge) return;
+  badge.textContent = n;
+  badge.hidden = !n;
+  badge.setAttribute('aria-label', `${plural(n, 'new booking')}`);
+}
+
 /** Sign in check, then the page's own loading. */
 async function adminBoot(load) {
   try {
     const session = await api('/api/session');
     state.csrf = session.csrf;
     $('who').textContent = session.email;
+    api('/api/cakes/counts').then((c) => showCakeCount(c.new)).catch(() => {});
     await load();
   } catch (err) {
     pageError(err.message);
