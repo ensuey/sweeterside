@@ -195,7 +195,9 @@ under *Promotion*:
   kept, so ending the sale is just choosing *No sale*.
 
 **Vouchers** are codes customers type in the cart, managed on the Vouchers
-page:
+page. In the cart the code box sits just above **Place order** and only opens
+when the customer ticks *I have a voucher code*.
+
 
 - Each code takes either a **% of the items** (optionally capped at a Php
   amount) or a **Php amount** off. A voucher never takes anything off the

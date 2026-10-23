@@ -35,6 +35,7 @@
       name: card.dataset.name,
       price: Number(card.dataset.price),
       max: remaining === undefined ? MAX_QTY : Math.min(MAX_QTY, Number(remaining)),
+      shot: card.querySelector('.shot'), // the card's photo, copied as the cart thumbnail
     };
   });
   var deliveryFee = Number(document.body.dataset.deliveryFee) || 0;
@@ -321,6 +322,17 @@
     var li = el('li', 'cline');
     li.dataset.id = line.id;
 
+    // A small square copy of the card's photo. The name is right beside it, so
+    // the picture is decorative for screen readers.
+    var thumb = el('div', 'cline__thumb');
+    thumb.setAttribute('aria-hidden', 'true');
+    if (item.shot) {
+      var shot = item.shot.cloneNode(true);
+      var pic = shot.querySelector('img');
+      if (pic) pic.alt = '';
+      thumb.appendChild(shot);
+    }
+
     var main = el('div', 'cline__main');
     main.appendChild(el('span', 'cline__name', item.name));
     main.appendChild(el('span', 'cline__each', money(item.price) + ' each'));
@@ -342,6 +354,7 @@
     stepper.appendChild(qty);
     stepper.appendChild(plus);
 
+    li.appendChild(thumb);
     li.appendChild(main);
     li.appendChild(stepper);
     li.appendChild(el('span', 'cline__total', money(item.price * line.qty)));
@@ -369,8 +382,11 @@
     form.hidden = n === 0 || type === null || shopClosed;
 
     $('cart-subtotal').textContent = money(subtotal());
-    $('voucher').hidden = n === 0 || type === null || shopClosed;
-    $('voucher-entry').hidden = !!voucher;
+    // The code box opens only after "I have a voucher code" is ticked; once a
+    // code is applied, the tick box gives way to the applied code.
+    if (voucher) $('v-have').checked = true;
+    $('v-have').closest('label').hidden = !!voucher;
+    $('voucher-entry').hidden = !!voucher || !$('v-have').checked;
     $('voucher-applied').hidden = !voucher;
     $('cart-discount-row').hidden = !voucher;
     if (voucher) {
@@ -661,6 +677,16 @@
     if (e.key === 'Enter') { e.preventDefault(); checkVoucher($('v-code').value); }
   });
   $('v-code').addEventListener('input', function () { voucherError(''); });
+  $('v-have').addEventListener('change', function () {
+    voucherError('');
+    if (this.checked) {
+      render();
+      $('v-code').focus();
+    } else {
+      $('v-code').value = '';
+      render();
+    }
+  });
   $('v-remove').addEventListener('click', function () {
     setVoucher(null);
     voucherError('');

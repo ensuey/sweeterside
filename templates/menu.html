@@ -93,22 +93,6 @@
     <p class="cart__empty" id="cart-empty">Your cart is empty. Tap <strong>Add</strong> on anything you like.</p>
     <ul class="cart__lines" id="cart-lines"></ul>
 
-    <!-- Voucher codes are checked by the server, which also works out the discount. -->
-    <div class="voucher" id="voucher" hidden>
-      <div class="voucher__entry" id="voucher-entry">
-        <label for="v-code">Voucher code</label>
-        <div class="voucher__row">
-          <input id="v-code" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. SWEET10">
-          <button class="voucher__apply" type="button" id="v-apply">Apply</button>
-        </div>
-      </div>
-      <p class="voucher__applied" id="voucher-applied" hidden>
-        <span id="voucher-label"></span>
-        <button class="voucher__remove" type="button" id="v-remove">Remove</button>
-      </p>
-      <p class="cfield__err" id="voucher-err" role="alert" hidden></p>
-    </div>
-
     <dl class="cart__sum" id="cart-sum">
       <div><dt>Subtotal</dt><dd id="cart-subtotal">Php 0</dd></div>
       <div id="cart-discount-row" hidden><dt>Voucher <span id="cart-voucher-code"></span></dt><dd id="cart-discount">−Php 0</dd></div>
@@ -174,6 +158,24 @@
         </div>
         <p class="cfield__change" id="o-change" aria-live="polite"></p>
         <p class="cfield__err" data-err="cash" hidden></p>
+      </div>
+
+      <!-- Voucher codes are checked by the server, which also works out the
+           discount. The code box only opens when the customer says they have one. -->
+      <div class="voucher" id="voucher">
+        <label class="voucher__have"><input type="checkbox" id="v-have" aria-controls="voucher-entry"> I have a voucher code</label>
+        <div class="voucher__entry" id="voucher-entry" hidden>
+          <label class="vh" for="v-code">Voucher code</label>
+          <div class="voucher__row">
+            <input id="v-code" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter your code, e.g. SWEET10">
+            <button class="voucher__apply" type="button" id="v-apply">Apply</button>
+          </div>
+        </div>
+        <p class="voucher__applied" id="voucher-applied" hidden>
+          <span id="voucher-label"></span>
+          <button class="voucher__remove" type="button" id="v-remove">Remove</button>
+        </p>
+        <p class="cfield__err" id="voucher-err" role="alert" hidden></p>
       </div>
 
       <p class="cfield__err" data-err="items" hidden></p>
