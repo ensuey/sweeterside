@@ -383,7 +383,9 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 
 /* Voucher code entry, above the totals. */
 .voucher { display: flex; flex-direction: column; gap: var(--sp-2); }
-.voucher[hidden], .voucher__entry[hidden], .voucher__applied[hidden] { display: none; }
+.voucher[hidden], .voucher__entry[hidden], .voucher__applied[hidden], .voucher__have[hidden] { display: none; }
+.voucher__have { min-height: 44px; display: inline-flex; align-items: center; gap: var(--sp-2); align-self: flex-start; font-weight: 700; font-size: .9375rem; cursor: pointer; }
+.voucher__have input { width: 20px; height: 20px; margin: 0; accent-color: var(--coral-ink); }
 .voucher__entry { display: flex; flex-direction: column; gap: var(--sp-1); }
 .voucher__entry label { font-weight: 700; font-size: .9375rem; }
 .voucher__row { display: flex; gap: var(--sp-2); }
@@ -412,11 +414,24 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 
 .cart__lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .cline {
-  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "main total" "step step";
+  display: grid; grid-template-columns: 56px 1fr auto; grid-template-areas: "thumb main total" "thumb step step";
   gap: var(--sp-2) var(--sp-3); align-items: center;
   padding: var(--sp-3) 0; border-bottom: 1px solid var(--line);
 }
 .cline:first-child { padding-top: 0; }
+
+/* A small square thumbnail: the card's photo (a sprite window or a whole
+   photo), scaled to cover the square and centred. */
+.cline__thumb {
+  grid-area: thumb; align-self: start; position: relative;
+  width: 56px; height: 56px; overflow: hidden;
+  border-radius: var(--r-sm); border: 1px solid var(--line); background: #fff;
+}
+.cline__thumb .shot {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: max(100%, calc(56px * var(--w) / var(--h))); border: 0;
+}
+.cline__thumb .shot--plain { width: 100%; height: 100%; aspect-ratio: auto; }
 .cline__main { grid-area: main; display: flex; flex-direction: column; min-width: 0; }
 .cline__name { font-weight: 700; overflow-wrap: anywhere; }
 .cline__each { font-size: .875rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
@@ -437,7 +452,8 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .stepper__btn:disabled { opacity: .35; cursor: not-allowed; }
 .stepper__n { min-width: 2ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
 @media (min-width: 420px) {
-  .cline { grid-template-columns: 1fr auto auto; grid-template-areas: "main step total"; }
+  .cline { grid-template-columns: 56px 1fr auto auto; grid-template-areas: "thumb main step total"; }
+  .cline__thumb { align-self: center; }
   .cline__total { min-width: 5.5rem; text-align: right; }
 }
 
