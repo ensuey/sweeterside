@@ -215,6 +215,37 @@ CREATE TABLE IF NOT EXISTS vouchers (
   updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 )`);
 
+/* Custom cake booking requests. The size's starting price is copied at
+   booking time; Dachel sets the real price (quoted_price) after reviewing it.
+   needed_on is a Manila calendar day. photo is a file name in CAKE_PHOTO_DIR
+   (never public), or ''. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS cake_bookings (
+  id              INTEGER PRIMARY KEY,
+  customer_name   TEXT    NOT NULL,
+  phone           TEXT    NOT NULL,
+  size            TEXT    NOT NULL,
+  size_from_price INTEGER NOT NULL,
+  flavour         TEXT    NOT NULL,
+  occasion        TEXT    NOT NULL DEFAULT '',
+  cake_message    TEXT    NOT NULL DEFAULT '',
+  design_notes    TEXT    NOT NULL DEFAULT '',
+  photo           TEXT    NOT NULL DEFAULT '',
+  needed_on       TEXT    NOT NULL,
+  handover        TEXT    NOT NULL CHECK (handover IN ('pickup','delivery')),
+  address         TEXT    NOT NULL DEFAULT '',
+  status          TEXT    NOT NULL DEFAULT 'new'
+                  CHECK (status IN ('new','quoted','confirmed','completed','declined')),
+  quoted_price    INTEGER,
+  deposit_paid    INTEGER NOT NULL DEFAULT 0,
+  deposit_amount  INTEGER,
+  admin_note      TEXT    NOT NULL DEFAULT '',
+  created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cake_bookings_day ON cake_bookings(needed_on, status);
+`);
+
 /* ---------- First-run seed: the nine items from the printed posters ---------- */
 
 const POSTER_DRINKS = 'assets/Menu Frappe.jpg';

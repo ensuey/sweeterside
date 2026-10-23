@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cakes — Sweeter Side admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <img class="topbar__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+    <h1 class="topbar__title">Menu admin</h1>
+    <nav class="topbar__nav" aria-label="Admin pages">
+      <a href="/admin">Orders</a>
+      <a href="/admin/items">Items</a>
+      <a href="/admin/vouchers">Vouchers</a>
+      <a href="/admin/cakes" aria-current="page">Cakes <span class="nav__n" id="nav-cakes-n" hidden></span></a>
+    </nav>
+    <div class="topbar__spacer"></div>
+    <span class="topbar__user" id="who"></span>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
+    <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+  </div>
+</header>
+
+<main class="admin">
+  <section aria-labelledby="cakes-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="cakes-title">Cake bookings</h2>
+        <p class="admin__sub" id="summary">Loading…</p>
+      </div>
+      <a class="btn btn--ghost" href="/cakes" target="_blank" rel="noopener">View booking page</a>
+    </div>
+
+    <p class="alert" id="page-error" role="alert" hidden></p>
+
+    <div class="tabs" role="group" aria-label="Which bookings to show">
+      <button class="tab" type="button" data-show="upcoming" aria-pressed="true">Upcoming <span class="tab__n" id="n-upcoming">0</span></button>
+      <button class="tab" type="button" data-show="past" aria-pressed="false">Past and declined</button>
+    </div>
+
+    <ul class="orders__list" id="bookings"></ul>
+    <p class="empty-note" id="bookings-empty" hidden></p>
+  </section>
+
+  <section class="admin__section" aria-labelledby="cake-settings-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="cake-settings-title">Booking settings</h2>
+        <p class="admin__sub">What customers can choose on the booking page.</p>
+      </div>
+    </div>
+
+    <form class="cake-settings" id="settings-form" novalidate>
+      <div class="row">
+        <div class="field">
+          <label for="s-lead">Days of notice needed</label>
+          <input id="s-lead" name="lead_days" type="number" min="0" max="60" step="1" inputmode="numeric" required>
+          <p class="field__err" data-err="lead_days" hidden></p>
+        </div>
+        <div class="field">
+          <label for="s-max">Cakes per day <span class="hint">(blank for no limit)</span></label>
+          <input id="s-max" name="max_per_day" type="number" min="1" max="50" step="1" inputmode="numeric">
+          <p class="field__err" data-err="max_per_day" hidden></p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="s-sizes">Sizes and starting prices <span class="hint">(one per line: Name | price)</span></label>
+          <textarea id="s-sizes" name="sizes" rows="6" spellcheck="false" placeholder='8" round (serves 15 to 20) | 1200'></textarea>
+          <p class="field__err" data-err="sizes" hidden></p>
+        </div>
+        <div class="field">
+          <label for="s-flavours">Flavours <span class="hint">(one per line)</span></label>
+          <textarea id="s-flavours" name="flavours" rows="6"></textarea>
+          <p class="field__err" data-err="flavours" hidden></p>
+        </div>
+      </div>
+
+      <div class="cake-settings__foot">
+        <button class="btn btn--primary" type="submit" id="settings-save">Save settings</button>
+      </div>
+    </form>
+  </section>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Full-size reference photo. -->
+<dialog class="modal" id="photo-view" aria-label="Reference photo">
+  <div class="modal__head">
+    <h2 class="modal__title" id="photo-title">Reference photo</h2>
+    <button class="icon-btn" type="button" id="photo-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal__body"><img class="photo-view__img" id="photo-full" alt=""></div>
+</dialog>
+
+<script src="/admin/common.js" defer></script>
+<script src="/admin/cakes.js" defer></script>
+</body>
+</html>

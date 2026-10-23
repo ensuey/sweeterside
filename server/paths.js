@@ -18,4 +18,10 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(ROOT, 'data');
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'app.db');
 
-module.exports = { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX, DATA_DIR, DB_PATH };
+// Reference photos customers send with cake bookings. Kept out of assets/ so
+// they are never served publicly; only the admin can fetch them.
+const CAKE_PHOTO_DIR = process.env.CAKE_PHOTO_DIR
+  ? path.resolve(process.env.CAKE_PHOTO_DIR)
+  : path.join(DATA_DIR, 'cake-photos');
+
+module.exports = { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX, DATA_DIR, DB_PATH, CAKE_PHOTO_DIR };

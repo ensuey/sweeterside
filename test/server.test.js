@@ -9,9 +9,10 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 
-// Point the database somewhere disposable before anything requires it.
-process.env.DB_PATH = path.join(
-  fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-test-')), 'test.db');
+// Point the database and cake photos somewhere disposable before anything requires them.
+const TEST_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-test-'));
+process.env.DB_PATH = path.join(TEST_DIR, 'test.db');
+process.env.CAKE_PHOTO_DIR = path.join(TEST_DIR, 'cake-photos');
 
 const { db, seedIfEmpty } = require('../server/db');
 const auth = require('../server/auth');
@@ -872,6 +873,210 @@ test('the voucher endpoints: public checking with a limit, admin-only managing',
   } finally {
     vouchers.remove(v.id);
     await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+/* ---------------------------- cake bookings ---------------------------- */
+
+const cakes = require('../server/cakes');
+
+// Noon in Manila on Fri 23 Oct 2026. With 3 days' notice the earliest day is Mon 26 Oct.
+const CAKE_NOW = new Date(Date.UTC(2026, 9, 23, 4, 0));
+const PNG = fs.readFileSync(path.join(__dirname, '..', 'assets', 'Sweeter Side - PNG.png'));
+
+function cakeInput(over = {}) {
+  return {
+    name: ' Ana  Reyes ', phone: '0917 555 1234', size: cakes.settings().sizes[0].name,
+    flavour: 'Chocolate', occasion: '7th birthday', cake_message: 'Happy Birthday, Mia!',
+    design_notes: 'Pink and gold, unicorn topper', photo: '',
+    needed_on: '2026-10-28', handover: 'pickup', address: '', ...over,
+  };
+}
+
+function cakeErrors(input) {
+  try { cakes.create(input, { now: CAKE_NOW }); return null; } catch (err) {
+    assert.ok(err instanceof menu.ValidationError, `expected a ValidationError, got ${err.message}`);
+    return err.errors;
+  }
+}
+
+/** Clear bookings between tests so capacity starts empty. */
+function clearCakes() {
+  db.exec('DELETE FROM cake_bookings');
+  cakes.updateSettings({ lead_days: 3, max_per_day: 2 });
+}
+
+test('cake settings: notice, capacity, sizes and flavours, validated together', () => {
+  const before = cakes.settings();
+  assert.ok(before.sizes.length > 0 && before.flavours.length > 0, 'starts with sensible defaults');
+
+  const bad = (input) => { try { cakes.updateSettings(input); return null; } catch (e) { return e.errors; } };
+  assert.ok(bad({ lead_days: -1 }).lead_days);
+  assert.ok(bad({ lead_days: 61 }).lead_days);
+  assert.ok(bad({ max_per_day: 0 }).max_per_day);
+  assert.match(bad({ sizes: '8" round | 1200\nNo price here' }).sizes, /Line 2/);
+  assert.match(bad({ sizes: 'Big | ten' }).sizes, /whole number/);
+  assert.match(bad({ sizes: 'Big | 100\nbig | 200' }).sizes, /twice/);
+  assert.ok(bad({ sizes: '\n  \n' }).sizes, 'at least one size');
+  assert.ok(bad({ lead_days: 5, sizes: 'oops' }), 'a bad size line blocks the whole save');
+  assert.deepStrictEqual(cakes.settings(), before, 'nothing was saved');
+
+  const s = cakes.updateSettings({
+    lead_days: '2', max_per_day: '', sizes: '6" round | 850\n8" round (serves 20) | Php 1,200',
+    flavours: 'Chocolate\nUbe\n\nchocolate',
+  });
+  assert.strictEqual(s.lead_days, 2);
+  assert.strictEqual(s.max_per_day, null, 'blank means no limit');
+  assert.deepStrictEqual(s.sizes, [{ name: '6" round', from_price: 850 }, { name: '8" round (serves 20)', from_price: 1200 }]);
+  assert.deepStrictEqual(s.flavours, ['Chocolate', 'Ube'], 'blank lines and repeats dropped');
+  clearCakes();
+});
+
+test('a cake booking needs the notice period, stays in range and copies the starting price', () => {
+  clearCakes();
+  const avail = cakes.availability(CAKE_NOW);
+  assert.strictEqual(avail.earliest, '2026-10-26');
+  assert.strictEqual(avail.latest, '2027-01-24');
+
+  const e = cakeErrors(cakeInput({ name: '', phone: '12', size: 'Huge', flavour: 'Durian', needed_on: '' }));
+  assert.ok(e.name && e.phone && e.size && e.flavour && e.needed_on);
+  assert.match(cakeErrors(cakeInput({ needed_on: '2026-10-25' })).needed_on, /at least 3 days notice.*Mon 26 Oct/);
+  assert.match(cakeErrors(cakeInput({ needed_on: '2027-01-25' })).needed_on, /up to/);
+  assert.ok(cakeErrors(cakeInput({ handover: 'delivery' })).address, 'delivery needs an address');
+  assert.ok(cakeErrors(cakeInput({ flavour: cakes.OTHER_FLAVOUR, design_notes: '' })).design_notes,
+    '"Other" needs the flavour in the notes');
+  assert.ok(cakeErrors(cakeInput({ cake_message: 'x'.repeat(81) })).cake_message);
+
+  const size = cakes.settings().sizes[0];
+  const b = cakes.create(cakeInput({ needed_on: '2026-10-26' }), { now: CAKE_NOW });
+  assert.strictEqual(b.customer_name, 'Ana Reyes');
+  assert.strictEqual(b.phone, '09175551234');
+  assert.strictEqual(b.size_from_price, size.from_price);
+  assert.strictEqual(b.status, 'new');
+  assert.strictEqual(b.address, '', 'pick-up keeps no address');
+
+  const other = cakes.create(cakeInput({ flavour: cakes.OTHER_FLAVOUR, design_notes: 'Pandan' }), { now: CAKE_NOW });
+  assert.strictEqual(other.flavour, cakes.OTHER_FLAVOUR);
+  clearCakes();
+});
+
+test('a day is full once it has the most cakes per day, not counting declined ones', () => {
+  clearCakes();
+  cakes.updateSettings({ max_per_day: 1 });
+  const first = cakes.create(cakeInput(), { now: CAKE_NOW });
+  assert.deepStrictEqual(cakes.availability(CAKE_NOW).full_dates, ['2026-10-28']);
+  assert.match(cakeErrors(cakeInput()).needed_on, /Wed 28 Oct is fully booked/);
+  assert.strictEqual(cakeErrors(cakeInput({ needed_on: '2026-10-29' })), null, 'the next day is free');
+
+  cakes.update(first.id, { status: 'declined' });
+  assert.ok(!cakes.availability(CAKE_NOW).full_dates.includes('2026-10-28'), 'declining frees the day');
+  assert.strictEqual(cakeErrors(cakeInput()), null);
+
+  cakes.updateSettings({ max_per_day: '' });
+  assert.deepStrictEqual(cakes.availability(CAKE_NOW).full_dates, [], 'no limit, no full days');
+  clearCakes();
+});
+
+test('reference photos: only real images, used once, and strays cleared after a day', () => {
+  clearCakes();
+  assert.strictEqual(cakes.savePhoto(Buffer.from('<?php echo 1; ?>')), null);
+  const token = cakes.savePhoto(PNG);
+  assert.match(token, /^[a-f0-9]{32}\.png$/);
+
+  for (const bad of ['../../etc/passwd', 'abc.png', `${'0'.repeat(32)}.png`]) {
+    assert.ok(cakeErrors(cakeInput({ photo: bad })).photo, `should refuse ${bad}`);
+  }
+  const b = cakes.create(cakeInput({ photo: token }), { now: CAKE_NOW });
+  assert.strictEqual(b.photo, token);
+  assert.match(cakeErrors(cakeInput({ photo: token, needed_on: '2026-10-29' })).photo, /already/);
+
+  const stray = cakes.savePhoto(PNG);
+  const later = new Date(Date.now() + 25 * 60 * 60 * 1000);
+  assert.strictEqual(cakes.removeStrayPhotos(new Date()), 0, 'a fresh photo is kept');
+  assert.strictEqual(cakes.removeStrayPhotos(later), 1, 'only the unattached one goes');
+  assert.strictEqual(cakes.photoPath(stray), null);
+  assert.ok(cakes.photoPath(token), 'the attached photo stays');
+  clearCakes();
+});
+
+test('the admin quotes a price, records the deposit and moves a booking along', () => {
+  clearCakes();
+  const b = cakes.create(cakeInput(), { now: CAKE_NOW });
+  const err = (input) => { try { cakes.update(b.id, input); return null; } catch (e) { return e.errors; } };
+
+  assert.ok(err({ status: 'quoted' }).quoted_price, 'quoting needs a price');
+  assert.ok(err({ status: 'baked' }).status);
+  assert.ok(err({ quoted_price: 1500, deposit_paid: true }).deposit_amount, 'a received deposit needs an amount');
+  assert.ok(err({ quoted_price: 1500, deposit_amount: 2000 }).deposit_amount, 'not more than the price');
+
+  const done = cakes.update(b.id, {
+    status: 'confirmed', quoted_price: '1500', deposit_paid: true, deposit_amount: '500', admin_note: 'Gold leaf',
+  });
+  assert.deepStrictEqual(
+    [done.status, done.quoted_price, done.deposit_paid, done.deposit_amount, done.admin_note],
+    ['confirmed', 1500, 1, 500, 'Gold leaf']);
+  assert.strictEqual(cakes.update(999999, { status: 'new' }), null);
+
+  assert.ok(cakes.list('upcoming', { now: CAKE_NOW }).some((x) => x.id === b.id));
+  cakes.update(b.id, { status: 'completed' });
+  assert.ok(cakes.list('past', { now: CAKE_NOW }).some((x) => x.id === b.id));
+  assert.throws(() => cakes.list('later'), (e) => e.status === 400);
+  clearCakes();
+});
+
+test('the cake page and endpoints: public booking, private photos, admin-only managing', async () => {
+  clearCakes();
+  const html = render.buildCakesHtml(CAKE_NOW);
+  const size = cakes.settings().sizes[0];
+  assert.ok(html.includes(`value="${render.esc(size.name)}"`));
+  assert.match(html, new RegExp(`from <strong>Php ${size.from_price.toLocaleString('en-US')}</strong>`));
+  assert.match(html, /data-earliest="2026-10-26"/);
+  assert.ok(!/<!--[A-Z_]+-->/.test(html), 'every placeholder is filled');
+
+  const { server } = require('../server/index');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.strictEqual((await fetch(`${url}/cakes`)).status, 200);
+
+    const upload = await fetch(`${url}/api/cakes/photo`, { method: 'POST', body: PNG });
+    assert.strictEqual(upload.status, 201);
+    const { photo } = await upload.json();
+    assert.strictEqual((await fetch(`${url}/api/cakes/photo`, { method: 'POST', body: 'not an image' })).status, 400);
+
+    // Book for a day that is open whatever today's date is.
+    const day = cakes.availability().earliest;
+    const book = (body, headers = { 'Content-Type': 'application/json' }) =>
+      fetch(`${url}/api/cakes`, { method: 'POST', headers, body: JSON.stringify(body) });
+    const ok = await book(cakeInput({ photo, needed_on: day }));
+    assert.strictEqual(ok.status, 201);
+    const { booking } = await ok.json();
+    assert.strictEqual(booking.needed_on, day);
+    assert.strictEqual(booking.phone, undefined, 'the reply does not echo personal details');
+
+    assert.strictEqual((await book(cakeInput({ needed_on: '2000-01-01' }))).status, 422);
+    assert.strictEqual((await book(cakeInput(), { 'Content-Type': 'text/plain' })).status, 415);
+    // Only sent bookings count towards the limit of three per ten minutes.
+    cakes.updateSettings({ max_per_day: '' });
+    assert.strictEqual((await book(cakeInput({ needed_on: day }))).status, 201);
+    assert.strictEqual((await book(cakeInput({ needed_on: day }))).status, 201);
+    assert.strictEqual((await book(cakeInput({ needed_on: day }))).status, 429, 'three bookings per ten minutes');
+
+    const avail = await (await fetch(`${url}/api/cakes/availability`)).json();
+    assert.strictEqual(avail.earliest, day);
+
+    // Photos are never public: not under /assets, and the admin route needs sign-in.
+    assert.strictEqual((await fetch(`${url}/api/cakes/${booking.id}/photo`)).status, 401);
+    assert.strictEqual((await fetch(`${url}/assets/uploads/${photo}`)).status, 404);
+    assert.strictEqual((await fetch(`${url}/api/cakes`)).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/cakes/counts`)).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/cakes/${booking.id}`, { method: 'PATCH' })).status, 401);
+    assert.strictEqual((await fetch(`${url}/api/cake-settings`, { method: 'PUT' })).status, 401);
+    const page = await fetch(`${url}/admin/cakes`, { redirect: 'manual' });
+    assert.strictEqual(page.status, 302, 'the cakes page needs sign-in');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    clearCakes();
   }
 });
 

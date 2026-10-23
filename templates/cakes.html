@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Custom cakes — Sweeter Side by Dachel</title>
+<meta name="description" content="Book a custom cake from Sweeter Side by Dachel: choose a size and flavour, describe your design and pick the day.">
+<meta name="theme-color" content="#F7E4A1">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Custom cakes — Sweeter Side by Dachel">
+<meta property="og:description" content="Book a custom cake for your celebration.">
+<meta property="og:image" content="/assets/Sweeter%20Side%20-%20PNG.png">
+
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="apple-touch-icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/assets/css/styles.css">
+</head>
+<!-- The server fills in the bookable days: from today plus the notice period,
+     leaving out days that are already full. cakes.js reads them. -->
+<body data-earliest="<!--EARLIEST-->" data-latest="<!--LATEST-->" data-full="<!--FULL_DATES-->">
+
+<a class="skip" href="#cake-form">Skip to the booking form</a>
+
+<header class="hero hero--small">
+  <div class="wrap">
+    <a href="/" class="hero__home"><img class="hero__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="Sweeter Side by Dachel — back to the menu" width="1563" height="1563"></a>
+    <h1 class="hero__title">Custom cakes</h1>
+    <p class="hero__sub">Tell us what you would like and the day you need it. Dachel will call you to confirm the price.</p>
+  </div>
+</header>
+
+<main class="wrap cakes">
+  <p class="cakes__nojs">Booking a cake needs JavaScript. You can also call us or message the shop to order.</p>
+
+  <form class="cake-form" id="cake-form" novalidate hidden>
+    <p class="cart__alert" id="cake-error" role="alert" hidden></p>
+
+    <fieldset class="cake-step">
+      <legend class="cake-step__title">1. Size</legend>
+      <div class="sizes">
+<!--SIZES-->
+      </div>
+      <p class="cfield__err" data-err="size" hidden></p>
+    </fieldset>
+
+    <fieldset class="cake-step">
+      <legend class="cake-step__title">2. Flavour and design</legend>
+
+      <div class="cfield">
+        <label for="k-flavour">Flavour</label>
+        <select id="k-flavour" name="flavour" required>
+<!--FLAVOURS-->
+        </select>
+        <p class="cfield__err" data-err="flavour" hidden></p>
+      </div>
+
+      <div class="cfield">
+        <label for="k-occasion">Occasion <span class="cfield__hint">optional, e.g. 7th birthday</span></label>
+        <input id="k-occasion" name="occasion" type="text" maxlength="60">
+        <p class="cfield__err" data-err="occasion" hidden></p>
+      </div>
+
+      <div class="cfield">
+        <label for="k-message">Message on the cake <span class="cfield__hint">optional</span></label>
+        <input id="k-message" name="cake_message" type="text" maxlength="80" placeholder="Happy Birthday, Mia!">
+        <p class="cfield__err" data-err="cake_message" hidden></p>
+      </div>
+
+      <div class="cfield">
+        <label for="k-notes">Design <span class="cfield__hint">colours, theme, toppers, anything we should know</span></label>
+        <textarea id="k-notes" name="design_notes" rows="4" maxlength="1000"></textarea>
+        <p class="cfield__err" data-err="design_notes" hidden></p>
+      </div>
+
+      <div class="cfield">
+        <span class="cfield__label" id="k-photo-label">Reference photo <span class="cfield__hint">optional, a picture of a design you like</span></span>
+        <div class="photo-pick" id="photo-pick">
+          <label class="photo-pick__btn" for="k-photo">Choose a photo</label>
+          <input id="k-photo" class="vh" type="file" accept="image/jpeg,image/png,image/webp" aria-labelledby="k-photo-label">
+          <div class="photo-pick__chosen" id="photo-chosen" hidden>
+            <img id="photo-preview" alt="Your reference photo">
+            <button class="voucher__remove" type="button" id="photo-remove">Remove</button>
+          </div>
+        </div>
+        <p class="cfield__err" data-err="photo" hidden></p>
+      </div>
+    </fieldset>
+
+    <fieldset class="cake-step">
+      <legend class="cake-step__title">3. When and how</legend>
+
+      <div class="cfield">
+        <label for="k-date">Day you need it <span class="cfield__hint">at least <!--LEAD_DAYS--> notice; the earliest is <!--EARLIEST_TEXT--></span></label>
+        <input id="k-date" name="needed_on" type="date" required>
+        <p class="cfield__err" data-err="needed_on" hidden></p>
+      </div>
+
+      <div class="otype__opts" role="radiogroup" aria-label="Pick-up or delivery">
+        <label class="otype__opt"><input type="radio" name="handover" value="pickup" checked><span>Pick-up</span></label>
+        <label class="otype__opt"><input type="radio" name="handover" value="delivery"><span>Delivery</span></label>
+      </div>
+      <p class="cfield__err" data-err="handover" hidden></p>
+
+      <div class="cfield" id="k-address-field" hidden>
+        <label for="k-address">Delivery address</label>
+        <textarea id="k-address" name="address" rows="3" autocomplete="street-address" maxlength="400" placeholder="House no., street, barangay, city. Add a landmark if it helps."></textarea>
+        <p class="cfield__err" data-err="address" hidden></p>
+      </div>
+    </fieldset>
+
+    <fieldset class="cake-step">
+      <legend class="cake-step__title">4. Your details</legend>
+
+      <div class="cfield">
+        <label for="k-name">Full name</label>
+        <input id="k-name" name="name" type="text" autocomplete="name" maxlength="80" required>
+        <p class="cfield__err" data-err="name" hidden></p>
+      </div>
+
+      <div class="cfield">
+        <label for="k-phone">Phone number</label>
+        <input id="k-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="0917 123 4567" required>
+        <p class="cfield__err" data-err="phone" hidden></p>
+      </div>
+    </fieldset>
+
+    <button class="checkout__submit" type="submit" id="cake-submit">Send cake request</button>
+    <p class="checkout__note">Prices start from the amount shown for each size. Dachel will call you to confirm the final price and the deposit. Nothing is charged online.</p>
+  </form>
+
+  <section class="cake-done" id="cake-done" hidden>
+    <h2 class="cart__title" id="cake-done-title" tabindex="-1">Request received!</h2>
+    <p id="cake-done-text"></p>
+    <p>Dachel will call you to talk through the design and confirm the price and deposit.</p>
+    <a class="cart__back" href="/">Back to the menu</a>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <strong>Sweeter Side by Dachel</strong>
+    <p><a href="/">See the menu</a></p>
+  </div>
+</footer>
+
+<script src="/assets/js/cakes.js" defer></script>
+</body>
+</html>

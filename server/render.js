@@ -8,8 +8,10 @@ const { ROOT } = require('./db');
 const menu = require('./menu');
 const categories = require('./categories');
 const orders = require('./orders');
+const cakes = require('./cakes');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
+const CAKES_TEMPLATE = path.join(ROOT, 'templates', 'cakes.html');
 const OUTPUT = path.join(ROOT, 'index.html');
 
 function esc(s) {
@@ -131,4 +133,34 @@ function writeStatic() {
   return OUTPUT;
 }
 
-module.exports = { buildHtml, writeStatic, esc, encPath, OUTPUT, TEMPLATE };
+/* ---------------------------- cake booking page ---------------------------- */
+
+/** The custom cake page: sizes with their starting prices, flavours, and the
+    days that can be booked. Rendered on every request, like the menu. */
+function buildCakesHtml(now = new Date()) {
+  const template = fs.readFileSync(CAKES_TEMPLATE, 'utf8');
+  const s = cakes.settings();
+  const avail = cakes.availability(now);
+
+  const sizes = s.sizes.map((size, i) => `        <label class="size">
+          <input type="radio" name="size" value="${esc(size.name)}"${i === 0 ? ' checked' : ''}>
+          <span class="size__body">
+            <span class="size__name">${esc(size.name)}</span>
+            <span class="size__price">from <strong>Php ${size.from_price.toLocaleString('en-US')}</strong></span>
+          </span>
+        </label>`).join('\n');
+
+  const flavours = [...s.flavours, cakes.OTHER_FLAVOUR]
+    .map((f) => `          <option value="${esc(f)}">${esc(f)}</option>`).join('\n');
+
+  return template
+    .replace('<!--EARLIEST-->', avail.earliest)
+    .replace('<!--LATEST-->', avail.latest)
+    .replace('<!--FULL_DATES-->', avail.full_dates.join(' '))
+    .replace('<!--EARLIEST_TEXT-->', esc(cakes.niceDate(avail.earliest)))
+    .replace('<!--LEAD_DAYS-->', `${avail.lead_days} day${avail.lead_days === 1 ? '' : 's'}`)
+    .replace('<!--SIZES-->', sizes)
+    .replace('<!--FLAVOURS-->', flavours);
+}
+
+module.exports = { buildHtml, buildCakesHtml, writeStatic, esc, encPath, OUTPUT, TEMPLATE };

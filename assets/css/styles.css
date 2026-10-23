@@ -84,6 +84,18 @@ img { max-width: 100%; }
   margin: var(--sp-3) auto 0; max-width: 46ch; color: #6B5330;
   font-size: clamp(1rem, 2.6vw, 1.125rem);
 }
+/* The link to the custom cake page. */
+.hero__cta {
+  display: inline-flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-4);
+  min-height: 44px; padding: 0 var(--sp-5); border-radius: var(--r-full);
+  font-weight: 700; color: #fff; background: var(--coral-ink); text-decoration: none;
+  box-shadow: var(--shadow); transition: filter .2s var(--ease), transform .12s var(--ease);
+}
+.hero__cta:hover { filter: brightness(1.08); }
+.hero__cta:active { transform: scale(.98); }
+.hero--small { padding: var(--sp-5) 0 var(--sp-6); }
+.hero--small .hero__logo { width: clamp(80px, 18vw, 104px); }
+.hero__home { display: inline-block; border-radius: 50%; }
 
 /* ---------- Sticky toolbar ---------- */
 .toolbar {
@@ -484,6 +496,52 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
   background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-full);
 }
 .cart__back:hover { background: var(--cream); }
+
+/* ---------- Custom cake booking page ---------- */
+.cakes { max-width: 640px; }
+.cakes__nojs { padding: var(--sp-4); border-radius: var(--r-md); background: var(--cream); border: 1px solid var(--line); }
+.cakes__nojs[hidden], .cake-form[hidden], .cake-done[hidden], .photo-pick__chosen[hidden], #k-address-field[hidden] { display: none; }
+.cake-form, .cake-done {
+  display: flex; flex-direction: column; gap: var(--sp-5);
+  padding: var(--sp-5); background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow);
+}
+.cake-done { gap: var(--sp-3); }
+.cake-done p { margin: 0; }
+.cake-done .cart__back { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; align-self: flex-start; }
+.cake-step { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
+.cake-step + .cake-step { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.cake-step__title { padding: 0; margin-bottom: var(--sp-1); font: 600 1.25rem "Fredoka", "Nunito", sans-serif; color: var(--ink); }
+.cfield select { appearance: auto; }
+.cfield__label { font-weight: 700; font-size: .9375rem; }
+
+/* Sizes as cards: name and starting price. */
+.sizes { display: grid; gap: var(--sp-2); }
+@media (min-width: 520px) { .sizes { grid-template-columns: 1fr 1fr; } }
+.size { position: relative; display: block; cursor: pointer; }
+.size input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.size__body {
+  height: 100%; display: flex; flex-direction: column; gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md);
+  border: 1.5px solid var(--line); background: var(--surface);
+  transition: border-color .2s var(--ease), background-color .2s var(--ease);
+}
+.size__name { font-weight: 700; }
+.size__price { font-size: .9375rem; color: var(--ink-soft); }
+.size__price strong { color: var(--coral-ink); font-family: "Fredoka", sans-serif; font-weight: 600; }
+.size input:hover + .size__body { border-color: #E2CFA5; }
+.size input:checked + .size__body { border-color: var(--coral-ink); background: #FDF1EE; box-shadow: inset 0 0 0 1px var(--coral-ink); }
+.size input:focus-visible + .size__body { box-shadow: 0 0 0 4px rgba(62,94,126,.24); }
+
+/* Reference photo picker. */
+.photo-pick { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); }
+.photo-pick__btn {
+  min-height: 44px; display: inline-flex; align-items: center; padding: 0 var(--sp-4); cursor: pointer;
+  font-weight: 700; color: var(--navy); background: #EAF1F7; border-radius: var(--r-full);
+}
+.photo-pick input:focus-visible + .photo-pick__chosen, .photo-pick__btn:focus-within { outline: 3px solid var(--navy); }
+.photo-pick__chosen { display: flex; align-items: center; gap: var(--sp-3); }
+.photo-pick__chosen img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--line); }
 
 /* ---------- Footer ---------- */
 .foot {

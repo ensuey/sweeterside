@@ -27,4 +27,11 @@ function manilaDate(now = new Date()) {
   return new Date(now.getTime() + MANILA_OFFSET_MS).toISOString().slice(0, 10);
 }
 
-module.exports = { manilaMinutes, manilaDayStartSql, manilaDate };
+/** 'YYYY-MM-DD' plus n calendar days. */
+function addDays(ymd, n) {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+module.exports = { manilaMinutes, manilaDayStartSql, manilaDate, addDays };

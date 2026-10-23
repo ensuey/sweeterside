@@ -328,6 +328,37 @@ a { color: var(--navy); }
 .promo__note { margin: 0; font-size: .875rem; font-weight: 700; color: var(--ok); min-height: 1.3em; }
 .promo__note:empty { display: none; }
 
+/* Nav count of new cake bookings. */
+.nav__n {
+  min-width: 1.4em; margin-left: .35rem; padding: 0 .35rem; border-radius: var(--r-full);
+  font-size: .75rem; line-height: 1.4; text-align: center; color: #fff; background: var(--coral-ink);
+}
+.nav__n[hidden] { display: none; }
+
+/* Cake booking cards (built on the order card). */
+.cake__body { display: flex; gap: 1rem; align-items: flex-start; }
+.cake__details { flex: 1; min-width: 0; margin: 0; display: grid; grid-template-columns: auto 1fr; gap: .25rem .8rem; font-size: .9375rem; }
+.cake__details dt { color: var(--ink-soft); }
+.cake__details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cake__photo { flex-shrink: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--r-sm); background: none; cursor: zoom-in; overflow: hidden; }
+.cake__photo img { display: block; width: 96px; height: 96px; object-fit: cover; }
+.cake__admin { display: flex; flex-direction: column; gap: .6rem; padding-top: .7rem; border-top: 1px dashed var(--line); }
+.cake__fields { display: flex; flex-wrap: wrap; gap: .6rem; }
+.cake__fields .stock__field { flex: 1 1 8rem; }
+.cake__fields .stock__field input, .cake__fields .stock__field select { width: 100%; }
+.cake__deposit-row { display: flex; align-items: center; gap: .4rem; }
+.cake__deposit-row input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--coral-ink); }
+.cake__admin textarea { width: 100%; padding: .4rem .6rem; font: inherit; font-size: .875rem; font-weight: 400; color: var(--ink); border: 1.5px solid var(--line); border-radius: var(--r-sm); resize: vertical; }
+.cake__save { display: flex; justify-content: flex-end; }
+.cake[data-status="new"] { border-left-color: var(--coral-ink); }
+.cake[data-status="quoted"] { border-left-color: #C98A1B; }
+.cake[data-status="confirmed"] { border-left-color: var(--navy); }
+.cake[data-status="declined"] { opacity: .7; }
+.cake-settings { display: flex; flex-direction: column; gap: 1rem; }
+.cake-settings textarea { width: 100%; padding: .55rem .7rem; font: inherit; font-size: .9375rem; color: var(--ink); border: 1.5px solid var(--line); border-radius: var(--r-sm); resize: vertical; }
+.cake-settings__foot { display: flex; justify-content: flex-end; }
+.photo-view__img { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; border-radius: var(--r-sm); }
+
 /* Voucher rows. */
 .voucher-row__code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; letter-spacing: .04em; }
 .voucher-row__status {
