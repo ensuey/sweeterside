@@ -28,7 +28,7 @@ npm start                 # http://127.0.0.1:3000
 - Admin, vouchers: <http://127.0.0.1:3000/admin/vouchers>
 - Admin, cakes: <http://127.0.0.1:3000/admin/cakes>
 
-`npm test` runs the test suite (54 tests covering password hashing, CSRF,
+`npm test` runs the test suite (57 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
 cake bookings and the database migrations).
 
@@ -88,6 +88,24 @@ similar) and get a correct menu; you just will not have the admin there, because
 static hosting cannot run the server.
 
 ## How ordering works
+
+### Open and closed
+
+The **Shop** switch at the top of the admin Orders page turns ordering on and
+off. The top bar of every admin page shows "Shop open" or "Shop closed".
+
+- **Open** (the default): the menu header says "Open now" and customers can
+  order.
+- **Closed**: the menu header says "Closed" with Dachel's optional note, e.g.
+  "Back tomorrow at 10 AM", or a default line. Customers can browse the menu,
+  but there are no Add buttons and no cart. Anything already in their cart is
+  kept for when the shop opens again. The server refuses orders and voucher
+  checks while closed, so a page left open from earlier cannot order either;
+  the customer is shown the closed message instead.
+- **Custom cake bookings are not affected**: `/cakes` takes requests whether
+  the shop is open or closed.
+
+### The cart
 
 Each card has an **Add** button. The cart is kept in the customer's browser,
 so it survives a reload. At checkout the customer chooses how they want it,

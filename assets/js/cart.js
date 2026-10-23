@@ -13,6 +13,9 @@
 
   var dialog = document.getElementById('cart');
   if (!dialog || typeof dialog.showModal !== 'function' || !window.fetch) return;
+  // While the shop is closed the menu is for browsing only: no Add buttons and
+  // no cart. A saved cart is left alone for when the shop opens again.
+  if (document.body.dataset.shopOpen === '0') return;
 
   var $ = function (id) { return document.getElementById(id); };
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card[data-id]'));
@@ -44,6 +47,7 @@
   var voucher = null; // { code, label, discount } once the server accepts a code
   var type = null; // 'delivery' | 'pickup' | 'dinein', or null when none is open
   var sending = false;
+  var shopClosed = false; // set if the shop closes while this page is open
 
   // Announces cart changes to screen readers without moving focus.
   var live = document.createElement('p');
@@ -361,11 +365,11 @@
     $('cart-empty').hidden = n > 0;
     $('cart-sum').hidden = n === 0;
     // No type open (all turned off, or only pick-up and it is past closing).
-    $('cart-closed').hidden = n === 0 || type !== null;
-    form.hidden = n === 0 || type === null;
+    $('cart-closed').hidden = n === 0 || (type !== null && !shopClosed);
+    form.hidden = n === 0 || type === null || shopClosed;
 
     $('cart-subtotal').textContent = money(subtotal());
-    $('voucher').hidden = n === 0 || type === null;
+    $('voucher').hidden = n === 0 || type === null || shopClosed;
     $('voucher-entry').hidden = !!voucher;
     $('voucher-applied').hidden = !voucher;
     $('cart-discount-row').hidden = !voucher;
@@ -590,6 +594,13 @@
       if (r.status === 422 && r.data.fields) {
         formError(r.data.error || 'Please check the highlighted fields.');
         showErrors(r.data.fields);
+        return;
+      }
+      // The shop closed while this page was open: stop taking the order, keep the cart.
+      if (r.status === 409 && r.data.closed) {
+        shopClosed = true;
+        $('cart-closed').textContent = r.data.error;
+        render();
         return;
       }
       if (r.status === 409 && r.data.quote) {

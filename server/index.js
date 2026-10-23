@@ -462,6 +462,8 @@ async function route(req, res) {
     if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
       return sendJson(res, 415, { error: 'Send the code as JSON.' });
     }
+    // A cart left open while the shop closed should not keep checking codes.
+    if (!orders.isShopOpen()) throw orders.shopClosedError();
     const ip = clientIp(req);
     if (voucherLimiter.limited(ip)) {
       return sendJson(res, 429, { error: 'Too many codes tried. Please wait a few minutes and try again.' });

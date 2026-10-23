@@ -1080,6 +1080,77 @@ test('the cake page and endpoints: public booking, private photos, admin-only ma
   }
 });
 
+/* ---------------------------- open / closed ---------------------------- */
+
+test('the shop is open by default, and the open switch and closed note are validated', () => {
+  assert.strictEqual(orders.settings().shop_open, true);
+  assert.strictEqual(orders.settings().closed_note, '');
+  assert.throws(() => orders.updateSettings({ shop_open: 'maybe' }), menu.ValidationError);
+  assert.throws(() => orders.updateSettings({ shop_open: false, closed_note: 'x'.repeat(121) }),
+    (err) => err instanceof menu.ValidationError && Boolean(err.errors.closed_note));
+  assert.strictEqual(orders.settings().shop_open, true, 'a bad note blocks the whole save');
+
+  const s = orders.updateSettings({ shop_open: false, closed_note: '  Back   tomorrow at 10 AM ' });
+  assert.strictEqual(s.shop_open, false);
+  assert.strictEqual(s.closed_note, 'Back tomorrow at 10 AM');
+  orders.updateSettings({ shop_open: true, closed_note: '' });
+});
+
+test('the menu says whether the shop is open, and shows the closed note', () => {
+  let html = render.buildHtml();
+  assert.match(html, /data-shop-open="1"/);
+  assert.match(html, /status--open.*Open now/);
+
+  orders.updateSettings({ shop_open: false, closed_note: 'Back at <b>10</b> AM' });
+  html = render.buildHtml();
+  assert.match(html, /data-shop-open="0"/);
+  assert.match(html, /status--closed.*Closed<\/span> Back at &lt;b&gt;10&lt;\/b&gt; AM/, 'the note is escaped');
+  assert.match(html, /href="\/cakes"/, 'cake booking is still offered');
+
+  orders.updateSettings({ closed_note: '' });
+  assert.match(render.buildHtml(), /We&#39;re closed right now\. You can still look through the menu\./);
+  orders.updateSettings({ shop_open: true });
+});
+
+test('no orders while closed, but cake bookings still go through', async () => {
+  orders.setDeliveryFee(0);
+  clearCakes();
+  orders.updateSettings({ shop_open: false, closed_note: 'Back at 10 AM.' });
+  try {
+    assert.throws(() => orders.create(orderInput({ expected_total: 343 })), (err) => {
+      assert.strictEqual(err.status, 409);
+      assert.strictEqual(err.body.closed, true);
+      assert.match(err.body.error, /closed right now.*Back at 10 AM\./);
+      return true;
+    });
+    assert.ok(cakes.create(cakeInput({ needed_on: cakes.availability().earliest })).id, 'cakes are always open');
+
+    const { server } = require('../server/index');
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${server.address().port}`;
+    try {
+      const post = (p, body) => fetch(`${url}${p}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const order = await post('/api/orders', orderInput({ expected_total: 343 }));
+      assert.strictEqual(order.status, 409);
+      assert.strictEqual((await order.json()).closed, true);
+      assert.strictEqual((await post('/api/vouchers/check', { code: 'ANY', items: orderInput().items })).status, 409);
+      // The cake endpoint is used up by the earlier cake test's rate limit, so
+      // only check that the closed shop is not what refuses it.
+      const cake = await post('/api/cakes', cakeInput({ needed_on: cakes.availability().earliest, name: 'Closed Day' }));
+      assert.notStrictEqual(cake.status, 409, 'the cake endpoint ignores the shop switch');
+      assert.ok(!(await cake.json()).closed);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  } finally {
+    orders.updateSettings({ shop_open: true, closed_note: '' });
+    clearCakes();
+  }
+  assert.strictEqual(orders.create(orderInput({ expected_total: 343 })).total, 343, 'open again: orders work');
+});
+
 test('the order endpoints: public placing, admin-only reading', async () => {
   const { server } = require('../server/index');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

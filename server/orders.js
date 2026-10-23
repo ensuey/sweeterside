@@ -134,6 +134,35 @@ function parsePickupTime(input, now) {
   return value;
 }
 
+/* ---------------------------- open / closed ---------------------------- */
+
+// Dachel switches the shop open or closed by hand. While closed, customers can
+// browse the menu but not order; cake bookings are not affected.
+const CLOSED_NOTE_MAX = 120;
+
+function isShopOpen() {
+  return getSetting('shop_open', '1') === '1';
+}
+
+function closedNote() {
+  return getSetting('closed_note', '');
+}
+
+function parseClosedNote(input) {
+  const note = String(input ?? '').trim().replace(/\s+/g, ' ');
+  if (note.length > CLOSED_NOTE_MAX) {
+    throw new ValidationError({ closed_note: `Keep the note under ${CLOSED_NOTE_MAX} characters.` });
+  }
+  return note;
+}
+
+/** The error an order (or a voucher check) gets while the shop is closed. */
+function shopClosedError() {
+  const note = closedNote();
+  const message = `Sorry, we're closed right now, so we can't take orders.${note ? ` ${note}` : ''}`;
+  return Object.assign(new Error(message), { status: 409, body: { error: message, closed: true } });
+}
+
 /* ---------------------------- all settings ---------------------------- */
 
 function settings() {
@@ -145,6 +174,8 @@ function settings() {
     dinein_enabled: isEnabled('dinein'),
     pickup_open: open,
     pickup_close: close,
+    shop_open: isShopOpen(),
+    closed_note: closedNote(),
   };
 }
 
@@ -157,6 +188,8 @@ function updateSettings(input) {
     dinein_enabled: parseSwitch('dinein_enabled'),
     pickup_open: parseHour('pickup_open'),
     pickup_close: parseHour('pickup_close'),
+    shop_open: parseSwitch('shop_open'),
+    closed_note: parseClosedNote,
   };
   const values = {};
   const errors = {};
@@ -297,6 +330,8 @@ function staleCart(message, q) {
  * options.now is the current time, for tests.
  */
 function create(input, { now = new Date() } = {}) {
+  if (!isShopOpen()) throw shopClosedError();
+
   const type = input.type === undefined ? 'delivery' : String(input.type);
   if (!ORDER_TYPES.includes(type) || !isEnabled(type)) {
     throw new ValidationError({ type: 'That order type is not available right now. Choose another.' });
@@ -448,5 +483,6 @@ function setStatus(id, status) {
 module.exports = {
   STATUSES, ORDER_TYPES, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
+  isShopOpen, closedNote, shopClosedError,
   quote, create, get, list, counts, setStatus,
 };
