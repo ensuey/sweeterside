@@ -24,7 +24,7 @@ npm start                 # http://127.0.0.1:3000
 - Menu:  <http://127.0.0.1:3000/>
 - Admin: <http://127.0.0.1:3000/admin>
 
-`npm test` runs the test suite (29 tests covering password hashing, CSRF,
+`npm test` runs the test suite (35 tests covering password hashing, CSRF,
 validation, path containment, categories, orders and the database migration).
 
 ### Changing the admin password
@@ -75,19 +75,40 @@ static hosting cannot run the server.
 ## How ordering works
 
 Each card has an **Add** button. The cart is kept in the customer's browser,
-so it survives a reload. At checkout the customer gives their full name, phone
-number, delivery address and the cash they will pay with — all four are
-required — and the page shows the subtotal, delivery fee, total and their
-change as they type.
+so it survives a reload. At checkout the customer chooses how they want it,
+and only that type's fields are shown. Every field shown is required.
 
-Once the order is placed, the customer sees the order number, the total, their
-cash and their change, and is told Dachel will call to confirm.
+| Type | The customer gives | Pays |
+|---|---|---|
+| **Delivery** | name, phone, address, cash they will pay with | cash on arrival, plus the delivery fee |
+| **Pick-up** | name, phone, pick-up time today | at the counter, no fee |
+| **Dine-in** | name, table number | at the counter, no fee |
 
-Orders appear at the top of the admin, oldest first, with the change to bring.
-The page checks for new ones every 20 seconds and shows the count in the tab
-title. Move each order through **New → Preparing → Out for delivery →
-Completed** (or **Cancelled**). The **delivery fee** is set next to the orders
-list and applies to the menu straight away.
+Pick-up times are "As soon as possible" or 15-minute slots, at least 15
+minutes ahead, within the pick-up hours. Times are always Manila time
+(UTC+8), whatever the customer's phone is set to. Once no slot is left today,
+pick-up is hidden with "Pick-up is closed for today."
+
+Once the order is placed, the customer sees the order number and total, plus
+their cash and change for delivery, the pick-up time, or the table it will
+be brought to.
+
+Orders appear at the top of the admin, oldest first, with a badge for the
+type (and pick-up time or table). The page checks for new ones every 20
+seconds and shows the count in the tab title. Move each order through
+**New → Preparing → Out for delivery / Ready for pick-up / Served →
+Completed** (or **Cancelled**).
+
+Next to the orders list the admin sets:
+
+- **Taking orders for**: turn Delivery, Pick-up or Dine-in on or off. A type
+  that is off disappears from checkout, and the server refuses it. With all
+  three off the cart says online ordering is closed.
+- **Delivery fee**: charged on delivery orders only.
+- **Pick-up from / until**: the pick-up hours, on the quarter hour.
+
+All apply to the menu straight away. Orders placed before order types existed
+are kept as delivery orders.
 
 What the server does not trust:
 

@@ -408,12 +408,13 @@ async function route(req, res) {
     }
     const order = orders.create(await readJson(req));
     recordOrder(ip);
-    console.log(`[order] #${order.id} Php ${order.total} — ${order.items.length} line(s)`);
+    console.log(`[order] #${order.id} ${order.order_type} Php ${order.total} — ${order.items.length} line(s)`);
     return sendJson(res, 201, {
       order: {
-        id: order.id, items: order.items, subtotal: order.subtotal,
+        id: order.id, order_type: order.order_type, items: order.items, subtotal: order.subtotal,
         delivery_fee: order.delivery_fee, total: order.total,
         cash: order.cash, change_due: order.change_due,
+        table_no: order.table_no, pickup_at: order.pickup_at,
       },
     });
   }

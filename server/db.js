@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 -- Amounts are whole pesos, copied at order time so later price changes do
--- not rewrite what the customer was charged.
+-- not rewrite what the customer was charged. The order type columns are added
+-- by migrateOrders(), so new and old databases take the same path.
 CREATE TABLE IF NOT EXISTS orders (
   id            INTEGER PRIMARY KEY,
   customer_name TEXT    NOT NULL,
@@ -157,6 +158,24 @@ function migrateItems() {
 }
 
 migrateItems();
+
+/* Orders were delivery-only before pick-up and dine-in. Adding columns with
+   defaults keeps every earlier order as a delivery order. Pick-up and dine-in
+   orders store '' for the address (and phone, for dine-in) and 0 for cash. */
+const ORDER_COLUMNS = {
+  order_type: "TEXT NOT NULL DEFAULT 'delivery'",
+  table_no: "TEXT NOT NULL DEFAULT ''",
+  pickup_at: "TEXT NOT NULL DEFAULT ''", // 'asap' or 'HH:MM', Manila time, same day
+};
+
+function migrateOrders() {
+  const cols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  for (const [name, type] of Object.entries(ORDER_COLUMNS)) {
+    if (!cols.includes(name)) db.exec(`ALTER TABLE orders ADD COLUMN ${name} ${type}`);
+  }
+}
+
+migrateOrders();
 
 /* ---------- First-run seed: the nine items from the printed posters ---------- */
 

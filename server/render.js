@@ -81,8 +81,12 @@ function buildHtml(items = menu.list(), cats = categories.list()) {
     ? '  <p class="no-items">The menu is being updated. Please check back shortly.</p>'
     : '';
 
+  const hours = orders.pickupHours();
   return template
     .replace('<!--DELIVERY_FEE-->', String(orders.getDeliveryFee()))
+    .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
+    .replace('<!--PICKUP_OPEN-->', esc(hours.open))
+    .replace('<!--PICKUP_CLOSE-->', esc(hours.close))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
     .replace('<!--SECTIONS-->', sections + empty);
 }

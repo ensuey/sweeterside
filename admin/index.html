@@ -32,9 +32,23 @@
         <p class="admin__sub" id="orders-summary">Loading…</p>
       </div>
       <form class="fee" id="fee-form" novalidate>
+        <fieldset class="fee__types">
+          <legend>Taking orders for</legend>
+          <label class="fee__check"><input type="checkbox" id="on-delivery"> Delivery</label>
+          <label class="fee__check"><input type="checkbox" id="on-pickup"> Pick-up</label>
+          <label class="fee__check"><input type="checkbox" id="on-dinein"> Dine-in</label>
+        </fieldset>
         <div class="field">
           <label for="fee">Delivery fee (Php)</label>
           <input id="fee" name="delivery_fee" type="number" min="0" max="10000" step="1" inputmode="numeric" required>
+        </div>
+        <div class="field">
+          <label for="pickup-open">Pick-up from</label>
+          <input id="pickup-open" name="pickup_open" type="time" step="900" required>
+        </div>
+        <div class="field">
+          <label for="pickup-close">Pick-up until</label>
+          <input id="pickup-close" name="pickup_close" type="time" step="900" required>
         </div>
         <button class="btn btn--ghost" type="submit" id="fee-save">Save</button>
       </form>
