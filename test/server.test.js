@@ -298,36 +298,6 @@ test('the delivery fee defaults to zero and only takes whole pesos in range', ()
   assert.match(render.buildHtml(), /data-delivery-fee="45"/, 'the page carries the fee');
 });
 
-test('the Messenger page defaults to Sweeter Side and accepts links or usernames', () => {
-  assert.strictEqual(orders.getMessengerPage(), 'SweeterSideByDachel');
-  assert.match(render.buildHtml(), /data-messenger-page="SweeterSideByDachel"/);
-
-  for (const [input, page] of [
-    ['https://www.facebook.com/SweeterSideByDachel', 'SweeterSideByDachel'],
-    ['facebook.com/SweeterSideByDachel/', 'SweeterSideByDachel'],
-    ['https://m.me/SweeterSideByDachel?ref=x', 'SweeterSideByDachel'],
-    ['@sweeter.side', 'sweeter.side'],
-    ['100063712345678', '100063712345678'],
-    ['  ', ''],
-  ]) {
-    assert.strictEqual(orders.parseMessengerPage(input), page, `from ${input}`);
-  }
-  for (const bad of ['abc', 'has space here', '"><script>', 'javascript:alert(1)']) {
-    assert.throws(() => orders.parseMessengerPage(bad), menu.ValidationError, `should reject ${bad}`);
-  }
-});
-
-test('settings are validated together, so a bad value never half-applies', () => {
-  const before = orders.settings();
-  assert.throws(() => orders.updateSettings({ delivery_fee: 30, messenger_page: 'no good!' }),
-    (err) => err instanceof menu.ValidationError && Boolean(err.errors.messenger_page));
-  assert.deepStrictEqual(orders.settings(), before, 'the valid fee was not saved either');
-
-  assert.deepStrictEqual(orders.updateSettings({ messenger_page: '' }),
-    { delivery_fee: before.delivery_fee, messenger_page: '' }, 'blank turns Messenger off');
-  orders.updateSettings({ messenger_page: before.messenger_page });
-});
-
 test('an order is priced from the database, not from the browser', () => {
   orders.setDeliveryFee(50);
   const order = orders.create(orderInput({

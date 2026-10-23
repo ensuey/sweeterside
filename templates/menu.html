@@ -20,7 +20,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-delivery-fee="<!--DELIVERY_FEE-->" data-messenger-page="<!--MESSENGER_PAGE-->">
+<body data-delivery-fee="<!--DELIVERY_FEE-->">
 
 <a class="skip" href="#menu">Skip to menu</a>
 
@@ -144,26 +144,7 @@
       <div><dt>Your change</dt><dd id="done-change"></dd></div>
     </dl>
 
-    <!-- Shown when a Messenger page is set: the customer sends us the summary. -->
-    <div class="msgr" id="msgr" hidden>
-      <h3 class="msgr__title">Last step: send your order on Messenger</h3>
-      <ol class="msgr__steps">
-        <li>Tap the button below. Your order details are copied for you.</li>
-        <li>In Messenger, <strong>paste</strong> the message and tap <strong>Send</strong>.</li>
-      </ol>
-      <a class="msgr__btn" id="msgr-open" href="#" target="_blank" rel="noopener">
-        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2C6.36 2 2 6.13 2 11.7c0 2.91 1.19 5.44 3.14 7.17.16.15.26.35.27.57l.05 1.78a.8.8 0 0 0 1.12.71l1.98-.87c.17-.08.36-.09.54-.04.91.25 1.87.38 2.9.38 5.64 0 10-4.13 10-9.7S17.64 2 12 2Zm6 7.46-2.94 4.66a1.5 1.5 0 0 1-2.17.4l-2.34-1.75a.6.6 0 0 0-.72 0l-3.16 2.4c-.42.32-.97-.18-.69-.63l2.94-4.66a1.5 1.5 0 0 1 2.17-.4l2.34 1.75a.6.6 0 0 0 .72 0l3.16-2.4c.42-.32.97.18.69.63Z"/></svg>
-        Send order on Messenger
-      </a>
-      <p class="msgr__status" id="msgr-status" role="status"></p>
-      <details class="msgr__details">
-        <summary>See the message</summary>
-        <label class="vh" for="msgr-text">Order message</label>
-        <textarea class="msgr__text" id="msgr-text" rows="9" readonly></textarea>
-        <button class="msgr__copy" type="button" id="msgr-copy">Copy message</button>
-      </details>
-    </div>
-    <p class="msgr__fallback" id="msgr-off">Dachel will call you to confirm.</p>
+    <p>Dachel will call you to confirm.</p>
 
     <button class="cart__back" type="button" data-close>Back to the menu</button>
   </div>

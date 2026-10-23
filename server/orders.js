@@ -46,50 +46,15 @@ function setDeliveryFee(input) {
   return fee;
 }
 
-/* ---------------------------- messenger page ---------------------------- */
-
-// Customers send their order summary to this page on Messenger (m.me/<page>).
-const DEFAULT_MESSENGER_PAGE = 'SweeterSideByDachel';
-
-function getMessengerPage() {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'messenger_page'").get();
-  return row ? row.value : DEFAULT_MESSENGER_PAGE;
-}
-
-/**
- * Accepts a page username, or a facebook.com / m.me link to the page, and
- * returns the username. An empty value turns the Messenger step off.
- */
-function parseMessengerPage(input) {
-  let page = String(input ?? '').trim();
-  const link = page.match(/^(?:https?:\/\/)?(?:(?:www|m|web)\.)?(?:facebook\.com|fb\.com|m\.me)\/([^/?#\s]+)/i);
-  if (link) page = link[1];
-  page = page.replace(/^@/, '');
-
-  // Facebook usernames are letters, digits and dots; page ids are digits.
-  if (page && !/^[A-Za-z0-9.]{5,50}$/.test(page)) {
-    throw new ValidationError({
-      messenger_page: 'Enter the page username, like SweeterSideByDachel, or its facebook.com link.',
-    });
-  }
-  return page;
-}
-
-function setMessengerPage(input) {
-  const page = parseMessengerPage(input);
-  saveSetting('messenger_page', page);
-  return page;
-}
-
 /* ---------------------------- all settings ---------------------------- */
 
 function settings() {
-  return { delivery_fee: getDeliveryFee(), messenger_page: getMessengerPage() };
+  return { delivery_fee: getDeliveryFee() };
 }
 
 /** Validate every submitted setting first, so a bad value never half-applies. */
 function updateSettings(input) {
-  const parsers = { delivery_fee: parseDeliveryFee, messenger_page: parseMessengerPage };
+  const parsers = { delivery_fee: parseDeliveryFee };
   const values = {};
   const errors = {};
   for (const [key, parse] of Object.entries(parsers)) {
@@ -287,7 +252,6 @@ function setStatus(id, status) {
 }
 
 module.exports = {
-  STATUSES, getDeliveryFee, setDeliveryFee, getMessengerPage, setMessengerPage,
-  parseMessengerPage, settings, updateSettings, normalisePhone,
+  STATUSES, getDeliveryFee, setDeliveryFee, settings, updateSettings, normalisePhone,
   quote, create, get, list, counts, setStatus,
 };

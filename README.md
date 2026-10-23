@@ -24,7 +24,7 @@ npm start                 # http://127.0.0.1:3000
 - Menu:  <http://127.0.0.1:3000/>
 - Admin: <http://127.0.0.1:3000/admin>
 
-`npm test` runs the test suite (31 tests covering password hashing, CSRF,
+`npm test` runs the test suite (29 tests covering password hashing, CSRF,
 validation, path containment, categories, orders and the database migration).
 
 ### Changing the admin password
@@ -80,25 +80,8 @@ number, delivery address and the cash they will pay with — all four are
 required — and the page shows the subtotal, delivery fee, total and their
 change as they type.
 
-### Sending the order on Messenger
-
-Once the order is placed, the page copies a summary of it (items, totals,
-cash, change, name, phone and address) to the customer's clipboard and opens
-Messenger to the shop's page, `m.me/<page>`. The customer pastes and sends.
-
-Two limits worth knowing:
-
-- **Messenger cannot be pre-filled.** Facebook's `m.me` links open a chat but
-  do not accept message text, so the customer has to paste it. The steps on
-  screen say so.
-- **Browsers may block the automatic open.** Opening a new tab is only allowed
-  shortly after a tap; the order request comes first, so some browsers
-  (notably Safari on iPhone) block it. The confirmation then shows a large
-  **Send order on Messenger** button, which always works.
-
-The page is set in the admin next to the delivery fee (a username or a
-facebook.com link both work). It defaults to `SweeterSideByDachel`; clear the
-field to turn the Messenger step off.
+Once the order is placed, the customer sees the order number, the total, their
+cash and their change, and is told Dachel will call to confirm.
 
 Orders appear at the top of the admin, oldest first, with the change to bring.
 The page checks for new ones every 20 seconds and shows the count in the tab
