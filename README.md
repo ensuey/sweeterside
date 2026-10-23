@@ -24,10 +24,11 @@ npm start                 # http://127.0.0.1:3000
 - Menu:  <http://127.0.0.1:3000/>
 - Admin, orders: <http://127.0.0.1:3000/admin>
 - Admin, items:  <http://127.0.0.1:3000/admin/items>
+- Admin, vouchers: <http://127.0.0.1:3000/admin/vouchers>
 
-`npm test` runs the test suite (41 tests covering password hashing, CSRF,
-validation, path containment, categories, orders, item stock and the database
-migrations).
+`npm test` runs the test suite (48 tests covering password hashing, CSRF,
+validation, path containment, categories, orders, item stock, promotions and
+the database migrations).
 
 ### Changing the admin password
 
@@ -41,16 +42,18 @@ server/
   index.js       HTTP server, routing, static files, uploads
   db.js          SQLite schema and the first-run seed
   auth.js        scrypt hashing, sessions, CSRF, login throttling
-  menu.js        item validation, CRUD, availability and daily limits
+  menu.js        item validation, CRUD, availability, daily limits, sale prices
   categories.js  category validation, CRUD and ordering
   orders.js      orders, pricing, order types and their settings
-  clock.js       Manila time: pick-up slots and "today" for daily limits
+  vouchers.js    voucher codes: validation, CRUD and checking a code
+  clock.js       Manila time: pick-up slots, daily limits, voucher dates
   render.js      builds the customer page from the database
   imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
 admin/
-  common.js      shared by both pages: API calls, toasts, sign-in, sign-out
+  common.js      shared by every page: API calls, toasts, sign-in, sign-out
   index.html     Orders page (orders.js): the queue and ordering settings
-  items.html     Items page (items.js): items, stock and categories
+  items.html     Items page (items.js): items, stock, promotions, categories
+  vouchers.html  Vouchers page (vouchers.js): voucher codes
   login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
@@ -155,6 +158,38 @@ Customers see "Only 3 left today" once 5 or fewer are left. The cart will not
 go past what is left, and the server checks again when the order is placed,
 so two customers cannot both take the last one: the second is told how many
 are left and their cart is cut down to that.
+
+## Promotions: best sellers, sale prices and vouchers
+
+**Best seller and sale price** are set in the item editor on the Items page,
+under *Promotion*:
+
+- **Best seller** puts a "★ Best seller" badge on the menu card and in the
+  item popup.
+- **Sale** is a % off (1 to 90) or a Php amount off (less than the full
+  price). The menu shows the full price struck through next to the sale
+  price, and the cart and the order charge the sale price. The full price is
+  kept, so ending the sale is just choosing *No sale*.
+
+**Vouchers** are codes customers type in the cart, managed on the Vouchers
+page:
+
+- Each code takes either a **% of the items** (optionally capped at a Php
+  amount) or a **Php amount** off. A voucher never takes anything off the
+  delivery fee, and never more than the items cost.
+- Optional **first and last days**, in Manila time, both days included. The
+  page shows each code as Active, Scheduled, Expired or Off.
+- An **On** switch turns a code off without deleting it. Deleting a code that
+  was used is fine: past orders keep the code and their discount.
+- Codes ignore case. The page counts how many orders used each code, not
+  counting cancelled ones.
+
+The server works out every discount itself. The cart asks it what a code
+takes off (`/api/vouchers/check`, limited to 20 checks per IP address every
+10 minutes so codes cannot be guessed), and checks again when the order is
+placed. If the code stopped working in between, for example it was turned off,
+the order is refused, the code is dropped and the customer sees the new total.
+Order cards in the admin show the code used and the discount.
 
 ## How the photos work
 

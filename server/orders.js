@@ -5,6 +5,7 @@
 
 const { db, transaction } = require('./db');
 const menu = require('./menu');
+const vouchers = require('./vouchers');
 const { manilaMinutes } = require('./clock');
 
 const { ValidationError } = menu;
@@ -213,13 +214,17 @@ function cartLines(rawItems) {
 }
 
 /**
- * Price a cart against the live menu. Only delivery pays the delivery fee.
+ * Price a cart against the live menu, at sale prices where an item is on
+ * sale. Only delivery pays the delivery fee.
  * Items that are deleted, not available or sold out (by hand or because
  * today's limit is used up) go in `unavailable`. Items with fewer left today
  * than the cart wants go in `limits` as { id: remaining }.
- * @returns {{ lines, unavailable, limits, short, subtotal, delivery_fee, total }}
+ * A voucher code takes `discount` off the items, never the fee. If the code
+ * does not work, `voucher` is null and `voucherError` says why.
+ * @returns {{ lines, unavailable, limits, short, subtotal, discount, voucher,
+ *             voucherError, delivery_fee, total }}
  */
-function quote(rawItems, type = 'delivery', now = new Date()) {
+function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') {
   const lines = [];
   const unavailable = [];
   const short = [];
@@ -233,13 +238,29 @@ function quote(rawItems, type = 'delivery', now = new Date()) {
     if (item.remaining !== null && qty > item.remaining) {
       short.push({ id: item.id, name: item.name, remaining: item.remaining });
     }
-    lines.push({ item_id: item.id, name: item.name, price: item.price, qty });
+    lines.push({ item_id: item.id, name: item.name, price: item.sale_price, qty });
   }
 
   const subtotal = lines.reduce((sum, l) => sum + l.price * l.qty, 0);
+
+  let voucher = null;
+  let voucherError = null;
+  if (vouchers.normaliseCode(voucherCode)) {
+    try {
+      voucher = vouchers.check(voucherCode, subtotal, now);
+    } catch (err) {
+      if (!(err instanceof ValidationError)) throw err;
+      voucherError = err.errors.voucher;
+    }
+  }
+  const discount = voucher ? voucher.discount : 0;
+
   const delivery_fee = type === 'delivery' ? getDeliveryFee() : 0;
   const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
-  return { lines, unavailable, limits, short, subtotal, delivery_fee, total: subtotal + delivery_fee };
+  return {
+    lines, unavailable, limits, short, subtotal, discount, voucher, voucherError,
+    delivery_fee, total: subtotal - discount + delivery_fee,
+  };
 }
 
 /** A 409 carrying the live prices, so the page can update and ask again. */
@@ -252,6 +273,7 @@ function staleCart(message, q) {
         items: q.lines.map((l) => ({ id: l.item_id, name: l.name, price: l.price })),
         unavailable: q.unavailable,
         limits: q.limits,
+        voucher: q.voucher,
         delivery_fee: q.delivery_fee,
         total: q.total,
       },
@@ -261,7 +283,7 @@ function staleCart(message, q) {
 
 /**
  * Validate and place an order.
- * input: { type, name, phone, address, cash, table_no, pickup_at,
+ * input: { type, name, phone, address, cash, table_no, pickup_at, voucher,
  *          items: [{ id, qty }], expected_total }
  * Which fields are required depends on the type:
  *   delivery  name, phone, address, cash
@@ -334,7 +356,7 @@ function create(input, { now = new Date() } = {}) {
   // cannot both take the last one.
   let q = null;
   try {
-    q = quote(input.items, type, now);
+    q = quote(input.items, type, now, input.voucher);
   } catch (err) {
     if (!(err instanceof ValidationError)) throw err;
     Object.assign(errors, err.errors);
@@ -351,6 +373,9 @@ function create(input, { now = new Date() } = {}) {
       : 'Some items have only a few left today. Your cart has been updated.';
     throw staleCart(message, q);
   }
+  // The code worked when applied but not now (expired, or turned off since):
+  // drop it and let the customer see the new total before ordering.
+  if (q.voucherError) throw staleCart(q.voucherError, q);
   if (q.lines.length === 0) throw new ValidationError({ items: 'Your cart is empty.' });
   if (Number(input.expected_total) !== q.total) {
     throw staleCart('Prices have changed since you opened the menu. Check the new total and place your order again.', q);
@@ -364,10 +389,10 @@ function create(input, { now = new Date() } = {}) {
   const id = transaction(() => {
     const info = db.prepare(`
       INSERT INTO orders (order_type, customer_name, phone, address, table_no, pickup_at,
-                          subtotal, delivery_fee, total, cash, change_due)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                          subtotal, voucher_code, discount, delivery_fee, total, cash, change_due)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       type, name, phone, address, tableNo, pickupAt,
-      q.subtotal, q.delivery_fee, q.total, cash, changeDue);
+      q.subtotal, q.voucher ? q.voucher.code : '', q.discount, q.delivery_fee, q.total, cash, changeDue);
     const line = db.prepare(
       'INSERT INTO order_items (order_id, item_id, name, price, qty) VALUES (?, ?, ?, ?, ?)');
     q.lines.forEach((l) => line.run(info.lastInsertRowid, l.item_id, l.name, l.price, l.qty));

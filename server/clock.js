@@ -22,4 +22,9 @@ function manilaDayStartSql(now = new Date()) {
   return start.toISOString().slice(0, 19).replace('T', ' ');
 }
 
-module.exports = { manilaMinutes, manilaDayStartSql };
+/** Today's date in Manila, 'YYYY-MM-DD'. Voucher dates are compared to it. */
+function manilaDate(now = new Date()) {
+  return new Date(now.getTime() + MANILA_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+module.exports = { manilaMinutes, manilaDayStartSql, manilaDate };

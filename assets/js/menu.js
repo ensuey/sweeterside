@@ -94,9 +94,21 @@
         img.alt = pic.getAttribute('alt');
 
         nameEl.textContent  = card.dataset.name;
-        priceEl.textContent = 'Php ' + card.dataset.price;
+        // On sale: the full price struck through before the sale price.
+        priceEl.textContent = '';
+        if (card.dataset.was) {
+          var was = document.createElement('s');
+          was.className = 'price__was';
+          was.textContent = 'Php ' + card.dataset.was;
+          priceEl.appendChild(was);
+          priceEl.appendChild(document.createTextNode(' '));
+        }
+        priceEl.appendChild(document.createTextNode('Php ' + card.dataset.price));
+
         var soldOut = card.hasAttribute('data-soldout');
-        tagEl.textContent   = soldOut ? 'Sold out' : card.dataset.tag || '';
+        tagEl.textContent   = soldOut ? 'Sold out'
+          : card.hasAttribute('data-best') ? '★ Best seller'
+          : card.dataset.tag || '';
         sheet.dataset.id    = card.dataset.id;  // read by cart.js's "Add to cart"
         sheet.toggleAttribute('data-soldout', soldOut); // hides "Add to cart"
 

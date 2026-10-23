@@ -7,6 +7,7 @@
 
   var STORAGE_KEY = 'sweeterside-cart-v1';
   var TYPE_KEY = 'sweeterside-order-type';
+  var VOUCHER_KEY = 'sweeterside-voucher';
   var MAX_QTY = 50;
   var SLOT_MINUTES = 15;
 
@@ -40,6 +41,7 @@
   var pickupClose = toMinutes(document.body.dataset.pickupClose);
 
   var lines = []; // [{ id: '12', qty: 2 }], in the order they were added
+  var voucher = null; // { code, label, discount } once the server accepts a code
   var type = null; // 'delivery' | 'pickup' | 'dinein', or null when none is open
   var sending = false;
 
@@ -64,7 +66,9 @@
   }
   // Only delivery pays the fee; pick-up and dine-in pay at the counter.
   function fee() { return type === 'delivery' ? deliveryFee : 0; }
-  function total() { return subtotal() + fee(); }
+  // A voucher comes off the items only, never the delivery fee.
+  function discount() { return voucher ? Math.min(voucher.discount, subtotal()) : 0; }
+  function total() { return subtotal() - discount() + fee(); }
 
   /* ---------------------------- pick-up times ---------------------------- */
 
@@ -180,6 +184,69 @@
      lasts until the page is closed. */
   function save() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(lines)); } catch (e) { /* ignore */ }
+    // A percentage voucher depends on what is in the cart.
+    if (voucher) scheduleVoucherCheck();
+  }
+
+  /* ---------------------------- voucher ---------------------------- */
+
+  function voucherError(message) {
+    $('voucher-err').textContent = message || '';
+    $('voucher-err').hidden = !message;
+  }
+
+  function setVoucher(next) {
+    voucher = next;
+    try {
+      if (next) localStorage.setItem(VOUCHER_KEY, next.code);
+      else localStorage.removeItem(VOUCHER_KEY);
+    } catch (e) { /* ignore */ }
+    render();
+  }
+
+  /** Ask the server what a code takes off this cart. It prices the cart exactly
+      as it will price the order. */
+  function checkVoucher(code) {
+    code = String(code || '').trim();
+    if (!code) { voucherError('Enter a voucher code.'); return Promise.resolve(); }
+    if (!count()) return Promise.resolve();
+    voucherError('');
+    $('v-apply').disabled = true;
+    return fetch('api/vouchers/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: code,
+        type: type || 'delivery',
+        items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
+      }),
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (res.ok && data.voucher) {
+          setVoucher({ code: data.voucher.code, label: data.voucher.label, discount: data.discount });
+          $('v-code').value = '';
+          return;
+        }
+        // Items that went off the menu are dealt with when ordering; here only the code matters.
+        var message = (data.fields && (data.fields.voucher || data.fields.items))
+          || data.error || 'That code could not be checked. Please try again.';
+        setVoucher(null);
+        voucherError(message);
+      });
+    }).catch(function () {
+      voucherError('Could not reach the shop to check that code. Try again.');
+    }).then(function () {
+      $('v-apply').disabled = false;
+    });
+  }
+
+  // Re-check once the customer stops changing the cart, not on every tap.
+  var voucherTimer = null;
+  function scheduleVoucherCheck() {
+    clearTimeout(voucherTimer);
+    voucherTimer = setTimeout(function () {
+      if (voucher && count()) checkVoucher(voucher.code);
+    }, 400);
   }
 
   function load() {
@@ -298,6 +365,15 @@
     form.hidden = n === 0 || type === null;
 
     $('cart-subtotal').textContent = money(subtotal());
+    $('voucher').hidden = n === 0 || type === null;
+    $('voucher-entry').hidden = !!voucher;
+    $('voucher-applied').hidden = !voucher;
+    $('cart-discount-row').hidden = !voucher;
+    if (voucher) {
+      $('voucher-label').textContent = voucher.code + ' · ' + voucher.label;
+      $('cart-voucher-code').textContent = voucher.code;
+      $('cart-discount').textContent = '−' + money(discount());
+    }
     $('cart-fee-row').hidden = type !== 'delivery';
     $('cart-fee').textContent = deliveryFee === 0 ? 'Free' : money(deliveryFee);
     $('cart-total').textContent = money(total());
@@ -390,6 +466,12 @@
     });
     // Other types are quoted with no fee, which says nothing about delivery's.
     if (type === 'delivery' && typeof quote.delivery_fee === 'number') deliveryFee = quote.delivery_fee;
+    // The server's view of the voucher: a new discount, or null when the code
+    // stopped working (expired or turned off). The error message says which.
+    if ('voucher' in quote && voucher) {
+      if (quote.voucher) voucher = { code: quote.voucher.code, label: quote.voucher.label, discount: quote.voucher.discount };
+      else setVoucher(null);
+    }
     save();
     render();
   }
@@ -430,6 +512,9 @@
     var counter = order.order_type !== 'delivery';
     $('done-id').textContent = '#' + order.id;
     $('done-total').textContent = money(order.total);
+    $('done-discount-row').hidden = !order.discount;
+    $('done-voucher-code').textContent = order.voucher_code || '';
+    $('done-discount').textContent = '−' + money(order.discount || 0);
     $('done-total-label').textContent = counter ? 'Total to pay at the counter' : 'Total to pay';
     $('done-cash-row').hidden = counter;
     $('done-change-row').hidden = counter;
@@ -475,6 +560,7 @@
       cash: type === 'delivery' ? form.elements.cash.value.trim() : '',
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
+      voucher: voucher ? voucher.code : '',
       items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
       expected_total: total(),
     };
@@ -494,6 +580,7 @@
     }).then(function (r) {
       if (r.ok && r.data.order) {
         lines = [];
+        setVoucher(null); // a code is used once per order; the next one starts fresh
         save();
         form.reset();
         setType(type); // reset() unchecked the type; keep it for next time
@@ -558,6 +645,17 @@
 
   /* ---------------------------- wiring ---------------------------- */
 
+  $('v-apply').addEventListener('click', function () { checkVoucher($('v-code').value); });
+  $('v-code').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); checkVoucher($('v-code').value); }
+  });
+  $('v-code').addEventListener('input', function () { voucherError(''); });
+  $('v-remove').addEventListener('click', function () {
+    setVoucher(null);
+    voucherError('');
+    $('v-code').focus();
+  });
+
   cards.forEach(function (card) {
     var btn = card.querySelector('[data-add]');
     if (!btn) return;
@@ -597,4 +695,9 @@
 
   load();
   refreshTypes();
+
+  // A code applied before a reload is checked again; it may have expired.
+  var savedCode = null;
+  try { savedCode = localStorage.getItem(VOUCHER_KEY); } catch (e) { savedCode = null; }
+  if (savedCode && count()) checkVoucher(savedCode);
 })();

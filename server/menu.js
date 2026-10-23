@@ -12,6 +12,7 @@ const { manilaDayStartSql } = require('./clock');
 const MAX_PRICE = 100000;
 const NAME_MAX = 80;
 const ALT_MAX = 300;
+const SALE_PERCENT_MAX = 90;
 
 class ValidationError extends Error {
   constructor(errors) {
@@ -119,12 +120,39 @@ function validate(input) {
     }
   }
 
+  const bestSeller = input.best_seller === true || input.best_seller === 'true'
+    || input.best_seller === 1 || input.best_seller === '1';
+
+  // A sale is kept as its rule, so the full price is never lost.
+  const saleType = String(input.sale_type ?? '');
+  let saleValue = null;
+  if (!['', 'percent', 'amount'].includes(saleType)) {
+    errors.sale = 'Choose no sale, % off or Php off.';
+  } else if (saleType) {
+    saleValue = intOrNull(input.sale_value);
+    if (saleValue === null || Number.isNaN(saleValue)) {
+      errors.sale = 'Enter the discount as a whole number.';
+    } else if (saleType === 'percent' && (saleValue < 1 || saleValue > SALE_PERCENT_MAX)) {
+      errors.sale = `Take between 1% and ${SALE_PERCENT_MAX}% off.`;
+    } else if (saleType === 'amount' && price !== null && (saleValue < 1 || saleValue >= price)) {
+      errors.sale = 'Take at least Php 1 off, and less than the full price.';
+    }
+  }
+
   if (Object.keys(errors).length) throw new ValidationError(errors);
 
   return {
     name, price, category_id: categoryId, image: image.rel, alt,
     crop_x: crop.x, crop_y: crop.y, crop_w: crop.w, crop_h: crop.h,
+    best_seller: bestSeller ? 1 : 0, sale_type: saleType, sale_value: saleValue,
   };
+}
+
+/** The price customers pay today: the full price, or the sale price. */
+function salePrice(item) {
+  if (item.sale_type === 'percent') return Math.round((item.price * (100 - item.sale_value)) / 100);
+  if (item.sale_type === 'amount') return Math.max(0, item.price - item.sale_value);
+  return item.price;
 }
 
 /* ---------------------------- stock ---------------------------- */
@@ -156,7 +184,10 @@ function soldToday(now = new Date()) {
 function withStock(item, sold) {
   const sold_today = sold.get(item.id) || 0;
   const remaining = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
-  return { ...item, sold_today, remaining, sold_out: item.availability === 'sold_out' || remaining === 0 };
+  return {
+    ...item, best_seller: item.best_seller === 1, sale_price: salePrice(item),
+    sold_today, remaining, sold_out: item.availability === 'sold_out' || remaining === 0,
+  };
 }
 
 /** @returns { availability, daily_limit } or throws ValidationError */
@@ -187,7 +218,7 @@ function setStock(id, input) {
 
 const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
                        i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position,
-                       i.availability, i.daily_limit
+                       i.availability, i.daily_limit, i.best_seller, i.sale_type, i.sale_value
                 FROM items i`;
 
 /** Items in menu order: by category position, then item position. */
@@ -209,10 +240,12 @@ function create(input) {
   ).get(row.category_id);
 
   const info = db.prepare(`
-    INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position,
+                       best_seller, sale_type, sale_value)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     row.name, row.price, row.category_id, row.image, row.alt,
-    row.crop_x, row.crop_y, row.crop_w, row.crop_h, next);
+    row.crop_x, row.crop_y, row.crop_w, row.crop_h, next,
+    row.best_seller, row.sale_type, row.sale_value);
 
   return get(info.lastInsertRowid);
 }
@@ -224,10 +257,12 @@ function update(id, input) {
 
   db.prepare(`
     UPDATE items SET name = ?, price = ?, category_id = ?, image = ?, alt = ?,
-      crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?, updated_at = datetime('now')
+      crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?,
+      best_seller = ?, sale_type = ?, sale_value = ?, updated_at = datetime('now')
     WHERE id = ?`).run(
     row.name, row.price, row.category_id, row.image, row.alt,
-    row.crop_x, row.crop_y, row.crop_w, row.crop_h, Number(id));
+    row.crop_x, row.crop_y, row.crop_w, row.crop_h,
+    row.best_seller, row.sale_type, row.sale_value, Number(id));
 
   return get(id);
 }
@@ -291,6 +326,6 @@ function availableImages() {
 
 module.exports = {
   ValidationError,
-  AVAILABILITY, list, get, create, update, remove, reorder, setStock,
+  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice,
   availableImages, resolveImage, validate,
 };

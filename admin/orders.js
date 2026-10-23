@@ -90,6 +90,7 @@ function orderHtml(o) {
       <ul class="order__items">${lines}</ul>
       <dl class="order__sum">
         <dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>
+        ${o.discount > 0 ? `<dt>Voucher ${esc(o.voucher_code)}</dt><dd class="order__discount">−${money(o.discount)}</dd>` : ''}
         ${o.delivery_fee > 0 ? `<dt>Delivery fee</dt><dd>${money(o.delivery_fee)}</dd>` : ''}
         <dt class="is-total">Total</dt><dd class="is-total">${money(o.total)}</dd>
         ${payment}
