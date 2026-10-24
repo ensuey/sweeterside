@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Staff — Sweeter Side admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <img class="topbar__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+    <h1 class="topbar__title">Menu admin</h1>
+    <nav class="topbar__nav" aria-label="Admin pages">
+      <a href="/admin">Orders</a>
+      <a href="/admin/pos">POS</a>
+      <a href="/admin/items">Items</a>
+      <a href="/admin/vouchers">Vouchers</a>
+      <a href="/admin/cakes">Cakes <span class="nav__n" id="nav-cakes-n" hidden></span></a>
+      <a href="/admin/blocked">Blocked</a>
+      <a href="/admin/staff" aria-current="page">Staff</a>
+    </nav>
+    <div class="topbar__spacer"></div>
+    <a class="shop-pill" id="shop-pill" href="/admin#shop" hidden></a>
+    <span class="topbar__user" id="who"></span>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
+    <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+  </div>
+</header>
+
+<main class="admin">
+  <p class="alert" id="page-error" role="alert" hidden></p>
+
+  <!-- First run: there are no staff yet -->
+  <section class="panel" id="setup" hidden aria-labelledby="setup-title">
+    <h2 class="panel__title" id="setup-title">Set up the owner</h2>
+    <p class="hint">The POS is used by staff with their own 4–6 digit PIN. Start with yours: you will be the owner,
+      who can add staff, approve voids and discounts, and see reports.</p>
+    <form class="staff-add" id="setup-form" novalidate>
+      <div class="field"><label for="setup-name">Your name</label><input id="setup-name" maxlength="40" autocomplete="name"></div>
+      <div class="field"><label for="setup-pin">PIN (4–6 digits)</label><input id="setup-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+      <div class="field"><label for="setup-pin2">PIN again</label><input id="setup-pin2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+      <div class="field"><label for="setup-password">Admin password</label><input id="setup-password" type="password" autocomplete="current-password"></div>
+      <button class="btn btn--primary" type="submit">Create owner</button>
+    </form>
+    <p class="field__err" id="setup-err" hidden></p>
+  </section>
+
+  <!-- Signed in, but not as the owner -->
+  <section class="panel" id="not-owner" hidden>
+    <h2 class="panel__title">Owner only</h2>
+    <p>Only the owner can manage staff and POS settings. <span id="not-owner-who"></span></p>
+    <button class="btn btn--ghost" type="button" id="switch-staff">Switch staff</button>
+  </section>
+
+  <div id="owner-area" hidden>
+    <section class="panel" aria-labelledby="staff-title">
+      <div class="panel__head">
+        <h2 class="panel__title" id="staff-title">Staff</h2>
+        <span class="hint" id="me"></span>
+        <button class="btn btn--ghost btn--sm" type="button" id="lock-btn">Lock</button>
+      </div>
+      <ul class="staff-list" id="staff-list"></ul>
+
+      <h3 class="panel__sub">Add someone</h3>
+      <form class="staff-add" id="add-form" novalidate>
+        <div class="field"><label for="add-name">Name</label><input id="add-name" maxlength="40" autocomplete="off"></div>
+        <div class="field"><label for="add-role">Role</label>
+          <select id="add-role">
+            <option value="cashier">Cashier</option>
+            <option value="waiter">Waiter</option>
+            <option value="owner">Owner</option>
+          </select></div>
+        <div class="field"><label for="add-pin">PIN (4–6 digits)</label><input id="add-pin" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+        <button class="btn btn--primary" type="submit">Add</button>
+      </form>
+      <p class="field__err" id="add-err" hidden></p>
+      <p class="hint">Cashiers take orders and payments and give discounts up to the limit below. Waiters take dine-in
+        orders and send them to the kitchen. Anything more needs the owner's PIN.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="pos-title">
+      <h2 class="panel__title" id="pos-title">POS settings</h2>
+      <form id="pos-form" novalidate>
+        <fieldset class="pos-settings__group">
+          <legend>Service charge</legend>
+          <label class="fee__check"><input type="checkbox" id="svc-on"> Add a service charge</label>
+          <div class="field field--xs"><label for="svc-rate">Rate (%)</label><input id="svc-rate" type="number" min="0" max="20" step="0.01"></div>
+          <div class="field field--xs"><label for="svc-base">Charged on</label>
+            <select id="svc-base"><option value="after_discounts">the amount after discounts</option><option value="before_discounts">the amount before discounts</option></select></div>
+          <span>On:</span>
+          <label class="fee__check"><input type="checkbox" data-svc-type="dinein"> Dine-in</label>
+          <label class="fee__check"><input type="checkbox" data-svc-type="pickup"> Takeout</label>
+          <label class="fee__check"><input type="checkbox" data-svc-type="delivery"> Delivery</label>
+          <p class="hint">Counter (POS) orders only. It is reported apart from sales, for the staff.</p>
+        </fieldset>
+        <fieldset class="pos-settings__group">
+          <legend>Cashiers and the tablet</legend>
+          <div class="field field--xs"><label for="limit">Cashier discount limit (%)</label><input id="limit" type="number" min="0" max="100" step="0.01"></div>
+          <div class="field field--xs"><label for="lock-min">Lock after (minutes idle)</label><input id="lock-min" type="number" min="1" max="60"></div>
+        </fieldset>
+        <button class="btn btn--primary" type="submit">Save POS settings</button>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="tax-title">
+      <h2 class="panel__title" id="tax-title">Tax settings</h2>
+      <form id="tax-form" novalidate>
+        <fieldset class="pos-settings__group">
+          <legend>Registration</legend>
+          <p class="tax-warning">Sweeter Side is <strong>non-VAT registered</strong> (8% income tax option). Only change
+            this if you have registered for VAT. Confirm with your accountant first.</p>
+          <label class="fee__check"><input type="radio" name="vat" value="0"> Non-VAT registered</label>
+          <label class="fee__check"><input type="radio" name="vat" value="1"> VAT-registered</label>
+          <p class="hint">VAT-registered changes the SC/PWD discount: the 12% VAT comes off first, then 20%.</p>
+        </fieldset>
+        <button class="btn btn--ghost" type="submit">Save tax setting</button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<!-- Reset a PIN -->
+<dialog class="modal modal--sm" id="pin-dialog" aria-labelledby="pin-title">
+  <form method="dialog" class="modal__form" id="pin-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="pin-title">New PIN</h2></div>
+    <div class="modal__body">
+      <div class="field"><label for="pin-new">New PIN (4–6 digits)</label><input id="pin-new" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+      <div class="field"><label for="pin-new2">Again</label><input id="pin-new2" type="password" inputmode="numeric" maxlength="6" autocomplete="new-password"></div>
+      <p class="field__err" id="pin-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="pin-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit">Save PIN</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="/admin/common.js"></script>
+<script src="/admin/staff-gate.js"></script>
+<script src="/admin/staff.js"></script>
+</body>
+</html>

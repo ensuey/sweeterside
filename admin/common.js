@@ -65,8 +65,16 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+/** Php 1,234 or, with centavos, Php 1,234.50 */
 function money(n) {
-  return `Php ${Number(n).toLocaleString('en-US')}`;
+  const v = Number(n);
+  const cents = Math.round(v * 100) % 100 !== 0;
+  return `Php ${v.toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
+/** The same, from centavos. */
+function moneyC(cents) {
+  return money(Number(cents) / 100);
 }
 
 /** New cake bookings, shown next to "Cakes" in the nav on every page. */
@@ -92,7 +100,7 @@ async function adminBoot(load) {
   try {
     const session = await api('/api/session');
     state.csrf = session.csrf;
-    $('who').textContent = session.email;
+    if ($('who')) $('who').textContent = session.email;
     api('/api/cakes/counts').then((c) => showCakeCount(c.new)).catch(() => {});
     api('/api/settings').then((s) => showShopPill(s.shop_open)).catch(() => {});
     await load();
@@ -101,7 +109,10 @@ async function adminBoot(load) {
   }
 }
 
-$('signout').addEventListener('click', async () => {
-  try { await api('/api/logout', { method: 'POST' }); } catch { /* sign out anyway */ }
-  window.location.assign('/admin/login');
-});
+// The POS has no sign-out button: the counter tablet stays signed in.
+if ($('signout')) {
+  $('signout').addEventListener('click', async () => {
+    try { await api('/api/logout', { method: 'POST' }); } catch { /* sign out anyway */ }
+    window.location.assign('/admin/login');
+  });
+}
