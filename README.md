@@ -27,10 +27,11 @@ npm start                 # http://127.0.0.1:3000
 - Admin, items:  <http://127.0.0.1:3000/admin/items>
 - Admin, vouchers: <http://127.0.0.1:3000/admin/vouchers>
 - Admin, cakes: <http://127.0.0.1:3000/admin/cakes>
+- Admin, blocked numbers: <http://127.0.0.1:3000/admin/blocked>
 
-`npm test` runs the test suite (57 tests covering password hashing, CSRF,
+`npm test` runs the test suite (71 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
-cake bookings and the database migrations).
+cake bookings, fake-order protection and the database migrations).
 
 ### Changing the admin password
 
@@ -49,6 +50,9 @@ server/
   orders.js      orders, pricing, order types and their settings
   vouchers.js    voucher codes: validation, CRUD and checking a code
   cakes.js       custom cake bookings: settings, open days, photos, requests
+  phone.js       PH mobile numbers: checking and normalising to +639XXXXXXXXX
+  checkout.js    signed checkout tokens (the minimum fill time)
+  blocklist.js   blocked phone numbers
   clock.js       Manila time: pick-up slots, daily limits, voucher and cake dates
   render.js      builds the customer pages (menu, cakes) from the database
   imagesize.js   reads JPEG/PNG/WebP dimensions (also the upload sniffer)
@@ -58,6 +62,7 @@ admin/
   items.html     Items page (items.js): items, stock, promotions, categories
   vouchers.html  Vouchers page (vouchers.js): voucher codes
   cakes.html     Cakes page (cakes.js): cake bookings and booking settings
+  blocked.html   Blocked numbers page (blocked.js)
   login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
@@ -113,7 +118,7 @@ and only that type's fields are shown. Every field shown is required.
 
 | Type | The customer gives | Pays |
 |---|---|---|
-| **Delivery** | name, phone, address, cash they will pay with | cash on arrival, plus the delivery fee |
+| **Delivery** | name, phone, address, landmark / directions, cash they will pay with | cash on arrival, plus the delivery fee |
 | **Pick-up** | name, phone, pick-up time today | at the counter, no fee |
 | **Dine-in** | name, table number | at the counter, no fee |
 
@@ -129,8 +134,8 @@ be brought to.
 Orders appear at the top of the admin, oldest first, with a badge for the
 type (and pick-up time or table). The page checks for new ones every 20
 seconds and shows the count in the tab title. Move each order through
-**New → Preparing → Out for delivery / Ready for pick-up / Served →
-Completed** (or **Cancelled**).
+**New → Confirmed → Preparing → Out for delivery / Ready for pick-up /
+Served → Completed** (or **Cancelled**).
 
 Next to the orders list the admin sets:
 
@@ -152,6 +157,54 @@ What the server does not trust:
   the cart updates so the customer can check before placing it again.
 - **Volume.** Each IP address can place 5 orders per 10 minutes. The endpoint
   only accepts JSON, so a form on another site cannot post to it.
+
+### Fake orders
+
+Every check below is made by the server; the cart only repeats some of them
+so the customer sees the problem straight away.
+
+- **Phone numbers** must be PH mobiles: `09XXXXXXXXX`, `+639XXXXXXXXX` or
+  `639XXXXXXXXX`, with spaces, dashes or brackets. Each is also stored as
+  `+639XXXXXXXXX`, so one customer matches however they typed it. The same
+  rule applies on `/cakes`. Dine-in takes no phone.
+- **Delivery needs a landmark** ("beside 7-Eleven, green gate"), 5 to 200
+  characters. It shows under the address on the order.
+- **A hidden honeypot field.** People never see it; bots that fill every
+  field do, and the order is refused with a generic message.
+- **A minimum fill time.** When the cart opens it fetches a signed token
+  (HMAC-SHA256 of the time it was issued). An order is refused if the token is
+  missing, forged, over 2 hours old or under 3 seconds old. The cart waits out
+  the 3 seconds itself and fetches a new token when one expires, so real
+  customers never notice.
+- **Orders in progress per number**: at most 3 (a setting) orders that are not
+  Completed or Cancelled. More get "You already have orders in progress.
+  Please wait for them to finish or call us."
+- **Blocked numbers** cannot order or book a cake. They are told "We couldn't
+  place this order online. Please call or message us.", never that they are
+  blocked.
+
+Refused orders and bookings are logged as `[rejected] order <code>` with one
+of `honeypot`, `too_fast`, `bad_token`, `invalid_phone`, `too_many_open`
+or `blocked`. No names, numbers or addresses are logged.
+
+On the admin Orders page:
+
+- **Confirmed.** New delivery and pick-up orders must be confirmed (call the
+  customer, tap **Confirm**) before they can be moved to Preparing. Dine-in
+  can go straight to Preparing. The **Call to confirm before preparing**
+  switches change this per order type. A New order still waiting after 10
+  minutes shows **Waiting N min**, updated with every 20-second check.
+- **Cancel reasons.** Cancelling asks why: Customer cancelled, No-show /
+  unreachable, Fake order or Other.
+- **Customer history.** Each order shows the number's other orders: "First
+  order", or e.g. "5 completed · 1 no-show" (no-shows and fakes are counted
+  from the cancel reasons).
+- **Trusted customers** (off by default): with **Confirm their orders
+  automatically** on, a number with at least 3 completed orders and no
+  no-shows or fakes (both settings) skips straight to Confirmed.
+- **Block this number** on an order asks for a reason and can cancel that
+  order as a fake at the same time. The **Blocked** page lists blocked
+  numbers, adds one by hand and unblocks.
 
 Ordering needs the server running. On static hosting the menu still shows,
 but placing an order fails with a connection message.
@@ -366,6 +419,7 @@ Your menu is then at `https://<app>.fly.dev/` and the admin at
 | `UPLOAD_DIR` | `assets/uploads/` | Where uploaded photos are written |
 | `FORCE_SECURE_COOKIES` | unset | Set to `1` to always mark cookies `Secure` |
 | `ADMIN_PASSWORD` | unset | Skips the prompt in `create-admin` |
+| `CHECKOUT_SECRET` | generated | Key that signs checkout tokens. If unset, one is generated on first use and kept in the database |
 
 ## Still to fill in
 

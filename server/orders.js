@@ -6,12 +6,18 @@
 const { db, transaction } = require('./db');
 const menu = require('./menu');
 const vouchers = require('./vouchers');
+const blocklist = require('./blocklist');
 const { manilaMinutes } = require('./clock');
+const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 
 const { ValidationError } = menu;
 
-const STATUSES = ['new', 'preparing', 'delivering', 'completed', 'cancelled'];
-const ACTIVE_STATUSES = ['new', 'preparing', 'delivering'];
+const STATUSES = ['new', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled'];
+const ACTIVE_STATUSES = ['new', 'confirmed', 'preparing', 'delivering'];
+// Why an order was cancelled. No-shows and fakes count against the number.
+const CANCEL_REASONS = ['customer', 'no_show', 'fake', 'other'];
+const LANDMARK_MIN = 5;
+const LANDMARK_MAX = 200;
 
 const NAME_MAX = 80;
 const ADDRESS_MAX = 400;
@@ -163,10 +169,88 @@ function shopClosedError() {
   return Object.assign(new Error(message), { status: 409, body: { error: message, closed: true } });
 }
 
+/* ---------------------------- fake-order protection ---------------------------- */
+
+// Orders of a type that needs confirmation wait as New until Dachel has
+// called the customer and tapped Confirm; only then can they be prepared.
+// Dine-in customers are standing in the shop, so by default they do not.
+const CONFIRM_DEFAULTS = { delivery: '1', pickup: '1', dinein: '0' };
+
+function requiresConfirmation(type) {
+  return getSetting(`require_confirm_${type}`, CONFIRM_DEFAULTS[type] || '0') === '1';
+}
+
+// How many orders still in progress one phone number may have at once.
+const DEFAULT_MAX_OPEN = 3;
+// Auto-confirm (off by default) numbers with this many completed orders and
+// at most this many no-shows or fakes.
+const DEFAULT_TRUSTED_COMPLETED = 3;
+const DEFAULT_TRUSTED_FLAGS = 0;
+
+function intSetting(key, fallback) {
+  const n = Number(getSetting(key, String(fallback)));
+  return Number.isInteger(n) ? n : fallback;
+}
+
+function maxOpenOrders() {
+  return intSetting('max_open_orders', DEFAULT_MAX_OPEN);
+}
+
+function trustRules() {
+  return {
+    on: getSetting('auto_confirm_trusted', '0') === '1',
+    min_completed: intSetting('trusted_min_completed', DEFAULT_TRUSTED_COMPLETED),
+    max_flags: intSetting('trusted_max_flags', DEFAULT_TRUSTED_FLAGS),
+  };
+}
+
+function parseCount(key, min, max) {
+  return (input) => {
+    const n = Number(input);
+    if (input === '' || input === null || input === undefined || !Number.isInteger(n) || n < min || n > max) {
+      throw new ValidationError({ [key]: `Enter a whole number from ${min} to ${max}.` });
+    }
+    return String(n);
+  };
+}
+
+/**
+ * Past orders per normalised phone: { orders, completed, no_show, fake, open }.
+ * One grouped query for the whole list, on the phone_norm index.
+ * @returns Map(phone_norm -> counts)
+ */
+function historyFor(phoneNorms) {
+  const phones = [...new Set(phoneNorms.filter(Boolean))];
+  if (!phones.length) return new Map();
+  const rows = db.prepare(`
+    SELECT phone_norm, COUNT(*) AS orders,
+           SUM(status = 'completed') AS completed,
+           SUM(status = 'cancelled' AND cancel_reason = 'no_show') AS no_show,
+           SUM(status = 'cancelled' AND cancel_reason = 'fake') AS fake,
+           SUM(status NOT IN ('completed','cancelled')) AS open
+    FROM orders WHERE phone_norm IN (${phones.map(() => '?').join(',')})
+    GROUP BY phone_norm`).all(...phones);
+  return new Map(rows.map((r) => [r.phone_norm, {
+    orders: r.orders, completed: r.completed || 0, no_show: r.no_show || 0, fake: r.fake || 0, open: r.open || 0,
+  }]));
+}
+
+const EMPTY_HISTORY = { orders: 0, completed: 0, no_show: 0, fake: 0, open: 0 };
+
+function isTrusted(history, rules = trustRules()) {
+  return history.completed >= rules.min_completed && history.no_show + history.fake <= rules.max_flags;
+}
+
+/** A refusal that index.js logs by code. Neutral wording, no personal data. */
+function rejection(status, code, message) {
+  return Object.assign(new Error(message), { status, code, body: { error: message } });
+}
+
 /* ---------------------------- all settings ---------------------------- */
 
 function settings() {
   const { open, close } = pickupHours();
+  const trust = trustRules();
   return {
     delivery_fee: getDeliveryFee(),
     delivery_enabled: isEnabled('delivery'),
@@ -176,6 +260,13 @@ function settings() {
     pickup_close: close,
     shop_open: isShopOpen(),
     closed_note: closedNote(),
+    require_confirm_delivery: requiresConfirmation('delivery'),
+    require_confirm_pickup: requiresConfirmation('pickup'),
+    require_confirm_dinein: requiresConfirmation('dinein'),
+    max_open_orders: maxOpenOrders(),
+    auto_confirm_trusted: trust.on,
+    trusted_min_completed: trust.min_completed,
+    trusted_max_flags: trust.max_flags,
   };
 }
 
@@ -190,6 +281,13 @@ function updateSettings(input) {
     pickup_close: parseHour('pickup_close'),
     shop_open: parseSwitch('shop_open'),
     closed_note: parseClosedNote,
+    require_confirm_delivery: parseSwitch('require_confirm_delivery'),
+    require_confirm_pickup: parseSwitch('require_confirm_pickup'),
+    require_confirm_dinein: parseSwitch('require_confirm_dinein'),
+    max_open_orders: parseCount('max_open_orders', 1, 20),
+    auto_confirm_trusted: parseSwitch('auto_confirm_trusted'),
+    trusted_min_completed: parseCount('trusted_min_completed', 1, 50),
+    trusted_max_flags: parseCount('trusted_max_flags', 0, 10),
   };
   const values = {};
   const errors = {};
@@ -316,10 +414,10 @@ function staleCart(message, q) {
 
 /**
  * Validate and place an order.
- * input: { type, name, phone, address, cash, table_no, pickup_at, voucher,
+ * input: { type, name, phone, address, landmark, cash, table_no, pickup_at, voucher,
  *          items: [{ id, qty }], expected_total }
  * Which fields are required depends on the type:
- *   delivery  name, phone, address, cash
+ *   delivery  name, phone, address, landmark, cash
  *   pickup    name, phone, pickup_at ('asap' or 'HH:MM' today)
  *   dinein    name, table_no
  * A missing type means delivery, so a page cached from before order types
@@ -343,22 +441,29 @@ function create(input, { now = new Date() } = {}) {
   if (!name) errors.name = 'Enter your full name.';
   else if (name.length > NAME_MAX) errors.name = `Keep your name under ${NAME_MAX} characters.`;
 
+  // Dine-in takes no phone. The others must give a PH mobile number, kept as
+  // typed (digits only) and as +639XXXXXXXXX for the checks below.
   let phone = '';
+  let phoneNorm = null;
   if (type !== 'dinein') {
     phone = normalisePhone(input.phone);
-    const phoneDigits = phone.replace('+', '');
-    if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
-    else if (phoneDigits.length < 7 || phoneDigits.length > 15) {
-      errors.phone = 'That phone number does not look right.';
-    }
+    phoneNorm = normalizePhPhone(input.phone);
+    if (!phone.replace('+', '')) errors.phone = 'Enter a phone number we can call.';
+    else if (!phoneNorm) errors.phone = PHONE_MESSAGE;
   }
 
   let address = '';
+  let landmark = '';
   let cash = 0;
   if (type === 'delivery') {
     address = String(input.address ?? '').trim();
     if (!address) errors.address = 'Enter the delivery address.';
     else if (address.length > ADDRESS_MAX) errors.address = `Keep the address under ${ADDRESS_MAX} characters.`;
+
+    landmark = String(input.landmark ?? '').trim().replace(/\s+/g, ' ');
+    if (!landmark) errors.landmark = 'Add a landmark or directions, e.g. beside 7-Eleven, green gate.';
+    else if (landmark.length < LANDMARK_MIN) errors.landmark = 'Tell us a little more so the rider can find you.';
+    else if (landmark.length > LANDMARK_MAX) errors.landmark = `Keep it under ${LANDMARK_MAX} characters.`;
 
     const cashRaw = input.cash;
     cash = Number(cashRaw);
@@ -399,6 +504,20 @@ function create(input, { now = new Date() } = {}) {
 
   if (Object.keys(errors).length) throw new ValidationError(errors);
 
+  // The number's standing: blocked, too many orders still in progress, or
+  // trusted enough to skip the confirmation call.
+  let status = 'new';
+  if (phoneNorm) {
+    if (blocklist.isBlocked(phoneNorm)) throw blocklist.blockedError();
+    const history = historyFor([phoneNorm]).get(phoneNorm) || EMPTY_HISTORY;
+    if (history.open >= maxOpenOrders()) {
+      throw rejection(409, 'too_many_open',
+        'You already have orders in progress. Please wait for them to finish or call us.');
+    }
+    const rules = trustRules();
+    if (rules.on && requiresConfirmation(type) && isTrusted(history, rules)) status = 'confirmed';
+  }
+
   if (q.unavailable.length) {
     throw staleCart('Some items in your cart are sold out or no longer on the menu. They have been removed.', q);
   }
@@ -423,10 +542,11 @@ function create(input, { now = new Date() } = {}) {
 
   const id = transaction(() => {
     const info = db.prepare(`
-      INSERT INTO orders (order_type, customer_name, phone, address, table_no, pickup_at,
-                          subtotal, voucher_code, discount, delivery_fee, total, cash, change_due)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      type, name, phone, address, tableNo, pickupAt,
+      INSERT INTO orders (order_type, status, customer_name, phone, phone_norm, address, landmark,
+                          table_no, pickup_at, subtotal, voucher_code, discount, delivery_fee,
+                          total, cash, change_due)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      type, status, name, phone, phoneNorm, address, landmark, tableNo, pickupAt,
       q.subtotal, q.voucher ? q.voucher.code : '', q.discount, q.delivery_fee, q.total, cash, changeDue);
     const line = db.prepare(
       'INSERT INTO order_items (order_id, item_id, name, price, qty) VALUES (?, ?, ?, ?, ?)');
@@ -464,8 +584,34 @@ function list(which = 'active') {
   const params = which === 'active' ? ACTIVE_STATUSES : [];
   // Active orders oldest first (the queue); finished ones newest first.
   const order = which === 'active' ? 'id ASC' : 'id DESC';
-  return db.prepare(`SELECT * FROM orders ${filter} ORDER BY ${order} LIMIT 200`)
-    .all(...params).map(withLines);
+  return withHistory(db.prepare(`SELECT * FROM orders ${filter} ORDER BY ${order} LIMIT 200`)
+    .all(...params).map(withLines));
+}
+
+/**
+ * Adds to each order the number's other orders (`history`: orders,
+ * completed, no_show, fake), whether it is blocked, and whether this order
+ * must be confirmed before it is prepared.
+ */
+function withHistory(list) {
+  const history = historyFor(list.map((o) => o.phone_norm));
+  const blocked = new Set(blocklist.list().map((b) => b.phone_norm));
+  return list.map((o) => {
+    const h = history.get(o.phone_norm);
+    // Leave this order out, so a first order reads as "First order".
+    const own = (s, reason) => (o.status === s && (!reason || o.cancel_reason === reason) ? 1 : 0);
+    return {
+      ...o,
+      history: o.phone_norm && h ? {
+        orders: h.orders - 1,
+        completed: h.completed - own('completed'),
+        no_show: h.no_show - own('cancelled', 'no_show'),
+        fake: h.fake - own('cancelled', 'fake'),
+      } : null,
+      blocked: blocked.has(o.phone_norm),
+      needs_confirm: requiresConfirmation(o.order_type),
+    };
+  });
 }
 
 function counts() {
@@ -473,16 +619,36 @@ function counts() {
   return Object.fromEntries(STATUSES.map((s) => [s, (rows.find((r) => r.status === s) || {}).n || 0]));
 }
 
-function setStatus(id, status) {
+/**
+ * Move an order along. A New order whose type needs confirmation cannot go
+ * to Preparing (or on to handed over) until it is Confirmed; it can still be
+ * cancelled, or marked completed. Cancelling takes a reason (CANCEL_REASONS).
+ */
+function setStatus(id, status, { reason } = {}) {
   if (!STATUSES.includes(status)) throw new ValidationError({ status: 'Choose a valid status.' });
-  const info = db.prepare(`UPDATE orders SET status = ?, updated_at = datetime('now') WHERE id = ?`)
-    .run(status, Number(id));
-  return info.changes ? get(id) : null;
+  const order = db.prepare('SELECT status, order_type, cancel_reason FROM orders WHERE id = ?').get(Number(id));
+  if (!order) return null;
+
+  if (order.status === 'new' && ['preparing', 'delivering'].includes(status) && requiresConfirmation(order.order_type)) {
+    throw new ValidationError({ status: 'Confirm this order first: call the customer, then tap Confirm.' });
+  }
+
+  let cancelReason = '';
+  if (status === 'cancelled') {
+    cancelReason = reason === undefined || reason === '' ? order.cancel_reason : String(reason);
+    if (cancelReason && !CANCEL_REASONS.includes(cancelReason)) {
+      throw new ValidationError({ reason: 'Choose why the order was cancelled.' });
+    }
+  }
+
+  db.prepare(`UPDATE orders SET status = ?, cancel_reason = ?, updated_at = datetime('now') WHERE id = ?`)
+    .run(status, cancelReason, Number(id));
+  return get(id);
 }
 
 module.exports = {
-  STATUSES, ORDER_TYPES, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
+  STATUSES, CANCEL_REASONS, ORDER_TYPES, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
-  isShopOpen, closedNote, shopClosedError,
+  isShopOpen, closedNote, shopClosedError, requiresConfirmation, historyFor,
   quote, create, get, list, counts, setStatus,
 };

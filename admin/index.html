@@ -22,6 +22,7 @@
       <a href="/admin/items">Items</a>
       <a href="/admin/vouchers">Vouchers</a>
       <a href="/admin/cakes">Cakes <span class="nav__n" id="nav-cakes-n" hidden></span></a>
+      <a href="/admin/blocked">Blocked</a>
     </nav>
     <div class="topbar__spacer"></div>
     <a class="shop-pill" id="shop-pill" href="/admin#shop" hidden></a>
@@ -89,9 +90,88 @@
     <ul class="orders__list" id="orders"></ul>
     <p class="empty-note" id="orders-empty" hidden></p>
   </section>
+
+  <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
+  <section class="trust" aria-labelledby="trust-title">
+    <h2 class="admin__title" id="trust-title">Fake-order protection</h2>
+    <p class="admin__sub">Blocked numbers are on the <a href="/admin/blocked">Blocked</a> page.</p>
+    <form class="trust__form" id="trust-form" novalidate>
+      <fieldset class="fee__types">
+        <legend>Call to confirm before preparing</legend>
+        <label class="fee__check"><input type="checkbox" id="confirm-delivery"> Delivery</label>
+        <label class="fee__check"><input type="checkbox" id="confirm-pickup"> Pick-up</label>
+        <label class="fee__check"><input type="checkbox" id="confirm-dinein"> Dine-in</label>
+      </fieldset>
+      <div class="field">
+        <label for="max-open">Orders in progress per number <span class="hint">(more are refused)</span></label>
+        <input id="max-open" type="number" min="1" max="20" step="1" inputmode="numeric" required>
+      </div>
+      <fieldset class="fee__types">
+        <legend>Trusted customers</legend>
+        <label class="fee__check"><input type="checkbox" id="auto-confirm"> Confirm their orders automatically</label>
+      </fieldset>
+      <div class="trust__rule">
+        <div class="field">
+          <label for="trusted-completed">Completed orders, at least</label>
+          <input id="trusted-completed" type="number" min="1" max="50" step="1" inputmode="numeric" required>
+        </div>
+        <div class="field">
+          <label for="trusted-flags">No-shows or fakes, at most</label>
+          <input id="trusted-flags" type="number" min="0" max="10" step="1" inputmode="numeric" required>
+        </div>
+      </div>
+      <button class="btn btn--ghost" type="submit" id="trust-save">Save</button>
+    </form>
+    <p class="field__err" id="trust-err" hidden></p>
+  </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- ---------- Cancel an order: why ---------- -->
+<dialog class="modal modal--sm" id="cancel-dialog" aria-labelledby="cancel-title">
+  <form method="dialog" class="modal__form" id="cancel-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="cancel-title">Cancel order</h2>
+    </div>
+    <div class="modal__body">
+      <fieldset class="reasons">
+        <legend>Why is it cancelled?</legend>
+        <label class="fee__check"><input type="radio" name="reason" value="customer" checked> Customer cancelled</label>
+        <label class="fee__check"><input type="radio" name="reason" value="no_show"> No-show / unreachable</label>
+        <label class="fee__check"><input type="radio" name="reason" value="fake"> Fake order</label>
+        <label class="fee__check"><input type="radio" name="reason" value="other"> Other</label>
+      </fieldset>
+      <p class="hint">No-shows and fakes show on this number's next orders.</p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="cancel-back">Keep order</button>
+      <button class="btn btn--danger" type="submit" id="cancel-ok">Cancel order</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- Block the number on an order ---------- -->
+<dialog class="modal modal--sm" id="block-dialog" aria-labelledby="block-title">
+  <form method="dialog" class="modal__form" id="block-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="block-title">Block this number?</h2>
+    </div>
+    <div class="modal__body">
+      <p id="block-text"></p>
+      <div class="field">
+        <label for="block-reason">Reason <span class="hint">(only you see it)</span></label>
+        <input id="block-reason" type="text" maxlength="200" placeholder="e.g. Fake order, nobody at the address">
+      </div>
+      <label class="fee__check" id="block-cancel-wrap"><input type="checkbox" id="block-cancel" checked> <span id="block-cancel-label">Also cancel this order as a fake order</span></label>
+      <p class="field__err" id="block-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="block-back">Back</button>
+      <button class="btn btn--danger" type="submit" id="block-ok">Block number</button>
+    </div>
+  </form>
+</dialog>
 
 <script src="/admin/common.js" defer></script>
 <script src="/admin/orders.js" defer></script>

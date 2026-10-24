@@ -12,6 +12,8 @@ const crypto = require('node:crypto');
 const { db, transaction } = require('./db');
 const { ValidationError } = require('./menu');
 const orders = require('./orders');
+const blocklist = require('./blocklist');
+const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 const imagesize = require('./imagesize');
 const { manilaDate, addDays } = require('./clock');
 const { CAKE_PHOTO_DIR } = require('./paths');
@@ -241,9 +243,9 @@ function create(input, { now = new Date() } = {}) {
   else if (name.length > NAME_MAX) errors.name = `Keep your name under ${NAME_MAX} characters.`;
 
   const phone = orders.normalisePhone(input.phone);
-  const phoneDigits = phone.replace('+', '');
-  if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
-  else if (phoneDigits.length < 7 || phoneDigits.length > 15) errors.phone = 'That phone number does not look right.';
+  const phoneNorm = normalizePhPhone(input.phone);
+  if (!phone.replace('+', '')) errors.phone = 'Enter a phone number we can call.';
+  else if (!phoneNorm) errors.phone = PHONE_MESSAGE;
 
   const size = s.sizes.find((x) => x.name === text(input.size));
   if (!size) errors.size = 'Choose a size.';
@@ -288,12 +290,13 @@ function create(input, { now = new Date() } = {}) {
   }
 
   if (Object.keys(errors).length) throw new ValidationError(errors);
+  if (blocklist.isBlocked(phoneNorm)) throw blocklist.blockedError();
 
   const info = db.prepare(`
-    INSERT INTO cake_bookings (customer_name, phone, size, size_from_price, flavour, occasion,
+    INSERT INTO cake_bookings (customer_name, phone, phone_norm, size, size_from_price, flavour, occasion,
                                cake_message, design_notes, photo, needed_on, handover, address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    name, phone, size.name, size.from_price, flavour, occasion,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+    name, phone, phoneNorm, size.name, size.from_price, flavour, occasion,
     cakeMessage, designNotes, photo, neededOn, handover, address);
   return get(info.lastInsertRowid);
 }

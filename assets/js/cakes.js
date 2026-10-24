@@ -175,8 +175,15 @@
     if (handover() === 'delivery' && !form.elements.address.value.trim()) errors.address = 'Enter the delivery address.';
     if (!form.elements.name.value.trim()) errors.name = 'Enter your full name.';
     if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
-    else if (phoneDigits.length < 7 || phoneDigits.length > 15) errors.phone = 'That phone number does not look right.';
+    else if (!isPhMobile(form.elements.phone.value)) errors.phone = 'Please enter a valid PH mobile number, e.g. 0917 123 4567.';
     return errors;
+  }
+
+  /** 0917 123 4567, +63 917 123 4567 or 639171234567: the forms the server accepts. */
+  function isPhMobile(raw) {
+    var s = String(raw || '').trim();
+    if (!/^\+?[\d\s()-]+$/.test(s)) return false;
+    return /^(\+63|63|0)9\d{9}$/.test(s.replace(/[\s()-]/g, ''));
   }
 
   function finish(booking) {

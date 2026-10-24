@@ -9,6 +9,7 @@ Object.assign(state, {
 
 const ORDER_STATUS = {
   new: 'New',
+  confirmed: 'Confirmed',
   preparing: 'Preparing',
   delivering: 'Out for delivery',
   completed: 'Completed',
@@ -23,6 +24,11 @@ function statusLabel(status, type) {
   return status === 'delivering' ? HANDOVER_LABEL[type] || ORDER_STATUS.delivering : ORDER_STATUS[status];
 }
 const ORDER_POLL_MS = 20000;
+// A New order waiting longer than this gets a "Waiting N min" badge.
+const WAITING_FLAG_MIN = 10;
+const CANCEL_REASON = {
+  customer: 'Customer cancelled', no_show: 'No-show / unreachable', fake: 'Fake order', other: 'Other',
+};
 
 /* ---------------------------- orders ---------------------------- */
 
@@ -55,6 +61,52 @@ function typeBadge(o) {
   return 'Delivery';
 }
 
+/** Minutes since an order was placed. */
+function minutesSince(sqlTime) {
+  const d = new Date(`${String(sqlTime).replace(' ', 'T')}Z`);
+  return Number.isNaN(d.getTime()) ? 0 : Math.floor((Date.now() - d.getTime()) / 60000);
+}
+
+/** "First order", or "5 completed · 1 no-show", from the number's other orders. */
+function historyText(h) {
+  if (h.orders === 0) return 'First order';
+  const parts = [`${h.completed} completed`];
+  if (h.no_show) parts.push(plural(h.no_show, 'no-show'));
+  if (h.fake) parts.push(`${h.fake} fake`);
+  return parts.join(' · ');
+}
+
+/** Badges under the name: blocked, the number's history, and how long it has waited. */
+function flagsHtml(o) {
+  const flags = [];
+  if (o.blocked) flags.push('<span class="flag flag--bad">Blocked number</span>');
+  if (o.history) {
+    const kind = o.history.no_show || o.history.fake ? 'bad'
+      : o.history.completed > 0 ? 'good' : 'new';
+    flags.push(`<span class="flag flag--${kind}">${esc(historyText(o.history))}</span>`);
+  }
+  const waited = minutesSince(o.created_at);
+  if (o.status === 'new' && o.needs_confirm && waited >= WAITING_FLAG_MIN) {
+    flags.push(`<span class="flag flag--wait">Waiting ${waited} min</span>`);
+  }
+  if (o.status === 'cancelled' && o.cancel_reason) {
+    flags.push(`<span class="flag">${esc(CANCEL_REASON[o.cancel_reason] || o.cancel_reason)}</span>`);
+  }
+  return flags.length ? `<div class="order__flags">${flags.join('')}</div>` : '';
+}
+
+/** Confirm (New orders) and Block this number (orders with a mobile number). */
+function actionsHtml(o) {
+  const actions = [];
+  if (o.status === 'new') {
+    actions.push(`<button class="btn btn--primary btn--sm" type="button" data-confirm>Confirm</button>`);
+  }
+  if (o.phone_norm && !o.blocked) {
+    actions.push(`<button class="btn btn--danger-ghost btn--sm" type="button" data-block>Block this number</button>`);
+  }
+  return actions.length ? `<div class="order__actions">${actions.join('')}</div>` : '';
+}
+
 // Every field below was typed by a customer on the public menu: escape all of it.
 function orderHtml(o) {
   const type = o.order_type || 'delivery';
@@ -84,8 +136,10 @@ function orderHtml(o) {
       </div>
       <div class="order__who">
         <span class="order__name">${esc(o.customer_name)}</span>
-        ${o.phone ? `<a class="order__phone" href="tel:${esc(o.phone)}">${esc(o.phone)}</a>` : ''}
+        ${o.phone ? `<a class="order__phone" href="tel:${esc(o.phone_norm || o.phone)}">${esc(o.phone)}</a>` : ''}
         ${type === 'delivery' ? `<span class="order__addr">${esc(o.address)}</span>` : ''}
+        ${type === 'delivery' && o.landmark ? `<span class="order__landmark"><strong>Landmark:</strong> ${esc(o.landmark)}</span>` : ''}
+        ${flagsHtml(o)}
       </div>
       <ul class="order__items">${lines}</ul>
       <dl class="order__sum">
@@ -95,6 +149,7 @@ function orderHtml(o) {
         <dt class="is-total">Total</dt><dd class="is-total">${money(o.total)}</dd>
         ${payment}
       </dl>
+      ${actionsHtml(o)}
     </li>`;
 }
 
@@ -102,7 +157,7 @@ function renderOrders(counts) {
   const list = $('orders');
   list.innerHTML = state.orders.map(orderHtml).join('');
 
-  const active = counts.new + counts.preparing + counts.delivering;
+  const active = counts.new + counts.confirmed + counts.preparing + counts.delivering;
   $('n-active').textContent = active;
   $('n-finished').textContent = counts.completed + counts.cancelled;
 
@@ -140,20 +195,91 @@ async function loadOrders({ announce = false } = {}) {
   }
 }
 
+/** Save a status. @returns true if it saved. */
+async function saveStatus(id, status, reason) {
+  const order = state.orders.find((o) => o.id === id);
+  try {
+    await api(`/api/orders/${id}`, { method: 'PATCH', body: reason ? { status, reason } : { status } });
+    toast(`Order #${id}: ${statusLabel(status, order ? order.order_type : 'delivery')}`
+      + (reason ? ` (${CANCEL_REASON[reason]}).` : '.'));
+    await loadOrders();
+    return true;
+  } catch (err) {
+    toast(err.fields ? Object.values(err.fields).join(' ') : err.message, 'error');
+    return false;
+  }
+}
+
 async function changeStatus(select) {
   const id = Number(select.closest('.order').dataset.orderId);
   const previous = state.orders.find((o) => o.id === id);
-  select.disabled = true;
-  try {
-    await api(`/api/orders/${id}`, { method: 'PATCH', body: { status: select.value } });
-    toast(`Order #${id}: ${statusLabel(select.value, previous ? previous.order_type : 'delivery')}.`);
-    select.blur();
-    await loadOrders();
-  } catch (err) {
+  const status = select.value;
+  // Cancelling asks why first; the select shows the old status until it is done.
+  if (status === 'cancelled') {
     if (previous) select.value = previous.status;
-    toast(err.message, 'error');
+    select.blur();
+    openCancel(id);
+    return;
+  }
+  select.disabled = true;
+  const saved = await saveStatus(id, status);
+  if (!saved && previous) select.value = previous.status;
+  select.disabled = false;
+  select.blur();
+}
+
+/* ---------------------------- cancel and block ---------------------------- */
+
+let cancelId = null;
+let blockId = null;
+
+function openCancel(id) {
+  cancelId = id;
+  $('cancel-title').textContent = `Cancel order #${id}`;
+  $('cancel-form').reset();
+  $('cancel-dialog').showModal();
+}
+
+async function submitCancel(event) {
+  event.preventDefault();
+  const reason = $('cancel-form').elements.reason.value;
+  $('cancel-ok').disabled = true;
+  if (await saveStatus(cancelId, 'cancelled', reason)) $('cancel-dialog').close();
+  $('cancel-ok').disabled = false;
+}
+
+function openBlock(id) {
+  const order = state.orders.find((o) => o.id === id);
+  if (!order) return;
+  blockId = id;
+  $('block-text').textContent = `${order.phone} (${order.customer_name}) will not be able to order or book a cake online.`;
+  $('block-reason').value = '';
+  $('block-err').hidden = true;
+  const open = !['completed', 'cancelled'].includes(order.status);
+  $('block-cancel-wrap').hidden = !open;
+  $('block-cancel').checked = open;
+  $('block-cancel-label').textContent = `Also cancel order #${id} as a fake order`;
+  $('block-dialog').showModal();
+}
+
+async function submitBlock(event) {
+  event.preventDefault();
+  const err = $('block-err');
+  err.hidden = true;
+  $('block-ok').disabled = true;
+  const cancel = !$('block-cancel-wrap').hidden && $('block-cancel').checked;
+  try {
+    const { blocked } = await api('/api/blocked', {
+      method: 'POST', body: { order_id: blockId, reason: $('block-reason').value, cancel },
+    });
+    $('block-dialog').close();
+    toast(`${blocked.display} is blocked.${cancel ? ` Order #${blockId} cancelled as a fake order.` : ''}`);
+    await loadOrders();
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
   } finally {
-    select.disabled = false;
+    $('block-ok').disabled = false;
   }
 }
 
@@ -163,6 +289,41 @@ function showSettings(s) {
   $('pickup-close').value = s.pickup_close;
   ORDER_TYPES.forEach((t) => { $(`on-${t}`).checked = s[`${t}_enabled`]; });
   showShop(s);
+  showTrust(s);
+}
+
+/* ---------------------------- fake-order protection ---------------------------- */
+
+function showTrust(s) {
+  ORDER_TYPES.forEach((t) => { $(`confirm-${t}`).checked = s[`require_confirm_${t}`]; });
+  $('max-open').value = s.max_open_orders;
+  $('auto-confirm').checked = s.auto_confirm_trusted;
+  $('trusted-completed').value = s.trusted_min_completed;
+  $('trusted-flags').value = s.trusted_max_flags;
+}
+
+async function saveTrust(event) {
+  event.preventDefault();
+  const err = $('trust-err');
+  err.hidden = true;
+  $('trust-save').disabled = true;
+  try {
+    const body = {
+      max_open_orders: $('max-open').value,
+      auto_confirm_trusted: $('auto-confirm').checked,
+      trusted_min_completed: $('trusted-completed').value,
+      trusted_max_flags: $('trusted-flags').value,
+    };
+    ORDER_TYPES.forEach((t) => { body[`require_confirm_${t}`] = $(`confirm-${t}`).checked; });
+    showTrust(await api('/api/settings', { method: 'PUT', body }));
+    toast('Saved.');
+    await loadOrders(); // the Waiting badges depend on which types need confirming
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+  } finally {
+    $('trust-save').disabled = false;
+  }
 }
 
 /* ---------------------------- open / closed ---------------------------- */
@@ -253,6 +414,21 @@ function pollOrders() {
 $('orders').addEventListener('change', (event) => {
   if (event.target.matches('[data-status-select]')) changeStatus(event.target);
 });
+
+$('orders').addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-confirm], [data-block]');
+  if (!btn) return;
+  const id = Number(btn.closest('.order').dataset.orderId);
+  if (btn.matches('[data-block]')) { openBlock(id); return; }
+  btn.disabled = true;
+  if (!(await saveStatus(id, 'confirmed'))) btn.disabled = false;
+});
+
+$('cancel-form').addEventListener('submit', submitCancel);
+$('cancel-back').addEventListener('click', () => $('cancel-dialog').close());
+$('block-form').addEventListener('submit', submitBlock);
+$('block-back').addEventListener('click', () => $('block-dialog').close());
+$('trust-form').addEventListener('submit', saveTrust);
 
 document.querySelectorAll('.tab[data-show]').forEach((tab) => {
   tab.addEventListener('click', async () => {
