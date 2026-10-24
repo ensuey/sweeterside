@@ -6,6 +6,7 @@ const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const fs = require('node:fs');
 const { ROOT, DB_PATH } = require('./paths');
+const { normalizePhPhone } = require('./phone');
 
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
@@ -71,7 +72,7 @@ CREATE TABLE IF NOT EXISTS orders (
   cash          INTEGER NOT NULL,
   change_due    INTEGER NOT NULL,
   status        TEXT    NOT NULL DEFAULT 'new'
-                CHECK (status IN ('new','preparing','delivering','completed','cancelled')),
+                CHECK (status IN ('new','confirmed','preparing','delivering','completed','cancelled')),
   created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
   updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
@@ -174,12 +175,17 @@ const ITEM_PROMO_COLUMNS = {
   sale_value: 'INTEGER',
 };
 
-/** Add any of `columns` that `table` does not have yet. */
+/** Add any of `columns` that `table` does not have yet. @returns the names added. */
 function addMissingColumns(table, columns) {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+  const added = [];
   for (const [name, type] of Object.entries(columns)) {
-    if (!cols.includes(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+    if (!cols.includes(name)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+      added.push(name);
+    }
   }
+  return added;
 }
 
 addMissingColumns('items', ITEM_STOCK_COLUMNS);
@@ -198,6 +204,63 @@ const ORDER_COLUMNS = {
 };
 
 addMissingColumns('orders', ORDER_COLUMNS);
+
+/* Fake-order protection came later. phone_norm is the phone as +639XXXXXXXXX
+   (NULL for dine-in, which takes no phone, and for older numbers that are not
+   PH mobiles); the open-orders limit, the customer history and the blocklist
+   all match on it. landmark is delivery only. cancel_reason says why an order
+   was cancelled: customer | no_show | fake | other, or '' for older ones. */
+const ORDER_TRUST_COLUMNS = {
+  phone_norm: 'TEXT',
+  landmark: "TEXT NOT NULL DEFAULT ''",
+  cancel_reason: "TEXT NOT NULL DEFAULT ''",
+};
+
+/** Fill phone_norm from phone for rows saved before it existed. */
+function backfillPhones(table) {
+  const rows = db.prepare(`SELECT id, phone FROM ${table} WHERE phone_norm IS NULL AND phone <> ''`).all();
+  const update = db.prepare(`UPDATE ${table} SET phone_norm = ? WHERE id = ?`);
+  transaction(() => {
+    for (const row of rows) {
+      const norm = normalizePhPhone(row.phone);
+      if (norm) update.run(norm, row.id);
+    }
+  });
+}
+
+if (addMissingColumns('orders', ORDER_TRUST_COLUMNS).includes('phone_norm')) backfillPhones('orders');
+
+/* The Confirmed status came with fake-order protection. SQLite cannot change a
+   CHECK constraint, so an older orders table is rebuilt from its own CREATE
+   statement with 'confirmed' added. Foreign keys are off while the table is
+   swapped, or dropping it would cascade-delete every order's lines. */
+function migrateOrderStatuses() {
+  const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'orders'").get();
+  if (sql.includes("'confirmed'")) return;
+  const rebuilt = sql
+    .replace(/^CREATE TABLE\s+"?orders"?/i, 'CREATE TABLE orders_new')
+    .replace(/'new'\s*,\s*'preparing'/, "'new','confirmed','preparing'");
+  db.exec('PRAGMA foreign_keys = OFF');
+  try {
+    transaction(() => {
+      db.exec(rebuilt);
+      db.exec('INSERT INTO orders_new SELECT * FROM orders');
+      db.exec('DROP TABLE orders');
+      db.exec('ALTER TABLE orders_new RENAME TO orders');
+      const orphans = db.prepare(
+        'SELECT COUNT(*) AS n FROM order_items WHERE order_id NOT IN (SELECT id FROM orders)').get().n;
+      if (orphans) throw new Error('Order lines lost their order.');
+    });
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
+migrateOrderStatuses();
+db.exec(`
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, id);
+CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(phone_norm, status);
+`);
 
 /* Voucher codes customers type at checkout. Codes are stored in upper case;
    the dates are Manila calendar days, both included, and either may be open. */
@@ -245,6 +308,18 @@ CREATE TABLE IF NOT EXISTS cake_bookings (
 );
 CREATE INDEX IF NOT EXISTS idx_cake_bookings_day ON cake_bookings(needed_on, status);
 `);
+
+if (addMissingColumns('cake_bookings', { phone_norm: 'TEXT' }).includes('phone_norm')) backfillPhones('cake_bookings');
+
+/* Numbers that may not order or book online. created_by is the admin's email. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS blocked_phones (
+  id         INTEGER PRIMARY KEY,
+  phone_norm TEXT    NOT NULL UNIQUE,
+  reason     TEXT    NOT NULL DEFAULT '',
+  created_by TEXT    NOT NULL DEFAULT '',
+  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+)`);
 
 /* ---------- First-run seed: the nine items from the printed posters ---------- */
 

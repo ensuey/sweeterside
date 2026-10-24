@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-const { seedIfEmpty } = require('./db');
+const { seedIfEmpty, transaction } = require('./db');
 const { ROOT, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const auth = require('./auth');
 const menu = require('./menu');
@@ -15,6 +15,9 @@ const categories = require('./categories');
 const orders = require('./orders');
 const vouchers = require('./vouchers');
 const cakes = require('./cakes');
+const checkout = require('./checkout');
+const blocklist = require('./blocklist');
+const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
 const render = require('./render');
 const imagesize = require('./imagesize');
 
@@ -151,6 +154,25 @@ const voucherLimiter = rateLimiter(20, 10 * 60 * 1000);
 /* Cake bookings and their reference photos are public writes as well. */
 const cakeLimiter = rateLimiter(3, 10 * 60 * 1000);
 const cakePhotoLimiter = rateLimiter(5, 10 * 60 * 1000);
+
+/* Refused orders and bookings are logged with a reason code only: no names,
+   numbers or addresses end up in the logs. */
+function logRejected(code, what = 'order') {
+  console.log(`[rejected] ${what} ${code}`);
+}
+
+/** Log a refusal that came from the checks in orders.js or cakes.js, then rethrow it. */
+function logAndRethrow(err, what) {
+  if (err.code === 'blocked' || err.code === 'too_many_open') logRejected(err.code, what);
+  else if (err instanceof menu.ValidationError && err.errors.phone === PHONE_MESSAGE) logRejected('invalid_phone', what);
+  throw err;
+}
+
+// What a filled-in honeypot gets. It does not say why.
+const GENERIC_REFUSAL = 'Your order could not be placed. Please call or message us.';
+// What a missing, expired or too-quick checkout token gets. The cart fetches
+// a fresh token when it sees retry, so a real customer just taps again.
+const RETRY_CHECKOUT = 'Please check your order and tap Place order again.';
 
 function isJson(req) {
   return String(req.headers['content-type'] || '').startsWith('application/json');
@@ -339,10 +361,11 @@ async function route(req, res) {
     return sendHtml(res, 200, html.replace('<!--SETUP-->', banner));
   }
 
-  // The admin pages: orders (with the ordering settings), items, vouchers and cakes.
+  // The admin pages: orders (with the ordering settings), items, vouchers, cakes and blocked numbers.
   const adminPages = {
     '/admin': 'index.html', '/admin/items': 'items.html',
     '/admin/vouchers': 'vouchers.html', '/admin/cakes': 'cakes.html',
+    '/admin/blocked': 'blocked.html',
   };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
@@ -431,6 +454,11 @@ async function route(req, res) {
   }
 
   /* ---- orders: placing is public, everything else is admin-only ---- */
+  // The cart asks for a signed token when it opens; the order must carry it.
+  if (pathname === '/api/checkout-token' && method === 'GET') {
+    return sendJson(res, 200, { token: checkout.issue(), min_ms: checkout.MIN_AGE_MS });
+  }
+
   if (pathname === '/api/orders' && method === 'POST') {
     // Requiring JSON means a plain HTML form on another site cannot post here.
     if (!String(req.headers['content-type'] || '').startsWith('application/json')) {
@@ -442,7 +470,25 @@ async function route(req, res) {
         error: 'You have placed several orders in the last few minutes. Please call us to add more.',
       });
     }
-    const order = orders.create(await readJson(req));
+    const body = await readJson(req);
+    // Closed says closed, whatever else is wrong with the order.
+    if (!orders.isShopOpen()) throw orders.shopClosedError();
+    // A hidden field people never see. Bots that fill every field fill it.
+    if (String(body.website ?? '').trim()) {
+      logRejected('honeypot');
+      return sendJson(res, 400, { error: GENERIC_REFUSAL });
+    }
+    const tokenProblem = checkout.check(body.checkout_token);
+    if (tokenProblem) {
+      logRejected(tokenProblem);
+      return sendJson(res, 409, { error: RETRY_CHECKOUT, retry: true });
+    }
+    let order;
+    try {
+      order = orders.create(body);
+    } catch (err) {
+      logAndRethrow(err, 'order');
+    }
     orderLimiter.record(ip);
     console.log(`[order] #${order.id} ${order.order_type} Php ${order.total} — ${order.items.length} line(s)`
       + (order.voucher_code ? ` — voucher ${order.voucher_code} -${order.discount}` : ''));
@@ -528,9 +574,48 @@ async function route(req, res) {
   if (orderMatch && (method === 'PATCH' || method === 'PUT')) {
     if (!requireApiAuth(req, res, { csrf: true })) return;
     const body = await readJson(req);
-    const order = orders.setStatus(Number(orderMatch[1]), String(body.status ?? ''));
+    const order = orders.setStatus(Number(orderMatch[1]), String(body.status ?? ''),
+      { reason: body.reason === undefined ? undefined : String(body.reason) });
     if (!order) return sendJson(res, 404, { error: 'That order no longer exists.' });
     return sendJson(res, 200, { order });
+  }
+
+  /* ---- blocked numbers (all authenticated) ---- */
+  if (pathname === '/api/blocked' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, {
+      blocked: blocklist.list().map((b) => ({ ...b, display: displayPhPhone(b.phone_norm) })),
+    });
+  }
+
+  // { phone, reason } blocks a number typed by the admin. { order_id, reason,
+  // cancel } blocks the number on an order, and with cancel: true also
+  // cancels that order as a fake, both or neither.
+  if (pathname === '/api/blocked' && method === 'POST') {
+    const session = requireApiAuth(req, res, { csrf: true });
+    if (!session) return;
+    const body = await readJson(req);
+    let phone = body.phone;
+    let order = null;
+    if (body.order_id !== undefined) {
+      order = orders.get(Number(body.order_id));
+      if (!order) return sendJson(res, 404, { error: 'That order no longer exists.' });
+      if (!order.phone_norm) return sendJson(res, 422, { error: 'This order has no mobile number to block.' });
+      phone = order.phone_norm;
+    }
+    const blocked = transaction(() => {
+      const row = blocklist.add({ phone, reason: body.reason }, session.email);
+      if (order && body.cancel === true) orders.setStatus(order.id, 'cancelled', { reason: 'fake' });
+      return row;
+    });
+    return sendJson(res, 201, { blocked: { ...blocked, display: displayPhPhone(blocked.phone_norm) } });
+  }
+
+  const blockedMatch = pathname.match(/^\/api\/blocked\/(\d+)$/);
+  if (blockedMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!blocklist.remove(Number(blockedMatch[1]))) return sendJson(res, 404, { error: 'That number is not blocked.' });
+    return sendJson(res, 200, { ok: true });
   }
 
   /* ---- settings ---- */
@@ -573,7 +658,12 @@ async function route(req, res) {
         error: 'You have sent several cake requests in the last few minutes. Please call us to add more.',
       });
     }
-    const booking = cakes.create(await readJson(req));
+    let booking;
+    try {
+      booking = cakes.create(await readJson(req));
+    } catch (err) {
+      logAndRethrow(err, 'cake');
+    }
     cakeLimiter.record(ip);
     console.log(`[cake] #${booking.id} for ${booking.needed_on} — ${booking.size}`);
     return sendJson(res, 201, { booking: { id: booking.id, needed_on: booking.needed_on, size: booking.size } });

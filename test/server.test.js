@@ -21,8 +21,12 @@ const categories = require('../server/categories');
 const render = require('../server/render');
 const orders = require('../server/orders');
 const imagesize = require('../server/imagesize');
+const checkout = require('../server/checkout');
 
 seedIfEmpty();
+// Most tests place many orders from the same number; the open-orders limit
+// has its own test, which sets it back to the default.
+orders.saveSetting('max_open_orders', 1000);
 const DRINKS_ID = db.prepare("SELECT id FROM categories WHERE slug = 'drinks'").get().id;
 
 /* ---------------------------- passwords ---------------------------- */
@@ -272,9 +276,11 @@ function orderInput(over = {}) {
   const sandwich = menuItem('Bacon and Egg Sandwich'); // Php 85
   return {
     name: '  Juan   dela Cruz ', phone: '0917 123-4567', address: '12 Mabini St, Brgy. Uno',
-    cash: 500,
+    landmark: 'beside 7-Eleven, green gate', cash: 500,
     items: [{ id: matcha.id, qty: 2 }, { id: sandwich.id, qty: 1 }],
     expected_total: 129 * 2 + 85 + orders.getDeliveryFee(),
+    // Issued ten seconds ago, as if the customer took that long at checkout.
+    checkout_token: checkout.issue(new Date(Date.now() - 10000)),
     ...over,
   };
 }
