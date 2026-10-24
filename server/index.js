@@ -23,6 +23,7 @@ const pos = require('./pos');
 const settings = require('./settings');
 const payments = require('./payments');
 const shifts = require('./shifts');
+const reports = require('./reports');
 const audit = require('./audit');
 const render = require('./render');
 const imagesize = require('./imagesize');
@@ -401,6 +402,7 @@ async function route(req, res) {
     '/admin': 'index.html', '/admin/items': 'items.html',
     '/admin/vouchers': 'vouchers.html', '/admin/cakes': 'cakes.html',
     '/admin/blocked': 'blocked.html', '/admin/pos': 'pos.html', '/admin/staff': 'staff.html',
+    '/admin/reports': 'reports.html',
   };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
@@ -798,6 +800,32 @@ async function route(req, res) {
     const report = shifts.report(Number(shiftMatch[1]));
     if (!report) return sendJson(res, 404, { error: 'No such shift.' });
     return sendJson(res, 200, { report });
+  }
+
+  /* ---- Reports and the audit log: the owner only ---- */
+  const q = Object.fromEntries(url.searchParams);
+  const sendCsv = (name, body) => send(res, 200, `﻿${body}`, {
+    'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
+    'Content-Disposition': `attachment; filename="${name}"`,
+  });
+
+  const reportMatch = pathname.match(/^\/api\/reports\/(summary|sc-pwd|sc-pwd\.csv|discounts|threshold)$/);
+  if (reportMatch && method === 'GET') {
+    if (!requireStaff(req, res, { permission: 'reports' })) return;
+    const which = reportMatch[1];
+    if (which === 'summary') return sendJson(res, 200, reports.summary(q));
+    if (which === 'sc-pwd') return sendJson(res, 200, reports.scPwd(q));
+    if (which === 'sc-pwd.csv') return sendCsv(`sc-pwd-${reports.range(q).from}-to-${reports.range(q).to}.csv`, reports.scPwdCsv(q));
+    if (which === 'discounts') return sendJson(res, 200, reports.discounts(q));
+    return sendJson(res, 200, reports.threshold());
+  }
+
+  if ((pathname === '/api/audit' || pathname === '/api/audit.csv') && method === 'GET') {
+    if (!requireStaff(req, res, { permission: 'audit' })) return;
+    const r = reports.range(q);
+    const entries = audit.list({ from: r.from, to: r.to, action: q.action || undefined, staff_id: q.staff_id || undefined });
+    if (pathname === '/api/audit.csv') return sendCsv(`audit-${r.from}-to-${r.to}.csv`, reports.auditCsv(entries));
+    return sendJson(res, 200, { from: r.from, to: r.to, entries, actions: audit.ACTIONS, staff: staff.list({ all: true }) });
   }
 
   /* ---- Receipt settings: printed by everyone, changed by the owner ---- */
