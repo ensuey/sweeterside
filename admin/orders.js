@@ -79,6 +79,7 @@ function historyText(h) {
 /** Badges under the name: blocked, the number's history, and how long it has waited. */
 function flagsHtml(o) {
   const flags = [];
+  if (o.source === 'pos') flags.push(`<span class="flag">Counter${o.paid_at ? ' · paid' : ''}</span>`);
   if (o.blocked) flags.push('<span class="flag flag--bad">Blocked number</span>');
   if (o.history) {
     const kind = o.history.no_show || o.history.fake ? 'bad'
@@ -114,11 +115,13 @@ function orderHtml(o) {
     .map((value) => `<option value="${value}"${value === o.status ? ' selected' : ''}>${statusLabel(value, type)}</option>`)
     .join('');
   const lines = o.items
-    .map((l) => `<li><span>${l.qty} × ${esc(l.name)}</span><span>${money(l.price * l.qty)}</span></li>`)
+    .map((l) => `<li><span>${l.qty} × ${esc(l.name)}${l.note ? ` <em class="order__note">${esc(l.note)}</em>` : ''}</span><span>${money(l.price * l.qty)}</span></li>`)
     .join('');
 
   // Delivery collects cash at the door; the other types pay at the counter.
-  const payment = type === 'delivery'
+  const payment = o.source === 'pos'
+    ? `<dd class="order__change">${o.paid_at ? 'Paid at the counter' : 'Not paid yet'}</dd>`
+    : type === 'delivery'
     ? `<dt>Customer pays with</dt><dd>${money(o.cash)}</dd>
         <dd class="order__change">${o.change_due === 0
           ? 'Exact amount, no change needed'
@@ -144,7 +147,11 @@ function orderHtml(o) {
       <ul class="order__items">${lines}</ul>
       <dl class="order__sum">
         <dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>
+        ${o.sc_pwd_discount > 0 ? `<dt>SC/PWD 20%</dt><dd class="order__discount">−${money(o.sc_pwd_discount)}</dd>` : ''}
+        ${o.vat_exempt > 0 ? `<dt>VAT exempt</dt><dd class="order__discount">−${money(o.vat_exempt)}</dd>` : ''}
         ${o.discount > 0 ? `<dt>Voucher ${esc(o.voucher_code)}</dt><dd class="order__discount">−${money(o.discount)}</dd>` : ''}
+        ${o.manual_discount > 0 ? `<dt>Discount</dt><dd class="order__discount">−${money(o.manual_discount)}</dd>` : ''}
+        ${o.service_charge > 0 ? `<dt>Service charge</dt><dd>${money(o.service_charge)}</dd>` : ''}
         ${o.delivery_fee > 0 ? `<dt>Delivery fee</dt><dd>${money(o.delivery_fee)}</dd>` : ''}
         <dt class="is-total">Total</dt><dd class="is-total">${money(o.total)}</dd>
         ${payment}

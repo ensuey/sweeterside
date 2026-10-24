@@ -266,6 +266,7 @@ function openEditor(item) {
   $('f-cw').value = item && item.crop_w != null ? item.crop_w : '';
   $('f-ch').value = item && item.crop_h != null ? item.crop_h : '';
   $('f-best').checked = !!(item && item.best_seller);
+  $('f-sc').checked = item ? item.sc_eligible !== false : true;
   $('f-sale-type').value = item ? item.sale_type : '';
   $('f-sale-value').value = item && item.sale_value != null ? item.sale_value : '';
 
@@ -289,6 +290,7 @@ async function saveItem(event) {
     crop_w: $('f-cw').value,
     crop_h: $('f-ch').value,
     best_seller: $('f-best').checked,
+    sc_eligible: $('f-sc').checked,
     sale_type: $('f-sale-type').value,
     sale_value: $('f-sale-type').value ? $('f-sale-value').value : '',
   };

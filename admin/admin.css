@@ -21,6 +21,9 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* hidden always hides, even on elements whose class sets display (.btn, .field). */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   background: var(--bg);
@@ -153,7 +156,12 @@ a { color: var(--navy); }
 .topbar__nav a[aria-current="page"] { background: var(--ink); color: #fff; }
 .topbar__user { font-size: .875rem; color: var(--ink-soft); }
 /* With six pages in the nav, the email makes room on narrower screens. */
-@media (max-width: 1180px) { .topbar__user { display: none; } }
+/* Seven pages fit in the bar only without the title text and the email:
+   the title stays for screen readers, the logo says where you are. */
+.topbar__title, .topbar__user {
+  position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
 
 /* ---------------- admin body ---------------- */
 .admin { width: min(100% - 2rem, 1040px); margin-inline: auto; padding-block: 2rem 4rem; }
@@ -469,3 +477,72 @@ a { color: var(--navy); }
 .block-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; margin-bottom: 1.5rem; }
 .block-add .field { width: 14rem; }
 .block-add .field--wide { width: min(100%, 22rem); }
+
+/* Staff PIN lock (staff-gate.js): over the whole page until someone unlocks */
+body.is-locked { overflow: hidden; }
+.gate {
+  position: fixed; inset: 0; z-index: 50; overflow-y: auto;
+  display: grid; place-items: center; padding: 1.5rem 1rem;
+  background: var(--cream);
+}
+.gate[hidden] { display: none; }
+.gate__panel { width: min(100%, 520px); display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; }
+.gate__logo { width: 64px; height: 64px; border-radius: 50%; }
+.gate__title { font-size: 1.5rem; }
+.gate__lead { margin: 0; color: var(--ink-soft); font-weight: 600; }
+.gate__staff {
+  list-style: none; margin: 0; padding: 0; width: 100%;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .6rem;
+}
+.gate__staff[hidden] { display: none; }
+.gate__who {
+  width: 100%; min-height: 84px; display: flex; flex-direction: column; justify-content: center; gap: .15rem;
+  cursor: pointer; font: inherit; color: var(--ink); background: var(--surface);
+  border: 1.5px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
+}
+.gate__who:active { transform: scale(.98); }
+.gate__name { font: 600 1.1rem "Fredoka", sans-serif; }
+.gate__role { font-size: .8125rem; color: var(--ink-soft); font-weight: 700; }
+.gate__setup { margin: 0; }
+.gate__exit { font-size: .875rem; }
+
+.pin__dots { display: flex; justify-content: center; gap: .6rem; min-height: 18px; }
+.pin__dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink-soft); }
+.pin__dot.is-on { background: var(--ink); border-color: var(--ink); }
+.pin__err { margin: .4rem 0 0; min-height: 1.3em; color: var(--danger); font-weight: 700; font-size: .875rem; text-align: center; }
+.pinpad { display: grid; grid-template-columns: repeat(3, 76px); gap: .6rem; justify-content: center; margin-top: .4rem; }
+.pinpad__key {
+  height: 64px; cursor: pointer; font: 600 1.5rem "Fredoka", sans-serif; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-md);
+}
+.pinpad__key:active { background: var(--butter); }
+.pinpad__key--soft { color: var(--ink-soft); }
+.pinpad__key--ok { background: var(--coral-ink); border-color: var(--coral-ink); color: #fff; font-size: 1.1rem; }
+
+.override__needs { margin: 0; padding-left: 1.2rem; font-weight: 700; }
+.override__pin { display: flex; flex-direction: column; align-items: center; }
+
+/* Staff page */
+.staff-list { list-style: none; margin: 0 0 1.5rem; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.staff-row {
+  display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+  padding: .75rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.staff-row.is-off { opacity: .6; }
+.staff-row__name { font-weight: 700; flex: 1; min-width: 8rem; }
+.staff-row select { min-height: 40px; border-radius: var(--r-sm); border: 1.5px solid var(--line); padding: 0 .6rem; font: inherit; }
+.staff-add, .pos-settings__form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; }
+.staff-add .field { width: 12rem; }
+.pos-settings__form .field { width: 12rem; }
+.pos-settings__group { border: 1px solid var(--line); border-radius: var(--r-md); padding: 1rem; margin: 0 0 1rem; display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; }
+.pos-settings__group legend { padding: 0 .3rem; }
+.tax-warning { margin: 0; width: 100%; padding: .6rem .8rem; border-radius: var(--r-sm); background: #FFF4E0; color: #8A5A12; font-weight: 600; font-size: .875rem; }
+
+/* A boxed section (Staff page) */
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 1.25rem; margin-bottom: 1.25rem; box-shadow: var(--shadow); }
+.panel[hidden] { display: none; }
+.panel__head { display: flex; align-items: center; gap: .8rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.panel__head .panel__title { margin: 0; flex: 1; }
+.panel__title { font-size: 1.2rem; margin-bottom: .75rem; }
+.panel__sub { font-size: 1rem; margin: 1.25rem 0 .6rem; }
+.order__note { font-style: normal; font-weight: 700; color: var(--navy); }

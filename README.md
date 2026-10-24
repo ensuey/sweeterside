@@ -28,11 +28,13 @@ npm start                 # http://127.0.0.1:3000
 - Admin, vouchers: <http://127.0.0.1:3000/admin/vouchers>
 - Admin, cakes: <http://127.0.0.1:3000/admin/cakes>
 - Admin, blocked numbers: <http://127.0.0.1:3000/admin/blocked>
+- POS: <http://127.0.0.1:3000/admin/pos>
+- Admin, staff and POS settings: <http://127.0.0.1:3000/admin/staff>
 
-`npm test` runs the test suite (103 tests covering password hashing, CSRF,
+`npm test` runs the test suite (115 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
-cake bookings, fake-order protection, the pricing engine, staff PINs, the
-audit log and the database migrations).
+cake bookings, fake-order protection, the pricing engine, staff PINs, POS
+tickets, the audit log and the database migrations).
 
 ### Changing the admin password
 
@@ -53,6 +55,7 @@ server/
   settings.js    the settings table, and the POS and tax settings
   staff.js       staff, roles, PINs, staff sessions and manager overrides
   audit.js       the append-only audit log
+  pos.js         POS tickets: saving, sending to the kitchen, voids, tabs, merging
   vouchers.js    voucher codes: validation, CRUD and checking a code
   cakes.js       custom cake bookings: settings, open days, photos, requests
   phone.js       PH mobile numbers: checking and normalising to +639XXXXXXXXX
@@ -68,6 +71,9 @@ admin/
   vouchers.html  Vouchers page (vouchers.js): voucher codes
   cakes.html     Cakes page (cakes.js): cake bookings and booking settings
   blocked.html   Blocked numbers page (blocked.js)
+  pos.html       the POS (pos.js, pos.css): tablet-first order taking
+  staff.html     Staff page (staff.js): staff, PINs, POS and tax settings
+  staff-gate.js  the staff PIN lock and owner override, shared by POS and Staff
   login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
@@ -217,8 +223,55 @@ but placing an order fails with a connection message.
 ## In-store POS
 
 The cashier and waiter POS is being built in four phases; the plan is in
-`claude/pos-plan.md`. Phase 1 (the money, the pricing engine, staff and the
-audit log) is server-side only and changes nothing on screen.
+`claude/pos-plan.md`. Phases 1 and 2 are in place: the money, the pricing
+engine, staff and PINs, and taking orders at `/admin/pos`. Payments,
+receipts and reports come next.
+
+### Getting started
+
+1. **Create the owner PIN.** Open **Staff** (`/admin/staff`). The first time,
+   it asks for your name, a PIN and the admin password, and makes you the
+   owner.
+2. **Add the staff.** Still on Staff, add each cashier and waiter with their
+   own PIN. The same page can change a role, switch someone off (they are never
+   deleted, so the audit log keeps their name) or reset a PIN.
+3. **Set the POS options** (owner only, on Staff): the service charge, the
+   cashier discount limit, the idle lock and the tax status.
+4. **Open the POS** (`/admin/pos`) on the counter tablet, signed in to the
+   admin. Staff tap their name and type their PIN; **Lock** hands the tablet to
+   the next person.
+
+### Taking an order
+
+- **Building the ticket.** Tap items to add them. Use − and + for quantity.
+  Tap a line to add a kitchen note (chips like "Less sugar") or change its
+  price, which needs the owner.
+- **Order types:**
+  - **Dine-in:** table and guests.
+  - **Takeout:** name optional.
+  - **Delivery:** name, PH mobile, address and landmark, plus the fee.
+  - Waiters take dine-in only.
+- **Discounts and charges** (cashier and owner): a voucher **or** a manual
+  discount with a reason, SC/PWD claimants (name, ID number, their own items
+  or a shared order), removing the service charge, or a different delivery fee.
+  **The total on screen is always worked out by the server**, with the same
+  engine the saved order uses.
+- **Save tab** keeps a dine-in tab open without sending it to the kitchen.
+  The kitchen does not see it yet, but it counts against the day's limits.
+  **Send to kitchen** puts it in the Orders queue (as Confirmed, flagged
+  "Counter"). Items added later are sent on their own the next time.
+- **Taking items off.** Items not yet sent come off freely. Items already sent
+  are a **void**, which needs a reason and the owner's PIN. **Void** on a tab
+  discards it if nothing was sent, or voids it (owner) if something was.
+- **Open tabs** lists unpaid POS orders. From there you can open one, move it
+  to another table, or merge it into another tab.
+- **Shop closed?** The Open/Closed switch only stops online orders; the POS
+  keeps working.
+- **A dropped connection** shows a banner and pauses saving. The ticket being
+  built is kept on the tablet (and survives a reload). Each save carries a
+  request key, so a double tap or a retry never makes two orders. If two
+  devices edit the same tab, the second is told to reload instead of
+  overwriting the first.
 
 ### Money
 

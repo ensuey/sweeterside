@@ -4,18 +4,19 @@ Live at https://sweeterside.fly.dev (Fly.io app `sweeterside`, region `sin`,
 volume `sweeterside_data` at `/data`). Node 22, no npm dependencies, SQLite
 via `node:sqlite`.
 
-**Tests:** 103 (`npm test`):
+**Tests:** 115 (`npm test`):
 - 57 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
+- 12 in `test/pos-orders.test.js`
 
 ## In-store POS (in progress; plan in `claude/pos-plan.md`)
 
 | Phase | Branch | PR | State |
 |---|---|---|---|
-| 1. Data model, pricing engine, tests | `pos-1-pricing` | — | open |
-| 2. POS order-taking UI | `pos-2-order-taking` | — | to do |
+| 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | open |
+| 2. POS order-taking UI | `pos-2-order-taking` | #14 | open (stacked on #13) |
 | 3. Payments, shifts, receipts | `pos-3-payments` | — | to do |
 | 4. Reports and audit UI | `pos-4-reports` | — | to do |
 
@@ -36,6 +37,27 @@ What Phase 1 shipped:
 - **New columns:** `orders.source` (backfilled `'online'`), `gross_cents`,
   discount columns, `pricing` JSON and `paid_at`. Voucher uses from POS orders
   count only once paid.
+
+What Phase 2 shipped:
+- **POS page** (`/admin/pos`), tablet first with two panels on phones:
+  - item grid with photos, search, categories and "N left";
+  - ticket with dine-in, takeout and delivery, notes and price changes;
+  - discounts, SC/PWD claimants, service charge and delivery fee, totals
+    priced by the server.
+- **Tabs:** save without sending; Send to kitchen goes to the queue as
+  Confirmed; items added later are sent on their own; move and merge tabs.
+- **Voids:** taking off sent items needs a reason and the owner's PIN. A held
+  tab is discarded; a sent one is voided.
+- **Safety:** idempotent saves (request key), versioned tabs (no lost
+  updates), offline banner, ticket kept in sessionStorage.
+- **Staff page** (`/admin/staff`): first owner (needs the admin password),
+  add staff, roles, switch off, reset PIN; POS settings; tax settings with a
+  warning.
+- **Shared PIN lock** (`admin/staff-gate.js`): lock screen, PIN pad, idle
+  lock, owner override dialog. A locked POS answers 423; a wrong PIN is a 403
+  with `wrong_pin`.
+- **Elsewhere:** Items page "Eligible for SC/PWD"; the queue shows Counter
+  orders, notes and the POS discounts; POS and Staff in the admin nav.
 
 ## Features shipped
 
