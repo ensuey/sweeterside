@@ -610,12 +610,14 @@ function get(id, options) {
 /**
  * @param {'active'|'finished'|'all'} which
  */
+// A POS tab that has not been sent to the kitchen is not in the queue yet,
+// and is not counted with it.
+const IN_QUEUE = "NOT (source = 'pos' AND kitchen_sent_at IS NULL)";
+
 function list(which = 'active') {
-  // A POS tab that has not been sent to the kitchen is not in the queue yet.
-  const sent = "NOT (source = 'pos' AND kitchen_sent_at IS NULL)";
   const filter = {
-    active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')}) AND ${sent}`,
-    finished: `WHERE status IN ('completed','cancelled') AND ${sent}`,
+    active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')}) AND ${IN_QUEUE}`,
+    finished: `WHERE status IN ('completed','cancelled') AND ${IN_QUEUE}`,
     all: '',
   }[which];
   if (filter === undefined) throw Object.assign(new Error('Unknown order filter.'), { status: 400 });
@@ -654,7 +656,7 @@ function withHistory(list) {
 }
 
 function counts() {
-  const rows = db.prepare('SELECT status, COUNT(*) AS n FROM orders GROUP BY status').all();
+  const rows = db.prepare(`SELECT status, COUNT(*) AS n FROM orders WHERE ${IN_QUEUE} GROUP BY status`).all();
   return Object.fromEntries(STATUSES.map((s) => [s, (rows.find((r) => r.status === s) || {}).n || 0]));
 }
 

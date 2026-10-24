@@ -57,6 +57,9 @@ test('a saved tab is held out of the queue until it is sent to the kitchen', () 
   assert.deepStrictEqual([order.source, order.status, order.held, order.total, order.version], ['pos', 'new', true, 393, 0]);
   assert.strictEqual(order.taken_by, 'Ben');
   assert.ok(!orders.list('active').some((o) => o.id === order.id), 'held tabs are not in the queue');
+  const newBefore = orders.counts().new;
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE status = 'new' AND source = 'online'").get().n, newBefore,
+    'nor in its counts ("N new orders to confirm")');
   assert.ok(pos.open().some((o) => o.id === order.id && o.table_no === '5' && o.held));
   assert.strictEqual(MATCHA().sold_today, 2, 'held tabs count against the day');
 
