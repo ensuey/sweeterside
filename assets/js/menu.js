@@ -87,8 +87,14 @@
         var src = card.querySelector('.shot');
         var pic = card.querySelector('.shot img');
 
+        // Show the photo the way the card does: a crop window onto a poster,
+        // or (shot--plain) an uploaded photo shown whole. Without the plain
+        // class an uploaded photo has no crop size, and the box collapses.
+        var plain = src.classList.contains('shot--plain');
+        shot.className = plain ? 'shot shot--plain' : 'shot';
         ['--x', '--y', '--w', '--h'].forEach(function (v) {
-          shot.style.setProperty(v, src.style.getPropertyValue(v));
+          if (plain) shot.style.removeProperty(v);
+          else shot.style.setProperty(v, src.style.getPropertyValue(v));
         });
         img.src = pic.getAttribute('src');
         img.alt = pic.getAttribute('alt');
