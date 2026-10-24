@@ -18,6 +18,10 @@ const cakes = require('./cakes');
 const checkout = require('./checkout');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
+const staff = require('./staff');
+const pos = require('./pos');
+const settings = require('./settings');
+const audit = require('./audit');
 const render = require('./render');
 const imagesize = require('./imagesize');
 
@@ -246,6 +250,35 @@ function requireApiAuth(req, res, { csrf = false } = {}) {
   return session;
 }
 
+/* The POS: the admin session plus a staff member's PIN session, sent in a
+   header. A locked POS answers 423 (not 401), so the page asks for a PIN
+   instead of sending the tablet to the admin sign-in. */
+const STAFF_HEADER = 'x-staff-token';
+
+function requireStaff(req, res, { csrf = false, permission } = {}) {
+  const session = requireApiAuth(req, res, { csrf });
+  if (!session) return null;
+  const member = staff.current(req.headers[STAFF_HEADER], session.id);
+  if (!member) {
+    sendJson(res, 423, { error: 'The POS is locked. Tap your name and enter your PIN.', locked: true });
+    return null;
+  }
+  if (permission && !staff.can(member.role, permission)) {
+    sendJson(res, 403, { error: 'Only the owner can do that.' });
+    return null;
+  }
+  return { session, staff: member };
+}
+
+/** What the signed-in staff member may do, for the screen to show or hide. */
+function permissionsOf(role) {
+  return Object.keys(staff.PERMISSIONS).filter((p) => staff.can(role, p));
+}
+
+/* Wrong PINs are throttled per staff member; this also caps how many PINs one
+   address can try across all staff. Only wrong PINs count. */
+const pinLimiter = rateLimiter(30, 10 * 60 * 1000);
+
 /* ---------------------------- routes ---------------------------- */
 
 async function handleLogin(req, res) {
@@ -365,7 +398,7 @@ async function route(req, res) {
   const adminPages = {
     '/admin': 'index.html', '/admin/items': 'items.html',
     '/admin/vouchers': 'vouchers.html', '/admin/cakes': 'cakes.html',
-    '/admin/blocked': 'blocked.html',
+    '/admin/blocked': 'blocked.html', '/admin/pos': 'pos.html', '/admin/staff': 'staff.html',
   };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
@@ -616,6 +649,165 @@ async function route(req, res) {
     if (!requireApiAuth(req, res, { csrf: true })) return;
     if (!blocklist.remove(Number(blockedMatch[1]))) return sendJson(res, 404, { error: 'That number is not blocked.' });
     return sendJson(res, 200, { ok: true });
+  }
+
+  /* ---- POS: staff and PINs ---- */
+  // The names on the PIN screen. Needs the admin session only.
+  if (pathname === '/api/pos/staff' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { staff: staff.list(), has_staff: staff.hasStaff() });
+  }
+
+  if (pathname === '/api/pos/unlock' && method === 'POST') {
+    const session = requireApiAuth(req, res, { csrf: true });
+    if (!session) return;
+    const ip = clientIp(req);
+    if (pinLimiter.limited(ip)) {
+      return sendJson(res, 429, { error: 'Too many wrong PINs from this device. Wait a few minutes.' });
+    }
+    const body = await readJson(req);
+    let opened;
+    try {
+      opened = staff.unlock(Number(body.staff_id), String(body.pin ?? ''), session.id);
+    } catch (err) {
+      if ((err.body && err.body.wrong_pin) || err.status === 429) pinLimiter.record(ip);
+      throw err;
+    }
+    return sendJson(res, 200, { ...opened, permissions: permissionsOf(opened.staff.role) });
+  }
+
+  if (pathname === '/api/pos/lock' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    staff.lock(req.headers[STAFF_HEADER]);
+    return sendJson(res, 200, { ok: true });
+  }
+
+  if (pathname === '/api/pos/me' && method === 'GET') {
+    const who = requireStaff(req, res);
+    if (!who) return;
+    return sendJson(res, 200, { staff: who.staff, permissions: permissionsOf(who.staff.role) });
+  }
+
+  /* ---- POS: menu, tickets and tabs ---- */
+  if (pathname === '/api/pos/menu' && method === 'GET') {
+    if (!requireStaff(req, res)) return;
+    const s = settings.posSettings();
+    return sendJson(res, 200, {
+      categories: categories.list(), items: pos.posMenu(),
+      delivery_fee: orders.getDeliveryFee(), service_charge: s.service_charge,
+      vat_registered: s.vat_registered, cashier_discount_limit_bp: s.cashier_discount_limit_bp,
+      lock_minutes: s.pos_lock_minutes,
+    });
+  }
+
+  if (pathname === '/api/pos/open' && method === 'GET') {
+    if (!requireStaff(req, res)) return;
+    return sendJson(res, 200, { orders: pos.open() });
+  }
+
+  if (pathname === '/api/pos/quote' && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true });
+    if (!who) return;
+    const body = await readJson(req);
+    return sendJson(res, 200, pos.quote(body.id ? Number(body.id) : null, body, who.staff));
+  }
+
+  if (pathname === '/api/pos/orders' && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true });
+    if (!who) return;
+    const saved = pos.save(null, await readJson(req), who.staff);
+    if (!saved.replayed) console.log(`[pos] #${saved.order.id} ${saved.order.order_type} by staff ${who.staff.id}`);
+    return sendJson(res, saved.replayed ? 200 : 201, saved);
+  }
+
+  const posOrderMatch = pathname.match(/^\/api\/pos\/orders\/(\d+)(?:\/(table|merge|void))?$/);
+  if (posOrderMatch) {
+    const id = Number(posOrderMatch[1]);
+    const action = posOrderMatch[2];
+    if (!action && method === 'GET') {
+      const who = requireStaff(req, res);
+      if (!who) return;
+      const order = pos.view(id, who.staff);
+      if (!order) return sendJson(res, 404, { error: 'That order is not a POS order or no longer exists.' });
+      return sendJson(res, 200, { order });
+    }
+    if (!action && (method === 'PUT' || method === 'PATCH')) {
+      const who = requireStaff(req, res, { csrf: true });
+      if (!who) return;
+      return sendJson(res, 200, pos.save(id, await readJson(req), who.staff));
+    }
+    if (action && method === 'POST') {
+      const who = requireStaff(req, res, { csrf: true });
+      if (!who) return;
+      const body = await readJson(req);
+      if (action === 'table') return sendJson(res, 200, { order: pos.moveTable(id, body.table_no, who.staff) });
+      if (action === 'merge') return sendJson(res, 200, { order: pos.merge(id, Number(body.into), who.staff) });
+      return sendJson(res, 200, pos.voidOrder(id, body, who.staff));
+    }
+  }
+
+  /* ---- POS settings: everyone at the POS reads them, the owner changes them ---- */
+  if (pathname === '/api/pos/settings' && method === 'GET') {
+    if (!requireStaff(req, res)) return;
+    return sendJson(res, 200, { ...settings.posSettings(), delivery_fee: orders.getDeliveryFee() });
+  }
+
+  if (pathname === '/api/pos/settings' && (method === 'PUT' || method === 'PATCH')) {
+    const who = requireStaff(req, res, { csrf: true, permission: 'tax_settings' });
+    if (!who) return;
+    const before = settings.posSettings();
+    const after = settings.updatePosSettings(await readJson(req));
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      audit.record({ action: 'settings_change', staff: who.staff, details: { before, after } });
+    }
+    return sendJson(res, 200, after);
+  }
+
+  /* ---- Staff page: the owner manages staff ---- */
+  if (pathname === '/api/staff' && method === 'GET') {
+    if (!requireStaff(req, res, { permission: 'manage_staff' })) return;
+    return sendJson(res, 200, { staff: staff.list({ all: true }) });
+  }
+
+  // The very first staff member (the owner), while there are none. The admin
+  // types their password again, so a tablet left signed in cannot be used to
+  // make someone else the owner.
+  if (pathname === '/api/staff/first' && method === 'POST') {
+    const session = requireApiAuth(req, res, { csrf: true });
+    if (!session) return;
+    const body = await readJson(req);
+    const key = auth.throttleKey(session.email, clientIp(req));
+    const locked = auth.lockRemaining(key);
+    if (locked > 0) {
+      return sendJson(res, 429, { error: `Too many attempts. Try again in ${Math.ceil(locked / 60000)} minute(s).` });
+    }
+    const user = auth.findUserByEmail(session.email);
+    if (!user || !auth.verifyPassword(String(body.password ?? ''), user.password_hash)) {
+      auth.recordFailure(key);
+      throw new menu.ValidationError({ password: 'That is not the admin password.' });
+    }
+    auth.clearFailures(key);
+    if (staff.hasStaff()) return sendJson(res, 409, { error: 'The owner is already set up. Unlock with their PIN.' });
+    return sendJson(res, 201, { staff: staff.create({ ...body, role: 'owner' }, null) });
+  }
+
+  if (pathname === '/api/staff' && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true, permission: 'manage_staff' });
+    if (!who) return;
+    return sendJson(res, 201, { staff: staff.create(await readJson(req), who.staff) });
+  }
+
+  const staffMatch = pathname.match(/^\/api\/staff\/(\d+)(\/pin)?$/);
+  if (staffMatch && (method === 'PATCH' || method === 'PUT' || method === 'POST')) {
+    const who = requireStaff(req, res, { csrf: true, permission: 'manage_staff' });
+    if (!who) return;
+    const body = await readJson(req);
+    const id = Number(staffMatch[1]);
+    const member = staffMatch[2]
+      ? staff.resetPin(id, body.pin, who.staff)
+      : staff.update(id, body, who.staff);
+    if (!member) return sendJson(res, 404, { error: 'That staff member no longer exists.' });
+    return sendJson(res, 200, { staff: member });
   }
 
   /* ---- settings ---- */

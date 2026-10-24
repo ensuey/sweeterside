@@ -172,11 +172,13 @@ function pinLock(id) {
 /**
  * Check a staff member's PIN, with throttling.
  * @returns the staff member
- * @throws 401 wrong PIN, 403 switched off, 429 locked
+ * A wrong PIN is a 403 with wrong_pin (not a 401, which the admin pages
+ * take to mean signed out).
+ * @throws 403 wrong PIN or switched off, 429 locked
  */
 function verifyPin(id, pin, now = Date.now()) {
   const row = db.prepare('SELECT * FROM staff WHERE id = ?').get(Number(id));
-  if (!row) throw httpError(401, 'Choose your name, then type your PIN.');
+  if (!row) throw httpError(403, 'Choose your name, then type your PIN.', { wrong_pin: true });
   if (row.active !== 1) throw httpError(403, 'This staff member is switched off. Ask the owner.');
   const lock = pinLock(row.id);
   if (lock.locked_until > now) {
@@ -189,9 +191,9 @@ function verifyPin(id, pin, now = Date.now()) {
                 ON CONFLICT(key) DO UPDATE SET fails = excluded.fails, locked_until = excluded.locked_until`)
       .run(`pin:${row.id}`, lockedUntil ? 0 : fails, lockedUntil);
     const left = PIN_MAX_FAILS - fails;
-    throw httpError(lockedUntil ? 429 : 401, lockedUntil
+    throw httpError(lockedUntil ? 429 : 403, lockedUntil
       ? 'Too many wrong PINs. Try again in 5 minutes.'
-      : `Wrong PIN.${left <= 2 ? ` ${left} more tries before a 5-minute lock.` : ''}`);
+      : `Wrong PIN.${left <= 2 ? ` ${left} more tries before a 5-minute lock.` : ''}`, lockedUntil ? {} : { wrong_pin: true });
   }
   db.prepare('DELETE FROM login_attempts WHERE key = ?').run(`pin:${row.id}`);
   return publicStaff(row);

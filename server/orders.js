@@ -578,7 +578,8 @@ function insertLines(orderId, lines) {
 
 // Stored as *_cents. The same amounts in pesos are added when an order is
 // read, for the checkout page and anything written before the POS.
-const PESO_FIELDS = ['subtotal', 'discount', 'delivery_fee', 'total', 'cash', 'change_due'];
+const PESO_FIELDS = ['subtotal', 'discount', 'delivery_fee', 'total', 'cash', 'change_due',
+  'gross', 'sc_pwd_discount', 'vat_exempt', 'manual_discount', 'service_charge'];
 
 /**
  * Add the lines, the peso fields and the pricing breakdown. SC/PWD ID
@@ -588,10 +589,13 @@ const PESO_FIELDS = ['subtotal', 'discount', 'delivery_fee', 'total', 'cash', 'c
 function withLines(order, { fullIds = false } = {}) {
   if (!order) return null;
   for (const f of PESO_FIELDS) order[f] = order[`${f}_cents`] / 100;
+  // qty is what is charged: a POS line's voided units are left out (and
+  // shown as voided_qty). A line voided completely is left out altogether.
   order.items = db.prepare(`
-    SELECT item_id, name, price_cents, regular_price_cents, net_cents, qty
+    SELECT item_id, name, price_cents, regular_price_cents, net_cents, qty, voided_qty, note
     FROM order_items WHERE order_id = ? ORDER BY id`).all(order.id)
-    .map((l) => ({ ...l, price: l.price_cents / 100 }));
+    .filter((l) => l.qty > l.voided_qty)
+    .map((l) => ({ ...l, qty: l.qty - l.voided_qty, price: l.price_cents / 100 }));
   order.pricing = order.pricing ? JSON.parse(order.pricing) : null;
   if (order.pricing && !fullIds) {
     order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
@@ -607,9 +611,11 @@ function get(id, options) {
  * @param {'active'|'finished'|'all'} which
  */
 function list(which = 'active') {
+  // A POS tab that has not been sent to the kitchen is not in the queue yet.
+  const sent = "NOT (source = 'pos' AND kitchen_sent_at IS NULL)";
   const filter = {
-    active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')})`,
-    finished: "WHERE status IN ('completed','cancelled')",
+    active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')}) AND ${sent}`,
+    finished: `WHERE status IN ('completed','cancelled') AND ${sent}`,
     all: '',
   }[which];
   if (filter === undefined) throw Object.assign(new Error('Unknown order filter.'), { status: 400 });

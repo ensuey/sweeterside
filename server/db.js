@@ -434,6 +434,46 @@ function backfillLineNets() {
 
 if (addMissingColumns('order_items', ORDER_ITEM_POS_COLUMNS).includes('net_cents')) backfillLineNets();
 
+/* POS tickets. A POS order with no kitchen_sent_at is held (a saved tab not
+   yet sent): it stays out of the order queue until Send to kitchen.
+   last_request_key is the client's key for the last save, so a double tap or
+   a retry after a dropped connection does not save twice. pos_version goes up
+   on every save, so two devices editing one tab cannot overwrite each other.
+   pos_input is what the cashier entered (claimants, discounts, fee), kept to
+   price the order again when items are added. merged_into points at the tab
+   this one was merged into. */
+const ORDER_TICKET_COLUMNS = {
+  kitchen_sent_at: 'TEXT',
+  pax: 'INTEGER',
+  last_request_key: 'TEXT',
+  pos_version: 'INTEGER NOT NULL DEFAULT 0',
+  pos_input: "TEXT NOT NULL DEFAULT ''",
+  updated_by: 'INTEGER REFERENCES staff(id)',
+  merged_into: 'INTEGER',
+};
+addMissingColumns('orders', ORDER_TICKET_COLUMNS);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_request_key
+         ON orders(last_request_key) WHERE last_request_key IS NOT NULL`);
+db.exec('CREATE INDEX IF NOT EXISTS idx_orders_source ON orders(source, paid_at, status)');
+
+/* POS lines. qty is every unit ever on the ticket and sent, voided_qty the
+   sent units taken off again (with void_reason); what is charged is qty -
+   voided_qty. Units not yet sent come off without a void. menu_price_cents
+   and menu_sale_cents are the menu prices when the line was added, which the
+   order is priced from; override_cents is a manager-approved price. */
+const ORDER_ITEM_TICKET_COLUMNS = {
+  note: "TEXT NOT NULL DEFAULT ''",
+  sent_qty: 'INTEGER NOT NULL DEFAULT 0',
+  voided_qty: 'INTEGER NOT NULL DEFAULT 0',
+  void_reason: "TEXT NOT NULL DEFAULT ''",
+  menu_price_cents: 'INTEGER',
+  menu_sale_cents: 'INTEGER',
+  override_cents: 'INTEGER',
+  override_reason: "TEXT NOT NULL DEFAULT ''",
+  sc_eligible: 'INTEGER NOT NULL DEFAULT 1',
+};
+addMissingColumns('order_items', ORDER_ITEM_TICKET_COLUMNS);
+
 /* Items can be left out of the SC/PWD discount (non-food items added later). */
 addMissingColumns('items', { sc_eligible: 'INTEGER NOT NULL DEFAULT 1' });
 

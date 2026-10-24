@@ -67,13 +67,13 @@ test('PINs are 4-6 digits and not trivially guessable', () => {
 test('a wrong PIN is refused, and five wrong PINs lock that staff member for 5 minutes', () => {
   const t0 = Date.UTC(2026, 9, 24, 2, 0);
   assert.strictEqual(staff.verifyPin(cashier.id, '3691', t0).name, 'Ana');
-  for (let i = 1; i <= 4; i++) assert.strictEqual(errorOf(() => staff.verifyPin(cashier.id, '0000', t0)).status, 401);
+  for (let i = 1; i <= 4; i++) assert.strictEqual(errorOf(() => staff.verifyPin(cashier.id, '0000', t0)).status, 403);
   const locked = errorOf(() => staff.verifyPin(cashier.id, '0000', t0));
   assert.strictEqual(locked.status, 429);
   assert.strictEqual(errorOf(() => staff.verifyPin(cashier.id, '3691', t0 + 60 * 1000)).status, 429,
     'even the right PIN waits out the lock');
   assert.strictEqual(staff.verifyPin(cashier.id, '3691', t0 + staff.PIN_LOCK_MS + 1).name, 'Ana', 'unlocks after 5 minutes');
-  assert.strictEqual(errorOf(() => staff.verifyPin(owner.id, '0000', t0)).status, 401, 'other staff are not affected');
+  assert.strictEqual(errorOf(() => staff.verifyPin(owner.id, '0000', t0)).status, 403, 'other staff are not affected');
   staff.verifyPin(owner.id, '2580', t0);
 });
 
@@ -109,7 +109,7 @@ test('switching staff off or changing their PIN ends their session; the last own
   const s = staff.unlock(waiter.id, '470213', admin, now);
   staff.resetPin(waiter.id, '582046', owner);
   assert.strictEqual(staff.current(s.token, admin, now), null);
-  assert.strictEqual(errorOf(() => staff.verifyPin(waiter.id, '470213')).status, 401);
+  assert.strictEqual(errorOf(() => staff.verifyPin(waiter.id, '470213')).body.wrong_pin, true);
 
   const s2 = staff.unlock(waiter.id, '582046', admin, now);
   staff.update(waiter.id, { active: false }, owner);
@@ -139,7 +139,7 @@ test('roles: what each may do, and manager overrides by an owner PIN', () => {
   assert.strictEqual(none.body.override_required, true);
   assert.strictEqual(errorOf(() => staff.authorise(cashier, 'void', { staff_id: cashier.id, pin: '3691' })).status, 403,
     "a cashier cannot approve their own void");
-  assert.strictEqual(errorOf(() => staff.authorise(cashier, 'void', { staff_id: owner.id, pin: '9999' })).status, 401);
+  assert.strictEqual(errorOf(() => staff.authorise(cashier, 'void', { staff_id: owner.id, pin: '9999' })).body.wrong_pin, true);
   assert.strictEqual(staff.authorise(cashier, 'void', { staff_id: owner.id, pin: '2580' }).approver.name, 'Dachel');
 });
 
