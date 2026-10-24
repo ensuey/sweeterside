@@ -109,6 +109,33 @@
       </form>
     </section>
 
+    <section class="panel" aria-labelledby="receipt-title">
+      <h2 class="panel__title" id="receipt-title">Receipts</h2>
+      <form id="receipt-form" novalidate>
+        <fieldset class="pos-settings__group">
+          <legend>On every slip</legend>
+          <div class="field"><label for="r-name">Shop name</label><input id="r-name" maxlength="60"></div>
+          <div class="field field--wide"><label for="r-address">Address</label><input id="r-address" maxlength="200"></div>
+          <div class="field"><label for="r-contact">Contact</label><input id="r-contact" maxlength="80" placeholder="0917 123 4567 · FB: Sweeter Side"></div>
+          <div class="field field--wide"><label for="r-footer">Footer</label><input id="r-footer" maxlength="200"></div>
+          <div class="field"><label for="r-width">Paper</label>
+            <select id="r-width"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+          <p class="hint">Until BIR mode is on, every slip also says <strong>ORDER SLIP — THIS IS NOT AN OFFICIAL RECEIPT</strong>.</p>
+        </fieldset>
+        <fieldset class="pos-settings__group">
+          <legend>BIR details</legend>
+          <label class="fee__check"><input type="checkbox" id="r-bir"> BIR mode: print the registered details below</label>
+          <div class="field"><label for="r-bname">Registered business name</label><input id="r-bname" maxlength="80"></div>
+          <div class="field field--wide"><label for="r-baddress">Registered address</label><input id="r-baddress" maxlength="200"></div>
+          <div class="field"><label for="r-tin">Non-VAT Reg. TIN</label><input id="r-tin" maxlength="30" placeholder="000-000-000-00000"></div>
+          <div class="field"><label for="r-ptu">PTU No.</label><input id="r-ptu" maxlength="60"></div>
+          <div class="field field--wide"><label for="r-notice">Non-VAT notice (printed once the TIN is filled in)</label><input id="r-notice" maxlength="120"></div>
+          <p class="tax-warning">Turn on BIR mode only once your accountant confirms these details and your receipts are registered.</p>
+        </fieldset>
+        <button class="btn btn--primary" type="submit">Save receipt settings</button>
+      </form>
+    </section>
+
     <section class="panel" aria-labelledby="tax-title">
       <h2 class="panel__title" id="tax-title">Tax settings</h2>
       <form id="tax-form" novalidate>

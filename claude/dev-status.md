@@ -4,12 +4,13 @@ Live at https://sweeterside.fly.dev (Fly.io app `sweeterside`, region `sin`,
 volume `sweeterside_data` at `/data`). Node 22, no npm dependencies, SQLite
 via `node:sqlite`.
 
-**Tests:** 115 (`npm test`):
+**Tests:** 123 (`npm test`):
 - 57 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
 - 12 in `test/pos-orders.test.js`
+- 8 in `test/pos-payments.test.js`
 
 ## In-store POS (in progress; plan in `claude/pos-plan.md`)
 
@@ -17,7 +18,7 @@ via `node:sqlite`.
 |---|---|---|---|
 | 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | open |
 | 2. POS order-taking UI | `pos-2-order-taking` | #14 | open (stacked on #13) |
-| 3. Payments, shifts, receipts | `pos-3-payments` | — | to do |
+| 3. Payments, shifts, receipts | `pos-3-payments` | #15 | open (stacked on #14) |
 | 4. Reports and audit UI | `pos-4-reports` | — | to do |
 
 What Phase 1 shipped:
@@ -58,6 +59,19 @@ What Phase 2 shipped:
   with `wrong_pin`.
 - **Elsewhere:** Items page "Eligible for SC/PWD"; the queue shows Counter
   orders, notes and the POS discounts; POS and Staff in the admin nav.
+What Phase 3 shipped:
+- **Payments:** cash with tendered, change and quick buttons; GCash, Maya, QR
+  Ph and card with a reference; split payments, paid only when covered;
+  idempotent; a `METHODS` registry ready for PayMongo.
+- **Refunds:** full or by line (with the line's service charge share), owner
+  approval, a reason, audited.
+- **Shifts:** open with starting cash, cash in and out with reasons, X
+  reading, close with counted cash (a note if it is off), the Z reading saved.
+  Cash needs an open shift.
+- **Printing** (browser print, 58/80 mm): receipts with SC/PWD details,
+  payments and change; the ORDER SLIP notice until BIR mode; kitchen tickets;
+  X and Z readings.
+- **Staff page:** receipt settings and BIR details.
 
 ## Features shipped
 

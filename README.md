@@ -31,10 +31,10 @@ npm start                 # http://127.0.0.1:3000
 - POS: <http://127.0.0.1:3000/admin/pos>
 - Admin, staff and POS settings: <http://127.0.0.1:3000/admin/staff>
 
-`npm test` runs the test suite (115 tests covering password hashing, CSRF,
+`npm test` runs the test suite (123 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
 cake bookings, fake-order protection, the pricing engine, staff PINs, POS
-tickets, the audit log and the database migrations).
+tickets, payments and shifts, the audit log and the database migrations).
 
 ### Changing the admin password
 
@@ -56,6 +56,8 @@ server/
   staff.js       staff, roles, PINs, staff sessions and manager overrides
   audit.js       the append-only audit log
   pos.js         POS tickets: saving, sending to the kitchen, voids, tabs, merging
+  payments.js    payments (split, cash and change, references), refunds, receipt data
+  shifts.js      shifts, the cash drawer, X and Z readings
   vouchers.js    voucher codes: validation, CRUD and checking a code
   cakes.js       custom cake bookings: settings, open days, photos, requests
   phone.js       PH mobile numbers: checking and normalising to +639XXXXXXXXX
@@ -71,7 +73,7 @@ admin/
   vouchers.html  Vouchers page (vouchers.js): voucher codes
   cakes.html     Cakes page (cakes.js): cake bookings and booking settings
   blocked.html   Blocked numbers page (blocked.js)
-  pos.html       the POS (pos.js, pos.css): tablet-first order taking
+  pos.html       the POS (pos.js, pos-pay.js, pos.css): order taking, payments, shifts, printing
   staff.html     Staff page (staff.js): staff, PINs, POS and tax settings
   staff-gate.js  the staff PIN lock and owner override, shared by POS and Staff
   login.html     sign-in page
@@ -223,9 +225,9 @@ but placing an order fails with a connection message.
 ## In-store POS
 
 The cashier and waiter POS is being built in four phases; the plan is in
-`claude/pos-plan.md`. Phases 1 and 2 are in place: the money, the pricing
-engine, staff and PINs, and taking orders at `/admin/pos`. Payments,
-receipts and reports come next.
+`claude/pos-plan.md`. Phases 1 to 3 are in place: the money, the pricing
+engine, staff and PINs, taking orders at `/admin/pos`, payments, shifts and
+receipts. Reports come next.
 
 ### Getting started
 
@@ -272,6 +274,50 @@ receipts and reports come next.
   request key, so a double tap or a retry never makes two orders. If two
   devices edit the same tab, the second is told to reload instead of
   overwriting the first.
+
+### Payments, shifts and receipts
+
+- **Shift.** Open a shift with the starting cash before taking cash (the
+  **Shift** button). During the shift, record **cash in or out** with a reason
+  ("Bought ice, Php 80"). The shift screen shows the **X reading** so far.
+  **Close the shift** with the cash counted: if it differs from what is
+  expected, a note is needed. The **Z reading** is saved with the shift and can
+  be printed.
+- **Pay** (cashier and owner) saves the ticket and opens the payment screen:
+  - **Cash** shows the amount handed over, with quick buttons (Exact,
+    Php 100/200/500/1,000) and the change.
+  - **GCash, Maya, QR Ph and Card** (paid on the external terminal) need the
+    reference number.
+  - **Split payments** work: pay part one way, the rest another. The order is
+    Paid only when it is fully covered.
+  - Takeout can be sent to the kitchen in the same step.
+  - Once payment has started, the ticket cannot be changed or voided.
+- **Refunds** (owner, or the owner's PIN) are under **Receipts**. Refund
+  everything, or some items: an item's refund includes its share of the
+  service charge. Pick the method it is paid back by, and give a reason.
+- **Readings.** X and Z readings show gross sales, each kind of discount
+  (sale, SC/PWD, voucher, manual), net sales, the service charge (apart, for
+  the staff), delivery fees, voids, refunds, payments by method, and cash
+  expected against cash counted.
+- **Receipts** print with the browser's print dialog on a slip laid out for
+  58 mm or 80 mm thermal paper (set on Staff). **Receipts** lists paid orders
+  to reprint the receipt or the kitchen ticket. After Send to kitchen, **Print
+  kitchen ticket** prints just the new items (no prices). A receipt shows:
+  - the shop details, date, order number, cashier, and order type or table;
+  - the lines and the sale prices;
+  - for each SC/PWD claimant, their name, ID and the 20% discount (and the
+    VAT exemption only if VAT-registered);
+  - the voucher, discount, service charge and delivery fee;
+  - the total, the payments and the change.
+- **The order-slip notice.** Until the owner turns on **BIR mode** (Staff →
+  Receipts), every slip says **ORDER SLIP — THIS IS NOT AN OFFICIAL RECEIPT**.
+  BIR mode prints the registered name and address, the Non-VAT Reg. TIN and
+  the PTU number. Once a TIN is filled in, it also prints the non-VAT notice
+  ("THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX", editable). Turn it on
+  only when your accountant confirms the details.
+- **Adding a payment provider later** (PayMongo): add it to `METHODS` in
+  `server/payments.js`. A payment is recorded only once it is confirmed, with
+  its reference.
 
 ### Money
 

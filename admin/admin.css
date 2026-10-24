@@ -546,3 +546,8 @@ body.is-locked { overflow: hidden; }
 .panel__title { font-size: 1.2rem; margin-bottom: .75rem; }
 .panel__sub { font-size: 1rem; margin: 1.25rem 0 .6rem; }
 .order__note { font-style: normal; font-weight: 700; color: var(--navy); }
+
+.pos-settings__group .field { width: 14rem; }
+.pos-settings__group .field--xs { width: 9rem; }
+.pos-settings__group .field--wide { width: min(100%, 28rem); }
+.pos-settings__group > .hint, .pos-settings__group > .fee__check { width: 100%; }

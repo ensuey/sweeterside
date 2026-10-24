@@ -79,6 +79,19 @@ async function loadSettings() {
   $('limit').value = s.cashier_discount_limit_bp / 100;
   $('lock-min').value = s.pos_lock_minutes;
   for (const r of document.getElementsByName('vat')) r.checked = s.vat_registered !== null && r.value === (s.vat_registered ? '1' : '0');
+
+  const r = await staffGate.call('/api/pos/receipt-settings');
+  $('r-name').value = r.receipt_shop_name;
+  $('r-address').value = r.receipt_address;
+  $('r-contact').value = r.receipt_contact;
+  $('r-footer').value = r.receipt_footer;
+  $('r-width').value = String(r.receipt_width);
+  $('r-bir').checked = r.bir_mode;
+  $('r-bname').value = r.bir_business_name;
+  $('r-baddress').value = r.bir_address;
+  $('r-tin').value = r.bir_tin;
+  $('r-ptu').value = r.bir_ptu;
+  $('r-notice').value = r.bir_notice;
 }
 
 /* ---------------------------- start ---------------------------- */
@@ -176,6 +189,25 @@ function bind() {
       });
       toast('POS settings saved.');
       await loadSettings();
+    } catch (err) {
+      toast(errText(err), 'error');
+    }
+  });
+
+  $('receipt-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await staffGate.call('/api/pos/receipt-settings', {
+        method: 'PUT',
+        body: {
+          receipt_shop_name: $('r-name').value, receipt_address: $('r-address').value,
+          receipt_contact: $('r-contact').value, receipt_footer: $('r-footer').value,
+          receipt_width: $('r-width').value, bir_mode: $('r-bir').checked,
+          bir_business_name: $('r-bname').value, bir_address: $('r-baddress').value,
+          bir_tin: $('r-tin').value, bir_ptu: $('r-ptu').value, bir_notice: $('r-notice').value,
+        },
+      });
+      toast('Receipt settings saved.');
     } catch (err) {
       toast(errText(err), 'error');
     }
