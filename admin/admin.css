@@ -551,3 +551,43 @@ body.is-locked { overflow: hidden; }
 .pos-settings__group .field--xs { width: 9rem; }
 .pos-settings__group .field--wide { width: min(100%, 28rem); }
 .pos-settings__group > .hint, .pos-settings__group > .fee__check { width: 100%; }
+
+/* Reports page */
+.limit { padding: 1rem 1.25rem; margin-bottom: 1.25rem; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line); }
+.limit[data-level="warn"] { background: #FFF4E0; border-color: #E6C27A; }
+.limit[data-level="danger"] { background: #FDECEA; border-color: #E8A39A; }
+.limit__head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; }
+.limit__title { font-size: 1.1rem; }
+.limit__pct { font: 600 1.4rem "Fredoka", sans-serif; }
+.limit[data-level="danger"] .limit__pct { color: var(--danger); }
+.limit__bar { height: 12px; margin: .6rem 0; border-radius: var(--r-full); background: var(--cream); border: 1px solid var(--line); overflow: hidden; }
+.limit__bar span { display: block; height: 100%; width: 0; background: var(--ok); }
+.limit[data-level="warn"] .limit__bar span { background: #C98A1B; }
+.limit[data-level="danger"] .limit__bar span { background: var(--danger); }
+.limit__text { margin: 0; font-weight: 600; }
+.limit__note { margin: .4rem 0 0; font-size: .875rem; color: var(--ink-soft); }
+.range { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; margin-bottom: 1rem; }
+.range__presets { display: flex; flex-wrap: wrap; gap: .4rem; width: 100%; }
+.range .field--xs { width: 10rem; }
+.chip { min-height: 40px; padding: 0 .9rem; cursor: pointer; font: 600 .875rem "Nunito", sans-serif; color: var(--ink); border: 1.5px solid var(--line); border-radius: var(--r-full); background: var(--surface); }
+.chip:hover { background: var(--cream); }
+.tabsbar { display: flex; flex-wrap: wrap; gap: .3rem; margin-bottom: 1rem; border-bottom: 1.5px solid var(--line); }
+.tabsbar button { min-height: 44px; padding: 0 1rem; cursor: pointer; border: 0; background: none; font: 700 .9375rem "Nunito", sans-serif; color: var(--ink-soft); border-bottom: 3px solid transparent; margin-bottom: -1.5px; }
+.tabsbar button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--coral-ink); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; margin: .75rem 0 1.25rem; }
+.card-stat { display: flex; flex-direction: column; gap: .2rem; padding: .8rem 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.card-stat span { font-size: .8125rem; color: var(--ink-soft); font-weight: 700; }
+.card-stat strong { font: 600 1.2rem "Fredoka", sans-serif; font-variant-numeric: tabular-nums; }
+.card-stat.is-main { border-color: var(--coral-ink); }
+.card-stat.is-main strong { color: var(--coral-ink); }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 1rem; }
+.report-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.report-head .hint { margin: 0; }
+.rtable { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: .9rem 1rem; min-width: 0; }
+.rtable__title { font-size: 1rem; margin-bottom: .5rem; }
+.rtable__scroll { overflow-x: auto; }
+.rtable table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.rtable th, .rtable td { text-align: left; padding: .4rem .5rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.rtable th { font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-soft); }
+.rtable .num { text-align: right; font-variant-numeric: tabular-nums; }
+.rtable tfoot td { font-weight: 700; border-bottom: 0; }

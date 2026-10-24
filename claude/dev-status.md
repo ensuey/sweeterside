@@ -4,22 +4,23 @@ Live at https://sweeterside.fly.dev (Fly.io app `sweeterside`, region `sin`,
 volume `sweeterside_data` at `/data`). Node 22, no npm dependencies, SQLite
 via `node:sqlite`.
 
-**Tests:** 123 (`npm test`):
+**Tests:** 130 (`npm test`):
 - 57 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
 - 12 in `test/pos-orders.test.js`
 - 8 in `test/pos-payments.test.js`
+- 7 in `test/pos-reports.test.js`
 
-## In-store POS (in progress; plan in `claude/pos-plan.md`)
+## In-store POS (plan in `claude/pos-plan.md`)
 
 | Phase | Branch | PR | State |
 |---|---|---|---|
 | 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | open |
 | 2. POS order-taking UI | `pos-2-order-taking` | #14 | open (stacked on #13) |
 | 3. Payments, shifts, receipts | `pos-3-payments` | #15 | open (stacked on #14) |
-| 4. Reports and audit UI | `pos-4-reports` | — | to do |
+| 4. Reports and audit UI | `pos-4-reports` | #16 | open (stacked on #15) |
 
 What Phase 1 shipped:
 - **Money in centavos:** the order and line money columns are renamed to
@@ -72,6 +73,26 @@ What Phase 3 shipped:
   payments and change; the ORDER SLIP notice until BIR mode; kitchen tickets;
   X and Z readings.
 - **Staff page:** receipt settings and BIR details.
+What Phase 4 shipped:
+- **Reports page** (`/admin/reports`, owner PIN): sales by day, item,
+  category, type, source and staff; payments by method; discounts; refunds.
+- **SC/PWD report** with a CSV export: full IDs in the CSV only; no VAT column
+  while non-VAT.
+- **Vouchers and manual discounts** report (staff, approver, reason).
+- **Audit log** viewer with filters and a CSV export.
+- **Php 3M tracker** (year to date): warnings at 80% and 95%.
+- **CSV exports** are formula-safe; every report endpoint is owner-only on the
+  server.
+
+After deploying (owner, once):
+1. Staff → create the owner PIN (needs the admin password), then add the
+   cashiers and waiters.
+2. Staff → Tax settings: confirm **non-VAT** (already set by the migration).
+3. Staff → Receipts: address, contact, paper width. Leave BIR mode off until
+   the accountant confirms the TIN and PTU.
+4. Staff → POS settings: service charge (off by default), cashier discount
+   limit (10%), idle lock (5 min).
+5. POS → Shift → open with the starting cash before taking cash.
 
 ## Features shipped
 

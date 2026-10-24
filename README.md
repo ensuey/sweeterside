@@ -30,11 +30,12 @@ npm start                 # http://127.0.0.1:3000
 - Admin, blocked numbers: <http://127.0.0.1:3000/admin/blocked>
 - POS: <http://127.0.0.1:3000/admin/pos>
 - Admin, staff and POS settings: <http://127.0.0.1:3000/admin/staff>
+- Reports and audit log (owner): <http://127.0.0.1:3000/admin/reports>
 
-`npm test` runs the test suite (123 tests covering password hashing, CSRF,
+`npm test` runs the test suite (130 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
 cake bookings, fake-order protection, the pricing engine, staff PINs, POS
-tickets, payments and shifts, the audit log and the database migrations).
+tickets, payments and shifts, reports, the audit log and the database migrations).
 
 ### Changing the admin password
 
@@ -58,6 +59,8 @@ server/
   pos.js         POS tickets: saving, sending to the kitchen, voids, tabs, merging
   payments.js    payments (split, cash and change, references), refunds, receipt data
   shifts.js      shifts, the cash drawer, X and Z readings
+  reports.js     sales reports, the SC/PWD report, discounts, the Php 3M tracker
+  csv.js         CSV exports (formula-safe)
   vouchers.js    voucher codes: validation, CRUD and checking a code
   cakes.js       custom cake bookings: settings, open days, photos, requests
   phone.js       PH mobile numbers: checking and normalising to +639XXXXXXXXX
@@ -75,7 +78,8 @@ admin/
   blocked.html   Blocked numbers page (blocked.js)
   pos.html       the POS (pos.js, pos-pay.js, pos.css): order taking, payments, shifts, printing
   staff.html     Staff page (staff.js): staff, PINs, POS and tax settings
-  staff-gate.js  the staff PIN lock and owner override, shared by POS and Staff
+  staff-gate.js  the staff PIN lock and owner override, shared by POS, Staff and Reports
+  reports.html   Reports page (reports.js): sales, SC/PWD, discounts, audit log
   login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
@@ -225,9 +229,9 @@ but placing an order fails with a connection message.
 ## In-store POS
 
 The cashier and waiter POS is being built in four phases; the plan is in
-`claude/pos-plan.md`. Phases 1 to 3 are in place: the money, the pricing
-engine, staff and PINs, taking orders at `/admin/pos`, payments, shifts and
-receipts. Reports come next.
+`claude/pos-plan.md`. All four phases are in place: the money, the pricing
+engine, staff and PINs, taking orders at `/admin/pos`, payments, shifts,
+receipts, and reports with the audit log at `/admin/reports`.
 
 ### Getting started
 
@@ -315,6 +319,42 @@ receipts. Reports come next.
   the PTU number. Once a TIN is filled in, it also prints the non-VAT notice
   ("THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX", editable). Turn it on
   only when your accountant confirms the details.
+### Reports and the audit log
+
+**Reports** (`/admin/reports`) is for the owner (owner PIN). Pick the dates
+(Manila days): today, yesterday, the last 7 days, this or last month, or any
+range.
+
+**What counts as a sale:**
+- a counter order once it is paid, dated by when it was paid;
+- an online order once it is Completed;
+- refunds come off on the day they were given.
+
+**What it shows:**
+- **Sales:** by day, item, category, order type, online vs counter, and staff.
+  It shows gross, each kind of discount, net sales, the service charge (apart:
+  it is the staff's), delivery fees, refunds, and counter payments by method.
+- **SC/PWD:** every discount given, with the date, order number, name, ID
+  number, type, gross eligible amount, the 20% discount and net. There is no
+  VAT column while the shop is non-VAT. ID numbers are masked on screen and in
+  full only in the owner's **CSV** download (for the tax deduction).
+- **Vouchers and discounts:** voucher use, and every manual discount with who
+  gave it, who approved it and why.
+- **Audit log:** voids, refunds, overrides, price changes, manual discounts,
+  service charge removals, cash in and out, shifts, staff and PIN changes and
+  settings changes. It can be filtered by what and who, and downloaded as CSV.
+  The log cannot be edited.
+
+**The Php 3M tracker** at the top shows this year's gross sales against the
+Php 3,000,000 limit for non-VAT registration and the 8% option. It counts
+online and counter sales, items at regular price plus delivery fees, before
+discounts, without the service charge, less refunds. The bar turns amber at
+80% and red at 95%. Crossing Php 3M requires VAT registration: talk to your
+accountant.
+
+CSV files start each text cell that looks like a spreadsheet formula with an
+apostrophe, so a name typed at the counter cannot run as one.
+
 - **Adding a payment provider later** (PayMongo): add it to `METHODS` in
   `server/payments.js`. A payment is recorded only once it is confirmed, with
   its reference.
