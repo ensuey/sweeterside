@@ -34,4 +34,13 @@ function addDays(ymd, n) {
   return d.toISOString().slice(0, 10);
 }
 
-module.exports = { manilaMinutes, manilaDayStartSql, manilaDate, addDays };
+/**
+ * Midnight at the start of a Manila calendar day ('YYYY-MM-DD'), as SQLite
+ * writes datetime('now'). Reports use it to turn a date range into a filter.
+ */
+function manilaDateStartSql(ymd) {
+  const start = new Date(new Date(`${ymd}T00:00:00Z`).getTime() - MANILA_OFFSET_MS);
+  return start.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+module.exports = { manilaMinutes, manilaDayStartSql, manilaDate, addDays, manilaDateStartSql };

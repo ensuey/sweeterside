@@ -6,6 +6,7 @@
 const { db } = require('./db');
 const { ValidationError } = require('./menu');
 const { manilaDate } = require('./clock');
+const { voucherDiscount } = require('./pricing');
 
 const KINDS = ['percent', 'amount'];
 const CODE_RE = /^[A-Z0-9-]{3,20}$/;
@@ -104,21 +105,23 @@ function status(v, now = new Date()) {
   return 'active';
 }
 
-/** Pesos off a subtotal: a percentage (capped) or an amount, never more than the subtotal. */
+/**
+ * Pesos off a whole-peso subtotal: a percentage (capped) or an amount, never
+ * more than the subtotal. The arithmetic is the pricing engine's, so the
+ * checkout and the POS agree.
+ */
 function discountFor(v, subtotal) {
-  const off = v.kind === 'percent'
-    ? Math.round((subtotal * v.value) / 100)
-    : v.value;
-  const capped = v.kind === 'percent' && v.max_off ? Math.min(off, v.max_off) : off;
-  return Math.max(0, Math.min(subtotal, capped));
+  return voucherDiscount(v, subtotal * 100) / 100;
 }
 
 /* ---------------------------- queries ---------------------------- */
 
-// uses: orders placed with the code, not counting cancelled ones.
+// uses: orders placed with the code, not counting cancelled ones. A POS
+// order only counts once it is paid.
 const SELECT = `SELECT v.id, v.code, v.kind, v.value, v.max_off, v.valid_from, v.valid_until, v.active,
                        (SELECT COUNT(*) FROM orders o
-                        WHERE o.voucher_code = v.code AND o.status <> 'cancelled') AS uses
+                        WHERE o.voucher_code = v.code AND o.status <> 'cancelled'
+                          AND (o.source = 'online' OR o.paid_at IS NOT NULL)) AS uses
                 FROM vouchers v`;
 
 function describe(v, now) {
@@ -167,11 +170,13 @@ function remove(id) {
 }
 
 /**
- * Check a code a customer typed against a subtotal.
- * @returns {{ code, label, discount }}
+ * Find a code a customer (or the cashier) typed and check it can be used
+ * today: on, and within its dates. Used by the checkout and the POS alike;
+ * the pricing engine then works out what it takes off.
+ * @returns {{ code, label, kind, value, max_off }}
  * @throws {ValidationError} with a `voucher` message the customer can act on
  */
-function check(rawCode, subtotal, now = new Date()) {
+function lookup(rawCode, now = new Date()) {
   const code = normaliseCode(rawCode);
   const v = code ? db.prepare('SELECT * FROM vouchers WHERE code = ?').get(code) : null;
   if (!v) throw new ValidationError({ voucher: "We don't know that code. Check the spelling." });
@@ -182,9 +187,19 @@ function check(rawCode, subtotal, now = new Date()) {
   if (state === 'scheduled') {
     throw new ValidationError({ voucher: `That code starts on ${niceDate(v.valid_from)}.` });
   }
-  return { code: v.code, label: label(v), discount: discountFor(v, subtotal) };
+  return { code: v.code, label: label(v), kind: v.kind, value: v.value, max_off: v.max_off };
+}
+
+/**
+ * Check a code against a whole-peso subtotal.
+ * @returns {{ code, label, discount }}
+ * @throws {ValidationError}
+ */
+function check(rawCode, subtotal, now = new Date()) {
+  const v = lookup(rawCode, now);
+  return { code: v.code, label: v.label, discount: discountFor(v, subtotal) };
 }
 
 module.exports = {
-  KINDS, normaliseCode, validate, list, get, create, update, setActive, remove, check, discountFor,
+  KINDS, normaliseCode, validate, list, get, create, update, setActive, remove, lookup, check, discountFor,
 };

@@ -29,9 +29,10 @@ npm start                 # http://127.0.0.1:3000
 - Admin, cakes: <http://127.0.0.1:3000/admin/cakes>
 - Admin, blocked numbers: <http://127.0.0.1:3000/admin/blocked>
 
-`npm test` runs the test suite (71 tests covering password hashing, CSRF,
+`npm test` runs the test suite (103 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
-cake bookings, fake-order protection and the database migrations).
+cake bookings, fake-order protection, the pricing engine, staff PINs, the
+audit log and the database migrations).
 
 ### Changing the admin password
 
@@ -47,7 +48,11 @@ server/
   auth.js        scrypt hashing, sessions, CSRF, login throttling
   menu.js        item validation, CRUD, availability, daily limits, sale prices
   categories.js  category validation, CRUD and ordering
-  orders.js      orders, pricing, order types and their settings
+  orders.js      orders, order types and their settings
+  pricing.js     the pricing engine (pure): sale, SC/PWD, vouchers, discounts, service charge
+  settings.js    the settings table, and the POS and tax settings
+  staff.js       staff, roles, PINs, staff sessions and manager overrides
+  audit.js       the append-only audit log
   vouchers.js    voucher codes: validation, CRUD and checking a code
   cakes.js       custom cake bookings: settings, open days, photos, requests
   phone.js       PH mobile numbers: checking and normalising to +639XXXXXXXXX
@@ -208,6 +213,87 @@ On the admin Orders page:
 
 Ordering needs the server running. On static hosting the menu still shows,
 but placing an order fails with a connection message.
+
+## In-store POS
+
+The cashier and waiter POS is being built in four phases; the plan is in
+`claude/pos-plan.md`. Phase 1 (the money, the pricing engine, staff and the
+audit log) is server-side only and changes nothing on screen.
+
+### Money
+
+- **Centavos.** Every order amount is stored as whole centavos (`*_cents`
+  columns); the migration multiplied the older peso amounts by 100.
+- **Pesos where they are typed.** Menu prices, sale values and voucher values
+  are still whole pesos.
+- **The checkout is unchanged.** It still receives and shows pesos, and an
+  order read back still has its peso fields (`total` etc.).
+
+### The pricing engine
+
+The checkout and the POS share one engine, `server/pricing.js`. It works in
+this order:
+
+1. the line price (regular, sale, or a manager-approved override);
+2. SC/PWD;
+3. a voucher **or** a manual discount;
+4. the service charge;
+5. the delivery fee.
+
+The full breakdown is saved with each order. Rounding is half-up and happens
+only at the points listed at the top of `server/pricing.js`.
+
+**SC/PWD:**
+- 20% off the claimant's portion. The shop is **non-VAT registered**, so there
+  is no VAT exemption line.
+- A claimant's portion is either the items that are theirs, or their share of
+  a shared order (shared items ÷ diners).
+- There can be several claimants on one order.
+- **No stacking:** the portion gets either SC/PWD on the regular price, or the
+  sale price and voucher, whichever is cheaper for the customer. The receipt
+  says which (`SC_PWD_POLICY`).
+- Items can be excluded with **Eligible for SC/PWD** (on by default).
+
+**Discounts and charges:**
+- **Manual discounts** need a reason. Above the cashier limit (10% by default)
+  they need the owner's PIN. They cannot be used with a voucher.
+- **Service charge** is off by default. When on, it is 10% for dine-in,
+  charged on the amount after discounts, at the counter only (online orders
+  never get it). It is reported apart from sales.
+- **The delivery fee** can be changed for one order, with a reason.
+
+### Tax status
+
+Sweeter Side is **non-VAT registered** (8% income tax option), and the
+migration sets `vat_registered` to off.
+- The VAT-registered SC/PWD maths is kept and tested, so switching later is a
+  setting, not a code change. Confirm with your accountant before changing it.
+- If the setting is ever missing, the POS refuses SC/PWD discounts.
+- The 8% is income tax. It is never added to an order or a receipt.
+
+### Staff, PINs and overrides
+
+**Roles:**
+- **Owner:** everything.
+- **Cashier:** takes orders and payments, and gives discounts up to the limit.
+- **Waiter:** dine-in orders and sending to the kitchen only.
+
+**PINs and the tablet:**
+- The counter tablet stays signed in as the admin. Each person taps their name
+  and types their 4–6 digit PIN.
+- PINs are scrypt-hashed. Easy ones like 1111 or 1234 are refused.
+- Five wrong PINs lock that person out for 5 minutes.
+- The POS locks itself after 5 minutes idle (a setting).
+
+**Overrides:** anything above a role's limit (voids, refunds, price changes,
+larger discounts) needs an owner to type their PIN on the screen.
+
+**Audit log:** every void, refund, override, discount, drawer movement, shift
+and staff change is written to it. The log is append-only: the database
+refuses edits and deletions.
+
+SC/PWD ID numbers are personal data. Lists mask them (`****1234`); only the
+owner and cashier screens show them in full.
 
 ## Items page: availability and daily limits
 

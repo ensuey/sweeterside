@@ -141,10 +141,15 @@ function validate(input) {
 
   if (Object.keys(errors).length) throw new ValidationError(errors);
 
+  // On by default: everything on the menu so far is food or drink.
+  const scEligible = !(input.sc_eligible === false || input.sc_eligible === 'false'
+    || input.sc_eligible === 0 || input.sc_eligible === '0');
+
   return {
     name, price, category_id: categoryId, image: image.rel, alt,
     crop_x: crop.x, crop_y: crop.y, crop_w: crop.w, crop_h: crop.h,
     best_seller: bestSeller ? 1 : 0, sale_type: saleType, sale_value: saleValue,
+    sc_eligible: scEligible ? 1 : 0,
   };
 }
 
@@ -185,7 +190,7 @@ function withStock(item, sold) {
   const sold_today = sold.get(item.id) || 0;
   const remaining = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
   return {
-    ...item, best_seller: item.best_seller === 1, sale_price: salePrice(item),
+    ...item, best_seller: item.best_seller === 1, sc_eligible: item.sc_eligible !== 0, sale_price: salePrice(item),
     sold_today, remaining, sold_out: item.availability === 'sold_out' || remaining === 0,
   };
 }
@@ -218,7 +223,8 @@ function setStock(id, input) {
 
 const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
                        i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position,
-                       i.availability, i.daily_limit, i.best_seller, i.sale_type, i.sale_value
+                       i.availability, i.daily_limit, i.best_seller, i.sale_type, i.sale_value,
+                       i.sc_eligible
                 FROM items i`;
 
 /** Items in menu order: by category position, then item position. */
@@ -241,11 +247,11 @@ function create(input) {
 
   const info = db.prepare(`
     INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position,
-                       best_seller, sale_type, sale_value)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                       best_seller, sale_type, sale_value, sc_eligible)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     row.name, row.price, row.category_id, row.image, row.alt,
     row.crop_x, row.crop_y, row.crop_w, row.crop_h, next,
-    row.best_seller, row.sale_type, row.sale_value);
+    row.best_seller, row.sale_type, row.sale_value, row.sc_eligible);
 
   return get(info.lastInsertRowid);
 }
@@ -253,16 +259,17 @@ function create(input) {
 function update(id, input) {
   const existing = get(id);
   if (!existing) return null;
-  const row = validate(input);
+  // A form without the SC/PWD switch keeps what the item had.
+  const row = validate('sc_eligible' in input ? input : { ...input, sc_eligible: existing.sc_eligible });
 
   db.prepare(`
     UPDATE items SET name = ?, price = ?, category_id = ?, image = ?, alt = ?,
       crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?,
-      best_seller = ?, sale_type = ?, sale_value = ?, updated_at = datetime('now')
+      best_seller = ?, sale_type = ?, sale_value = ?, sc_eligible = ?, updated_at = datetime('now')
     WHERE id = ?`).run(
     row.name, row.price, row.category_id, row.image, row.alt,
     row.crop_x, row.crop_y, row.crop_w, row.crop_h,
-    row.best_seller, row.sale_type, row.sale_value, Number(id));
+    row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, Number(id));
 
   return get(id);
 }

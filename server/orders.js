@@ -7,6 +7,8 @@ const { db, transaction } = require('./db');
 const menu = require('./menu');
 const vouchers = require('./vouchers');
 const blocklist = require('./blocklist');
+const pricing = require('./pricing');
+const { getSetting, saveSetting } = require('./settings');
 const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 
@@ -33,11 +35,6 @@ function getDeliveryFee() {
   return row ? Number(row.value) : 0;
 }
 
-function saveSetting(key, value) {
-  db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?)
-              ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, String(value));
-}
-
 /** @returns the fee as an integer, or throws ValidationError */
 function parseDeliveryFee(input) {
   const fee = Number(input);
@@ -61,11 +58,6 @@ function setDeliveryFee(input) {
 // Delivery pays in cash at the door; pick-up and dine-in pay at the counter.
 const ORDER_TYPES = ['delivery', 'pickup', 'dinein'];
 const TABLE_MAX = 10;
-
-function getSetting(key, fallback) {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
-  return row ? row.value : fallback;
-}
 
 function isEnabled(type) {
   return getSetting(`${type}_enabled`, '1') === '1';
@@ -346,14 +338,18 @@ function cartLines(rawItems) {
 
 /**
  * Price a cart against the live menu, at sale prices where an item is on
- * sale. Only delivery pays the delivery fee.
+ * sale, through the pricing engine the POS uses too. Only delivery pays the
+ * delivery fee. Online orders get no SC/PWD, manual discount or service
+ * charge: those are given at the counter.
  * Items that are deleted, not available or sold out (by hand or because
  * today's limit is used up) go in `unavailable`. Items with fewer left today
  * than the cart wants go in `limits` as { id: remaining }.
  * A voucher code takes `discount` off the items, never the fee. If the code
  * does not work, `voucher` is null and `voucherError` says why.
+ * Amounts are pesos, as the checkout page shows them; `priced` is the
+ * engine's breakdown in centavos (null for an empty cart).
  * @returns {{ lines, unavailable, limits, short, subtotal, discount, voucher,
- *             voucherError, delivery_fee, total }}
+ *             voucherError, delivery_fee, total, priced }}
  */
 function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') {
   const lines = [];
@@ -369,28 +365,41 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') 
     if (item.remaining !== null && qty > item.remaining) {
       short.push({ id: item.id, name: item.name, remaining: item.remaining });
     }
-    lines.push({ item_id: item.id, name: item.name, price: item.sale_price, qty });
+    lines.push({
+      item_id: item.id, name: item.name, price: item.sale_price, regular: item.price,
+      sc_eligible: item.sc_eligible, qty,
+    });
   }
 
-  const subtotal = lines.reduce((sum, l) => sum + l.price * l.qty, 0);
-
-  let voucher = null;
+  let found = null;
   let voucherError = null;
   if (vouchers.normaliseCode(voucherCode)) {
     try {
-      voucher = vouchers.check(voucherCode, subtotal, now);
+      found = vouchers.lookup(voucherCode, now);
     } catch (err) {
       if (!(err instanceof ValidationError)) throw err;
       voucherError = err.errors.voucher;
     }
   }
-  const discount = voucher ? voucher.discount : 0;
 
-  const delivery_fee = type === 'delivery' ? getDeliveryFee() : 0;
+  const fee = type === 'delivery' ? getDeliveryFee() : 0;
+  const priced = lines.length ? pricing.price({
+    type,
+    lines: lines.map((l, i) => ({
+      key: String(i), item_id: l.item_id, name: l.name, qty: l.qty,
+      unit_cents: l.regular * 100, sale_cents: l.price * 100, sc_eligible: l.sc_eligible,
+    })),
+    voucher: found,
+    delivery: { default_cents: fee * 100 },
+  }) : null;
+  const t = priced ? priced.totals : { subtotal: 0, voucher_discount: 0, delivery_fee: fee * 100, total: fee * 100 };
+
+  const discount = t.voucher_discount / 100;
+  const voucher = found ? { code: found.code, label: found.label, discount } : null;
   const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
   return {
-    lines, unavailable, limits, short, subtotal, discount, voucher, voucherError,
-    delivery_fee, total: subtotal - discount + delivery_fee,
+    lines, unavailable, limits, short, subtotal: t.subtotal / 100, discount, voucher, voucherError,
+    delivery_fee: t.delivery_fee / 100, total: t.total / 100, priced,
   };
 }
 
@@ -541,33 +550,57 @@ function create(input, { now = new Date() } = {}) {
   const changeDue = type === 'delivery' ? cash - q.total : 0;
 
   const id = transaction(() => {
+    const t = q.priced.totals;
     const info = db.prepare(`
-      INSERT INTO orders (order_type, status, customer_name, phone, phone_norm, address, landmark,
-                          table_no, pickup_at, subtotal, voucher_code, discount, delivery_fee,
-                          total, cash, change_due)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      INSERT INTO orders (source, order_type, status, customer_name, phone, phone_norm, address, landmark,
+                          table_no, pickup_at, gross_cents, subtotal_cents, voucher_code, discount_cents,
+                          delivery_fee_cents, total_cents, cash_cents, change_due_cents, pricing)
+      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       type, status, name, phone, phoneNorm, address, landmark, tableNo, pickupAt,
-      q.subtotal, q.voucher ? q.voucher.code : '', q.discount, q.delivery_fee, q.total, cash, changeDue);
-    const line = db.prepare(
-      'INSERT INTO order_items (order_id, item_id, name, price, qty) VALUES (?, ?, ?, ?, ?)');
-    q.lines.forEach((l) => line.run(info.lastInsertRowid, l.item_id, l.name, l.price, l.qty));
+      t.gross, t.subtotal, q.voucher ? q.voucher.code : '', t.voucher_discount,
+      t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced));
+    insertLines(info.lastInsertRowid, q.priced.lines);
     return info.lastInsertRowid;
   });
 
   return get(id);
 }
 
+/** Save the engine's lines: unit price charged, regular price and net, in centavos. */
+function insertLines(orderId, lines) {
+  const line = db.prepare(`
+    INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`);
+  lines.forEach((l) => line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty));
+}
+
 /* ---------------------------- queries ---------------------------- */
 
-function withLines(order) {
+// Stored as *_cents. The same amounts in pesos are added when an order is
+// read, for the checkout page and anything written before the POS.
+const PESO_FIELDS = ['subtotal', 'discount', 'delivery_fee', 'total', 'cash', 'change_due'];
+
+/**
+ * Add the lines, the peso fields and the pricing breakdown. SC/PWD ID
+ * numbers are masked (****1234) unless options.fullIds, which only the
+ * owner's and cashier's screens ask for.
+ */
+function withLines(order, { fullIds = false } = {}) {
   if (!order) return null;
-  order.items = db.prepare(
-    'SELECT item_id, name, price, qty FROM order_items WHERE order_id = ? ORDER BY id').all(order.id);
+  for (const f of PESO_FIELDS) order[f] = order[`${f}_cents`] / 100;
+  order.items = db.prepare(`
+    SELECT item_id, name, price_cents, regular_price_cents, net_cents, qty
+    FROM order_items WHERE order_id = ? ORDER BY id`).all(order.id)
+    .map((l) => ({ ...l, price: l.price_cents / 100 }));
+  order.pricing = order.pricing ? JSON.parse(order.pricing) : null;
+  if (order.pricing && !fullIds) {
+    order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
+  }
   return order;
 }
 
-function get(id) {
-  return withLines(db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(id)) || null);
+function get(id, options) {
+  return withLines(db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(id)) || null, options);
 }
 
 /**
@@ -585,7 +618,7 @@ function list(which = 'active') {
   // Active orders oldest first (the queue); finished ones newest first.
   const order = which === 'active' ? 'id ASC' : 'id DESC';
   return withHistory(db.prepare(`SELECT * FROM orders ${filter} ORDER BY ${order} LIMIT 200`)
-    .all(...params).map(withLines));
+    .all(...params).map((o) => withLines(o)));
 }
 
 /**
@@ -647,8 +680,8 @@ function setStatus(id, status, { reason } = {}) {
 }
 
 module.exports = {
-  STATUSES, CANCEL_REASONS, ORDER_TYPES, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
+  STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, closedNote, shopClosedError, requiresConfirmation, historyFor,
-  quote, create, get, list, counts, setStatus,
+  quote, create, insertLines, get, list, counts, setStatus,
 };

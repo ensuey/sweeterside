@@ -58,19 +58,19 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
--- Amounts are whole pesos, copied at order time so later price changes do
--- not rewrite what the customer was charged. The order type columns are added
--- by addMissingColumns(), so new and old databases take the same path.
+-- Amounts are centavos, copied at order time so later price changes do not
+-- rewrite what the customer was charged. The order type columns are added by
+-- addMissingColumns(), so new and old databases take the same path.
 CREATE TABLE IF NOT EXISTS orders (
-  id            INTEGER PRIMARY KEY,
-  customer_name TEXT    NOT NULL,
-  phone         TEXT    NOT NULL,
-  address       TEXT    NOT NULL,
-  subtotal      INTEGER NOT NULL,
-  delivery_fee  INTEGER NOT NULL,
-  total         INTEGER NOT NULL,
-  cash          INTEGER NOT NULL,
-  change_due    INTEGER NOT NULL,
+  id                 INTEGER PRIMARY KEY,
+  customer_name      TEXT    NOT NULL,
+  phone              TEXT    NOT NULL,
+  address            TEXT    NOT NULL,
+  subtotal_cents     INTEGER NOT NULL,
+  delivery_fee_cents INTEGER NOT NULL,
+  total_cents        INTEGER NOT NULL,
+  cash_cents         INTEGER NOT NULL,
+  change_due_cents   INTEGER NOT NULL,
   status        TEXT    NOT NULL DEFAULT 'new'
                 CHECK (status IN ('new','confirmed','preparing','delivering','completed','cancelled')),
   created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
@@ -83,12 +83,38 @@ CREATE TABLE IF NOT EXISTS order_items (
   order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   -- SET NULL: deleting a menu item must not delete past orders of it.
   item_id  INTEGER REFERENCES items(id) ON DELETE SET NULL,
-  name     TEXT    NOT NULL,
-  price    INTEGER NOT NULL,
-  qty      INTEGER NOT NULL CHECK (qty > 0)
+  name        TEXT    NOT NULL,
+  price_cents INTEGER NOT NULL,   -- the unit price charged, before order-level discounts
+  qty         INTEGER NOT NULL CHECK (qty > 0)
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 `);
+
+/* Orders were stored in whole pesos before the POS. SQLite can rename a
+   column in place, so each peso column becomes *_cents and its values are
+   multiplied by 100, all in one transaction: the order rows and their ids are
+   untouched. Runs before the columns below are added, so `discount` (when an
+   older database has it) is renamed rather than duplicated. */
+const PESO_COLUMNS = {
+  orders: ['subtotal', 'delivery_fee', 'total', 'cash', 'change_due', 'discount'],
+  order_items: ['price'],
+};
+
+function migrateMoneyToCents() {
+  const work = Object.entries(PESO_COLUMNS).map(([table, names]) => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    return [table, names.filter((name) => cols.includes(name))];
+  }).filter(([, names]) => names.length);
+  if (!work.length) return;
+  transaction(() => {
+    for (const [table, names] of work) {
+      for (const name of names) db.exec(`ALTER TABLE ${table} RENAME COLUMN ${name} TO ${name}_cents`);
+      db.exec(`UPDATE ${table} SET ${names.map((name) => `${name}_cents = ${name}_cents * 100`).join(', ')}`);
+    }
+  });
+}
+
+migrateMoneyToCents();
 
 const ITEMS_TABLE = (name) => `
 CREATE TABLE ${name} (
@@ -200,7 +226,7 @@ const ORDER_COLUMNS = {
   pickup_at: "TEXT NOT NULL DEFAULT ''", // 'asap' or 'HH:MM', Manila time, same day
   // A voucher takes `discount` off the items: total = subtotal - discount + delivery_fee.
   voucher_code: "TEXT NOT NULL DEFAULT ''",
-  discount: 'INTEGER NOT NULL DEFAULT 0',
+  discount_cents: 'INTEGER NOT NULL DEFAULT 0',
 };
 
 addMissingColumns('orders', ORDER_COLUMNS);
@@ -310,6 +336,111 @@ CREATE INDEX IF NOT EXISTS idx_cake_bookings_day ON cake_bookings(needed_on, sta
 `);
 
 if (addMissingColumns('cake_bookings', { phone_norm: 'TEXT' }).includes('phone_norm')) backfillPhones('cake_bookings');
+
+/* ---------- The in-store POS (claude/pos-plan.md) ---------- */
+
+/* Staff who use the counter tablet. They pick their name and type a 4-6
+   digit PIN; the tablet itself stays signed in as the admin. Staff are never
+   deleted, only switched off, so the audit log always names them. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS staff (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT    NOT NULL,
+  role       TEXT    NOT NULL CHECK (role IN ('owner','cashier','waiter')),
+  pin_hash   TEXT    NOT NULL,
+  active     INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- A staff member's turn at the tablet, under the admin session it was opened
+-- in. id is the SHA-256 of the token. last_seen drives the idle lock.
+CREATE TABLE IF NOT EXISTS staff_sessions (
+  id            TEXT    PRIMARY KEY,
+  staff_id      INTEGER NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  admin_session TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  created_at    INTEGER NOT NULL,
+  last_seen     INTEGER NOT NULL
+);
+
+-- Everything that moves money or needs a manager, append-only: the triggers
+-- below refuse any change or deletion. staff_name is copied so a renamed
+-- staff member's old entries still read as they did.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id            INTEGER PRIMARY KEY,
+  at            TEXT    NOT NULL DEFAULT (datetime('now')),
+  action        TEXT    NOT NULL,
+  staff_id      INTEGER REFERENCES staff(id),
+  staff_name    TEXT    NOT NULL DEFAULT '',
+  approved_by   INTEGER REFERENCES staff(id),
+  approver_name TEXT    NOT NULL DEFAULT '',
+  order_id      INTEGER,
+  amount_cents  INTEGER,
+  reason        TEXT    NOT NULL DEFAULT '',
+  details       TEXT    NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);
+CREATE TRIGGER IF NOT EXISTS audit_log_no_update BEFORE UPDATE ON audit_log
+  BEGIN SELECT RAISE(ABORT, 'The audit log cannot be changed.'); END;
+CREATE TRIGGER IF NOT EXISTS audit_log_no_delete BEFORE DELETE ON audit_log
+  BEGIN SELECT RAISE(ABORT, 'The audit log cannot be changed.'); END;
+`);
+
+/* Orders from the POS sit in the same table as online ones. source tells
+   them apart; every older order came from the website. The discounts the
+   pricing engine works out are kept as columns for reports, and in full as
+   JSON (pricing) for the receipt. gross_cents is the items at regular price,
+   before any sale or discount. paid_at is when the order was fully paid. */
+const ORDER_POS_COLUMNS = {
+  source: "TEXT NOT NULL DEFAULT 'online'",
+  gross_cents: 'INTEGER NOT NULL DEFAULT 0',
+  sc_pwd_discount_cents: 'INTEGER NOT NULL DEFAULT 0',
+  vat_exempt_cents: 'INTEGER NOT NULL DEFAULT 0',
+  manual_discount_cents: 'INTEGER NOT NULL DEFAULT 0',
+  service_charge_cents: 'INTEGER NOT NULL DEFAULT 0',
+  pricing: "TEXT NOT NULL DEFAULT ''",
+  staff_id: 'INTEGER REFERENCES staff(id)',
+  paid_at: 'TEXT',
+};
+
+// Older orders had no sale or SC/PWD breakdown: their gross is what they paid for the items.
+if (addMissingColumns('orders', ORDER_POS_COLUMNS).includes('gross_cents')) {
+  db.exec('UPDATE orders SET gross_cents = subtotal_cents');
+}
+db.exec('CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at)');
+
+/* Per line: the regular unit price (before any sale) and what the line came
+   to after every discount, for sales-by-item reports. */
+const ORDER_ITEM_POS_COLUMNS = {
+  regular_price_cents: 'INTEGER NOT NULL DEFAULT 0',
+  net_cents: 'INTEGER NOT NULL DEFAULT 0',
+};
+
+/** Older lines: regular = the price charged; net = the line less its share of the voucher. */
+function backfillLineNets() {
+  const { allocate } = require('./pricing');
+  const orders = db.prepare('SELECT id, discount_cents FROM orders').all();
+  const linesOf = db.prepare('SELECT id, price_cents, qty FROM order_items WHERE order_id = ? ORDER BY id');
+  const update = db.prepare('UPDATE order_items SET regular_price_cents = ?, net_cents = ? WHERE id = ?');
+  transaction(() => {
+    for (const o of orders) {
+      const lines = linesOf.all(o.id);
+      const amounts = lines.map((l) => l.price_cents * l.qty);
+      const off = allocate(o.discount_cents, amounts);
+      lines.forEach((l, i) => update.run(l.price_cents, amounts[i] - off[i], l.id));
+    }
+  });
+}
+
+if (addMissingColumns('order_items', ORDER_ITEM_POS_COLUMNS).includes('net_cents')) backfillLineNets();
+
+/* Items can be left out of the SC/PWD discount (non-food items added later). */
+addMissingColumns('items', { sc_eligible: 'INTEGER NOT NULL DEFAULT 1' });
+
+/* The shop is non-VAT registered (8% income tax option). Saved here, once,
+   so the POS gives the non-VAT SC/PWD discount; the owner can change it in
+   Tax settings. OR IGNORE keeps whatever the owner set later. */
+db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('vat_registered', '0')").run();
 
 /* Numbers that may not order or book online. created_by is the admin's email. */
 db.exec(`
