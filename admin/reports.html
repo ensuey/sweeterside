@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reports — Sweeter Side admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <img class="topbar__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+    <h1 class="topbar__title">Menu admin</h1>
+    <nav class="topbar__nav" aria-label="Admin pages">
+      <a href="/admin">Orders</a>
+      <a href="/admin/pos">POS</a>
+      <a href="/admin/items">Items</a>
+      <a href="/admin/vouchers">Vouchers</a>
+      <a href="/admin/cakes">Cakes <span class="nav__n" id="nav-cakes-n" hidden></span></a>
+      <a href="/admin/blocked">Blocked</a>
+      <a href="/admin/staff">Staff</a>
+      <a href="/admin/reports" aria-current="page">Reports</a>
+    </nav>
+    <div class="topbar__spacer"></div>
+    <a class="shop-pill" id="shop-pill" href="/admin#shop" hidden></a>
+    <span class="topbar__user" id="who"></span>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
+    <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+  </div>
+</header>
+
+<main class="admin">
+  <p class="alert" id="page-error" role="alert" hidden></p>
+
+  <section class="panel" id="not-owner" hidden>
+    <h2 class="panel__title">Owner only</h2>
+    <p>Reports and the audit log are for the owner. <span id="not-owner-who"></span></p>
+    <button class="btn btn--ghost" type="button" id="switch-staff">Switch staff</button>
+  </section>
+
+  <div id="owner-area" hidden>
+    <!-- Php 3M: the non-VAT / 8% income tax option limit -->
+    <section class="limit" id="limit" aria-labelledby="limit-title">
+      <div class="limit__head">
+        <h2 class="limit__title" id="limit-title">Gross sales this year</h2>
+        <span class="limit__pct" id="limit-pct"></span>
+      </div>
+      <div class="limit__bar" role="progressbar" aria-labelledby="limit-title" aria-valuemin="0" aria-valuemax="100" id="limit-bar"><span id="limit-fill"></span></div>
+      <p class="limit__text" id="limit-text"></p>
+      <p class="limit__note">Non-VAT registration and the 8% option stop at Php 3,000,000 a year.
+        Crossing Php 3M requires VAT registration — talk to your accountant.</p>
+    </section>
+
+    <form class="range" id="range-form" novalidate>
+      <div class="range__presets" role="group" aria-label="Dates">
+        <button type="button" class="chip" data-preset="today">Today</button>
+        <button type="button" class="chip" data-preset="yesterday">Yesterday</button>
+        <button type="button" class="chip" data-preset="week">Last 7 days</button>
+        <button type="button" class="chip" data-preset="month">This month</button>
+        <button type="button" class="chip" data-preset="last-month">Last month</button>
+      </div>
+      <div class="field field--xs"><label for="from">From</label><input id="from" type="date"></div>
+      <div class="field field--xs"><label for="to">To</label><input id="to" type="date"></div>
+      <button class="btn btn--primary" type="submit">Show</button>
+      <span class="hint" id="me"></span>
+      <button class="btn btn--ghost btn--sm" type="button" id="lock-btn">Lock</button>
+    </form>
+
+    <div class="tabsbar" role="tablist" aria-label="Report">
+      <button type="button" role="tab" id="tab-sales" aria-controls="view-sales" aria-selected="true" data-view="sales">Sales</button>
+      <button type="button" role="tab" id="tab-scpwd" aria-controls="view-scpwd" aria-selected="false" data-view="scpwd">SC / PWD</button>
+      <button type="button" role="tab" id="tab-discounts" aria-controls="view-discounts" aria-selected="false" data-view="discounts">Vouchers and discounts</button>
+      <button type="button" role="tab" id="tab-audit" aria-controls="view-audit" aria-selected="false" data-view="audit">Audit log</button>
+    </div>
+
+    <section id="view-sales" role="tabpanel" aria-labelledby="tab-sales">
+      <p class="hint">A sale is a counter order once paid, or an online order once Completed. Refunds come off on the day they were given.</p>
+      <div class="cards" id="cards"></div>
+      <div class="report-grid" id="sales-tables"></div>
+    </section>
+
+    <section id="view-scpwd" role="tabpanel" aria-labelledby="tab-scpwd" hidden>
+      <div class="report-head">
+        <p class="hint">Every SC/PWD discount given, for the tax deduction. ID numbers are masked here and in full in the download.</p>
+        <button class="btn btn--primary btn--sm" type="button" id="scpwd-csv">Download CSV</button>
+      </div>
+      <div id="scpwd-table"></div>
+    </section>
+
+    <section id="view-discounts" role="tabpanel" aria-labelledby="tab-discounts" hidden>
+      <div class="report-grid" id="discount-tables"></div>
+    </section>
+
+    <section id="view-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
+      <form class="range" id="audit-form" novalidate>
+        <div class="field field--xs"><label for="audit-action">What</label><select id="audit-action"><option value="">Everything</option></select></div>
+        <div class="field field--xs"><label for="audit-staff">Who</label><select id="audit-staff"><option value="">Anyone</option></select></div>
+        <button class="btn btn--ghost" type="submit">Filter</button>
+        <button class="btn btn--primary btn--sm" type="button" id="audit-csv">Download CSV</button>
+      </form>
+      <div id="audit-table"></div>
+    </section>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="/admin/common.js"></script>
+<script src="/admin/staff-gate.js"></script>
+<script src="/admin/reports.js"></script>
+</body>
+</html>

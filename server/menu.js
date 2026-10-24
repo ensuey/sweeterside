@@ -168,13 +168,14 @@ const AVAILABILITY = ['available', 'unavailable', 'sold_out'];
 const LIMIT_MAX = 9999;
 
 /**
- * Quantity of each item on today's orders (Manila time), leaving out
- * cancelled ones, so cancelling an order frees its quantity again.
+ * Quantity of each item on today's orders (Manila time), online and POS,
+ * leaving out cancelled orders and voided units, so cancelling frees the
+ * quantity again. A held POS tab counts: it is food someone has ordered.
  * @returns Map(item_id -> qty)
  */
 function soldToday(now = new Date()) {
   const rows = db.prepare(`
-    SELECT oi.item_id, SUM(oi.qty) AS qty
+    SELECT oi.item_id, SUM(oi.qty - oi.voided_qty) AS qty
     FROM order_items oi JOIN orders o ON o.id = oi.order_id
     WHERE o.status <> 'cancelled' AND o.created_at >= ? AND oi.item_id IS NOT NULL
     GROUP BY oi.item_id`).all(manilaDayStartSql(now));

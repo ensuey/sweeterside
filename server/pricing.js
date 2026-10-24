@@ -275,7 +275,9 @@ function normaliseManual(raw, lines) {
  *   service: { on, rate_bp, types: [...], base, removed_reason? },
  *   delivery: { default_cents, cents?, reason? },
  *   limits: { manual_bp },                       // above this needs `override`
- *   override: true when a manager approved (or the owner is acting),
+ *   override: true when a manager approved everything (or the owner is acting),
+ *             or { prices, discount } to approve price changes and a manual
+ *             discount above the limit separately,
  *   policy: SC_PWD_POLICY by default,
  * }
  * @throws {PricingError}
@@ -284,7 +286,8 @@ function price(input) {
   const type = String(input.type ?? '');
   const tax = input.tax || {};
   const policy = input.policy || SC_PWD_POLICY;
-  const lines = normaliseLines(input.lines, input.override === true);
+  const approved = input.override === true ? { prices: true, discount: true } : (input.override || {});
+  const lines = normaliseLines(input.lines, approved.prices === true);
   const { claimants, diners } = normaliseClaimants(input.claimants || [], lines, input.diners, tax);
   const voucher = input.voucher || null;
   const manual = normaliseManual(input.manual, lines);
@@ -372,7 +375,7 @@ function price(input) {
     manualOff = manualAmount(manual, base);
     const limitBp = input.limits && Number.isSafeInteger(input.limits.manual_bp) ? input.limits.manual_bp : 0;
     const over = manual.kind === 'percent' ? manual.bp > limitBp : manualOff * 10000 > limitBp * base;
-    if (over && input.override !== true) {
+    if (over && approved.discount !== true) {
       throw new PricingError('manual',
         `Discounts above ${limitBp / 100}% need a manager override.`, 'override_required');
     }

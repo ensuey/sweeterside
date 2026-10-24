@@ -28,11 +28,14 @@ npm start                 # http://127.0.0.1:3000
 - Admin, vouchers: <http://127.0.0.1:3000/admin/vouchers>
 - Admin, cakes: <http://127.0.0.1:3000/admin/cakes>
 - Admin, blocked numbers: <http://127.0.0.1:3000/admin/blocked>
+- POS: <http://127.0.0.1:3000/admin/pos>
+- Admin, staff and POS settings: <http://127.0.0.1:3000/admin/staff>
+- Reports and audit log (owner): <http://127.0.0.1:3000/admin/reports>
 
-`npm test` runs the test suite (103 tests covering password hashing, CSRF,
+`npm test` runs the test suite (130 tests covering password hashing, CSRF,
 validation, path containment, categories, orders, item stock, promotions,
-cake bookings, fake-order protection, the pricing engine, staff PINs, the
-audit log and the database migrations).
+cake bookings, fake-order protection, the pricing engine, staff PINs, POS
+tickets, payments and shifts, reports, the audit log and the database migrations).
 
 ### Changing the admin password
 
@@ -53,6 +56,11 @@ server/
   settings.js    the settings table, and the POS and tax settings
   staff.js       staff, roles, PINs, staff sessions and manager overrides
   audit.js       the append-only audit log
+  pos.js         POS tickets: saving, sending to the kitchen, voids, tabs, merging
+  payments.js    payments (split, cash and change, references), refunds, receipt data
+  shifts.js      shifts, the cash drawer, X and Z readings
+  reports.js     sales reports, the SC/PWD report, discounts, the Php 3M tracker
+  csv.js         CSV exports (formula-safe)
   vouchers.js    voucher codes: validation, CRUD and checking a code
   cakes.js       custom cake bookings: settings, open days, photos, requests
   phone.js       PH mobile numbers: checking and normalising to +639XXXXXXXXX
@@ -68,6 +76,10 @@ admin/
   vouchers.html  Vouchers page (vouchers.js): voucher codes
   cakes.html     Cakes page (cakes.js): cake bookings and booking settings
   blocked.html   Blocked numbers page (blocked.js)
+  pos.html       the POS (pos.js, pos-pay.js, pos.css): order taking, payments, shifts, printing
+  staff.html     Staff page (staff.js): staff, PINs, POS and tax settings
+  staff-gate.js  the staff PIN lock and owner override, shared by POS, Staff and Reports
+  reports.html   Reports page (reports.js): sales, SC/PWD, discounts, audit log
   login.html     sign-in page
 templates/
   menu.html      customer page shell; the server fills in the items
@@ -217,8 +229,135 @@ but placing an order fails with a connection message.
 ## In-store POS
 
 The cashier and waiter POS is being built in four phases; the plan is in
-`claude/pos-plan.md`. Phase 1 (the money, the pricing engine, staff and the
-audit log) is server-side only and changes nothing on screen.
+`claude/pos-plan.md`. All four phases are in place: the money, the pricing
+engine, staff and PINs, taking orders at `/admin/pos`, payments, shifts,
+receipts, and reports with the audit log at `/admin/reports`.
+
+### Getting started
+
+1. **Create the owner PIN.** Open **Staff** (`/admin/staff`). The first time,
+   it asks for your name, a PIN and the admin password, and makes you the
+   owner.
+2. **Add the staff.** Still on Staff, add each cashier and waiter with their
+   own PIN. The same page can change a role, switch someone off (they are never
+   deleted, so the audit log keeps their name) or reset a PIN.
+3. **Set the POS options** (owner only, on Staff): the service charge, the
+   cashier discount limit, the idle lock and the tax status.
+4. **Open the POS** (`/admin/pos`) on the counter tablet, signed in to the
+   admin. Staff tap their name and type their PIN; **Lock** hands the tablet to
+   the next person.
+
+### Taking an order
+
+- **Building the ticket.** Tap items to add them. Use − and + for quantity.
+  Tap a line to add a kitchen note (chips like "Less sugar") or change its
+  price, which needs the owner.
+- **Order types:**
+  - **Dine-in:** table and guests.
+  - **Takeout:** name optional.
+  - **Delivery:** name, PH mobile, address and landmark, plus the fee.
+  - Waiters take dine-in only.
+- **Discounts and charges** (cashier and owner): a voucher **or** a manual
+  discount with a reason, SC/PWD claimants (name, ID number, their own items
+  or a shared order), removing the service charge, or a different delivery fee.
+  **The total on screen is always worked out by the server**, with the same
+  engine the saved order uses.
+- **Save tab** keeps a dine-in tab open without sending it to the kitchen.
+  The kitchen does not see it yet, but it counts against the day's limits.
+  **Send to kitchen** puts it in the Orders queue (as Confirmed, flagged
+  "Counter"). Items added later are sent on their own the next time.
+- **Taking items off.** Items not yet sent come off freely. Items already sent
+  are a **void**, which needs a reason and the owner's PIN. **Void** on a tab
+  discards it if nothing was sent, or voids it (owner) if something was.
+- **Open tabs** lists unpaid POS orders. From there you can open one, move it
+  to another table, or merge it into another tab.
+- **Shop closed?** The Open/Closed switch only stops online orders; the POS
+  keeps working.
+- **A dropped connection** shows a banner and pauses saving. The ticket being
+  built is kept on the tablet (and survives a reload). Each save carries a
+  request key, so a double tap or a retry never makes two orders. If two
+  devices edit the same tab, the second is told to reload instead of
+  overwriting the first.
+
+### Payments, shifts and receipts
+
+- **Shift.** Open a shift with the starting cash before taking cash (the
+  **Shift** button). During the shift, record **cash in or out** with a reason
+  ("Bought ice, Php 80"). The shift screen shows the **X reading** so far.
+  **Close the shift** with the cash counted: if it differs from what is
+  expected, a note is needed. The **Z reading** is saved with the shift and can
+  be printed.
+- **Pay** (cashier and owner) saves the ticket and opens the payment screen:
+  - **Cash** shows the amount handed over, with quick buttons (Exact,
+    Php 100/200/500/1,000) and the change.
+  - **GCash, Maya, QR Ph and Card** (paid on the external terminal) need the
+    reference number.
+  - **Split payments** work: pay part one way, the rest another. The order is
+    Paid only when it is fully covered.
+  - Takeout can be sent to the kitchen in the same step.
+  - Once payment has started, the ticket cannot be changed or voided.
+- **Refunds** (owner, or the owner's PIN) are under **Receipts**. Refund
+  everything, or some items: an item's refund includes its share of the
+  service charge. Pick the method it is paid back by, and give a reason.
+- **Readings.** X and Z readings show gross sales, each kind of discount
+  (sale, SC/PWD, voucher, manual), net sales, the service charge (apart, for
+  the staff), delivery fees, voids, refunds, payments by method, and cash
+  expected against cash counted.
+- **Receipts** print with the browser's print dialog on a slip laid out for
+  58 mm or 80 mm thermal paper (set on Staff). **Receipts** lists paid orders
+  to reprint the receipt or the kitchen ticket. After Send to kitchen, **Print
+  kitchen ticket** prints just the new items (no prices). A receipt shows:
+  - the shop details, date, order number, cashier, and order type or table;
+  - the lines and the sale prices;
+  - for each SC/PWD claimant, their name, ID and the 20% discount (and the
+    VAT exemption only if VAT-registered);
+  - the voucher, discount, service charge and delivery fee;
+  - the total, the payments and the change.
+- **The order-slip notice.** Until the owner turns on **BIR mode** (Staff →
+  Receipts), every slip says **ORDER SLIP — THIS IS NOT AN OFFICIAL RECEIPT**.
+  BIR mode prints the registered name and address, the Non-VAT Reg. TIN and
+  the PTU number. Once a TIN is filled in, it also prints the non-VAT notice
+  ("THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX", editable). Turn it on
+  only when your accountant confirms the details.
+### Reports and the audit log
+
+**Reports** (`/admin/reports`) is for the owner (owner PIN). Pick the dates
+(Manila days): today, yesterday, the last 7 days, this or last month, or any
+range.
+
+**What counts as a sale:**
+- a counter order once it is paid, dated by when it was paid;
+- an online order once it is Completed;
+- refunds come off on the day they were given.
+
+**What it shows:**
+- **Sales:** by day, item, category, order type, online vs counter, and staff.
+  It shows gross, each kind of discount, net sales, the service charge (apart:
+  it is the staff's), delivery fees, refunds, and counter payments by method.
+- **SC/PWD:** every discount given, with the date, order number, name, ID
+  number, type, gross eligible amount, the 20% discount and net. There is no
+  VAT column while the shop is non-VAT. ID numbers are masked on screen and in
+  full only in the owner's **CSV** download (for the tax deduction).
+- **Vouchers and discounts:** voucher use, and every manual discount with who
+  gave it, who approved it and why.
+- **Audit log:** voids, refunds, overrides, price changes, manual discounts,
+  service charge removals, cash in and out, shifts, staff and PIN changes and
+  settings changes. It can be filtered by what and who, and downloaded as CSV.
+  The log cannot be edited.
+
+**The Php 3M tracker** at the top shows this year's gross sales against the
+Php 3,000,000 limit for non-VAT registration and the 8% option. It counts
+online and counter sales, items at regular price plus delivery fees, before
+discounts, without the service charge, less refunds. The bar turns amber at
+80% and red at 95%. Crossing Php 3M requires VAT registration: talk to your
+accountant.
+
+CSV files start each text cell that looks like a spreadsheet formula with an
+apostrophe, so a name typed at the counter cannot run as one.
+
+- **Adding a payment provider later** (PayMongo): add it to `METHODS` in
+  `server/payments.js`. A payment is recorded only once it is confirmed, with
+  its reference.
 
 ### Money
 

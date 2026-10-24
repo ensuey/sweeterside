@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>POS — Sweeter Side</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#FFF9E8">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+<link rel="stylesheet" href="/admin/pos.css">
+</head>
+<body class="pos" data-panel="menu">
+
+<header class="pos-bar">
+  <a class="pos-bar__back" href="/admin" aria-label="Back to the admin">
+    <img src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="36" height="36">
+  </a>
+  <h1 class="pos-bar__title">POS</h1>
+  <button class="btn btn--ghost btn--sm" type="button" id="tabs-btn">Open tabs <span class="nav__n" id="tabs-n" hidden></span></button>
+  <button class="btn btn--ghost btn--sm" type="button" id="new-btn">New ticket</button>
+  <button class="btn btn--ghost btn--sm" type="button" id="receipts-btn">Receipts</button>
+  <button class="btn btn--ghost btn--sm shift-btn" type="button" id="shift-btn" data-open="0">Shift</button>
+  <div class="pos-bar__spacer"></div>
+  <span class="net" id="net" role="status" hidden>Offline</span>
+  <span class="pos-bar__who" id="who-staff"></span>
+  <button class="btn btn--ghost btn--sm" type="button" id="lock-btn">Lock</button>
+</header>
+
+<p class="offline" id="offline" role="alert" hidden>
+  No connection. The ticket is kept on this tablet; saving and sending are paused until the connection is back.
+</p>
+<p class="alert pos-error" id="page-error" role="alert" hidden></p>
+
+<main class="pos-main">
+  <!-- Left: the menu -->
+  <section class="catalog" aria-labelledby="catalog-title">
+    <h2 class="vh" id="catalog-title">Menu</h2>
+    <div class="catalog__top">
+      <label class="vh" for="search">Search items</label>
+      <input class="catalog__search" id="search" type="search" placeholder="Search items" autocomplete="off">
+    </div>
+    <div class="cats" id="cats" role="toolbar" aria-label="Categories"></div>
+    <ul class="grid" id="grid" aria-live="polite"></ul>
+  </section>
+
+  <!-- Right: the ticket -->
+  <section class="ticket" aria-labelledby="ticket-title">
+    <div class="ticket__head">
+      <h2 class="ticket__title" id="ticket-title">New ticket</h2>
+      <span class="ticket__state" id="ticket-state"></span>
+    </div>
+
+    <div class="seg" id="types" role="radiogroup" aria-label="Order type">
+      <button type="button" role="radio" data-type="dinein">Dine-in</button>
+      <button type="button" role="radio" data-type="pickup">Takeout</button>
+      <button type="button" role="radio" data-type="delivery">Delivery</button>
+    </div>
+
+    <div class="tfields" id="fields-dinein">
+      <div class="field field--xs"><label for="t-table">Table</label><input id="t-table" maxlength="10" inputmode="numeric" autocomplete="off"></div>
+      <div class="field field--xs"><label for="t-pax">Guests</label><input id="t-pax" type="number" min="1" max="50" inputmode="numeric"></div>
+    </div>
+    <div class="tfields" id="fields-pickup" hidden>
+      <div class="field field--xs field--grow"><label for="t-name">Name <span class="opt">(optional)</span></label><input id="t-name" maxlength="80" autocomplete="off"></div>
+    </div>
+    <div class="tfields tfields--wrap" id="fields-delivery" hidden>
+      <div class="field field--xs field--grow"><label for="d-name">Name</label><input id="d-name" maxlength="80" autocomplete="off"></div>
+      <div class="field field--xs field--grow"><label for="d-phone">Mobile</label><input id="d-phone" type="tel" inputmode="tel" maxlength="20" placeholder="0917 123 4567" autocomplete="off"></div>
+      <div class="field field--xs field--full"><label for="d-address">Address</label><input id="d-address" maxlength="400" autocomplete="off"></div>
+      <div class="field field--xs field--full"><label for="d-landmark">Landmark</label><input id="d-landmark" maxlength="200" placeholder="Blue gate beside the chapel" autocomplete="off"></div>
+    </div>
+    <p class="field__err" id="fields-err" hidden></p>
+
+    <ul class="tlines" id="tlines" aria-label="Items on the ticket"></ul>
+    <p class="ticket__empty" id="tempty">Tap items on the left to add them.</p>
+
+    <details class="disc" id="disc" hidden>
+      <summary>Discounts and charges <span class="disc__n" id="disc-n"></span></summary>
+      <div class="disc__body">
+        <div class="disc__row" id="row-voucher">
+          <div class="field field--xs field--grow"><label for="v-code">Voucher code</label><input id="v-code" maxlength="20" autocomplete="off" autocapitalize="characters"></div>
+          <button class="btn btn--ghost btn--sm" type="button" id="v-apply">Apply</button>
+        </div>
+        <div class="disc__row" id="row-manual">
+          <button class="btn btn--ghost btn--sm" type="button" id="m-open">Manual discount…</button>
+          <span class="disc__val" id="m-val"></span>
+        </div>
+        <div class="disc__row" id="row-sc">
+          <button class="btn btn--ghost btn--sm" type="button" id="sc-add">Add SC / PWD…</button>
+          <ul class="claimants" id="claimants"></ul>
+        </div>
+        <div class="disc__row" id="row-service" hidden>
+          <span id="svc-text"></span>
+          <button class="btn btn--ghost btn--sm" type="button" id="svc-toggle"></button>
+        </div>
+        <div class="disc__row" id="row-fee" hidden>
+          <div class="field field--xs"><label for="fee">Delivery fee (Php)</label><input id="fee" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow"><label for="fee-reason">Reason if changed</label><input id="fee-reason" maxlength="200" autocomplete="off"></div>
+        </div>
+      </div>
+    </details>
+
+    <dl class="tsum" id="tsum"></dl>
+    <p class="ticket__needs" id="needs" hidden></p>
+    <p class="alert" id="ticket-error" role="alert" hidden></p>
+
+    <p class="after" id="after" hidden>
+      <span id="after-text"></span>
+      <button class="link" type="button" id="after-kitchen">Print kitchen ticket</button>
+      <button class="link" type="button" id="after-receipt" hidden>Print receipt</button>
+    </p>
+
+    <div class="ticket__actions">
+      <button class="btn btn--danger-ghost" type="button" id="void-btn" hidden>Void</button>
+      <button class="btn btn--ghost" type="button" id="save-btn">Save tab</button>
+      <button class="btn btn--primary" type="button" id="send-btn">Send to kitchen</button>
+      <button class="btn btn--pay" type="button" id="pay-btn" hidden>Pay</button>
+    </div>
+  </section>
+</main>
+
+<!-- Phones: menu and ticket are two panels -->
+<nav class="pos-switch" aria-label="Show">
+  <button type="button" data-show="menu">Menu</button>
+  <button type="button" data-show="ticket">Ticket <span id="switch-total"></span></button>
+</nav>
+
+<!-- A line: quantity, note, price -->
+<dialog class="modal modal--sm" id="line-dialog" aria-labelledby="line-title">
+  <form method="dialog" class="modal__form" id="line-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="line-title">Item</h2></div>
+    <div class="modal__body">
+      <p class="hint" id="line-sent" hidden></p>
+      <div class="field"><label for="line-note">Note for the kitchen</label>
+        <input id="line-note" maxlength="120" placeholder="Less sugar, no ice…" autocomplete="off"></div>
+      <div class="note-chips" id="note-chips"></div>
+      <fieldset class="line-price" id="line-price-box">
+        <legend>Price</legend>
+        <div class="field field--xs"><label for="line-price">Price each (Php)</label>
+          <input id="line-price" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <div class="field field--xs field--grow"><label for="line-price-reason">Reason for the change</label>
+          <input id="line-price-reason" maxlength="200" autocomplete="off"></div>
+        <p class="hint">Changing a price needs the owner.</p>
+      </fieldset>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--danger-ghost" type="button" id="line-remove">Remove</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--ghost" type="button" id="line-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit">Done</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Manual discount -->
+<dialog class="modal modal--sm" id="manual-dialog" aria-labelledby="manual-title">
+  <form method="dialog" class="modal__form" id="manual-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="manual-title">Manual discount</h2></div>
+    <div class="modal__body">
+      <div class="seg seg--sm" id="m-kind" role="radiogroup" aria-label="Kind">
+        <button type="button" role="radio" data-kind="percent">% off</button>
+        <button type="button" role="radio" data-kind="amount">Php off</button>
+      </div>
+      <div class="field"><label for="m-value">How much</label><input id="m-value" type="number" min="0" step="0.01" inputmode="decimal"></div>
+      <div class="field"><label for="m-line">On</label><select id="m-line"></select></div>
+      <div class="field"><label for="m-reason">Reason</label>
+        <select id="m-reason">
+          <option value="">Choose a reason</option>
+          <option>Regular customer</option>
+          <option>Staff meal</option>
+          <option>Service recovery</option>
+          <option>Promo not in the system</option>
+          <option value="other">Other…</option>
+        </select></div>
+      <div class="field" id="m-other-box" hidden><label for="m-other">Other reason</label><input id="m-other" maxlength="200" autocomplete="off"></div>
+      <p class="hint" id="m-limit"></p>
+      <p class="field__err" id="m-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--danger-ghost" type="button" id="m-remove">Remove discount</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--ghost" type="button" id="m-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit">Apply</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- SC / PWD claimant -->
+<dialog class="modal" id="sc-dialog" aria-labelledby="sc-title">
+  <form method="dialog" class="modal__form" id="sc-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="sc-title">Senior Citizen / PWD</h2></div>
+    <div class="modal__body">
+      <div class="seg seg--sm" id="sc-type" role="radiogroup" aria-label="Discount">
+        <button type="button" role="radio" data-sc="sc">Senior Citizen</button>
+        <button type="button" role="radio" data-sc="pwd">PWD</button>
+      </div>
+      <div class="field"><label for="sc-name">Full name on the ID</label><input id="sc-name" maxlength="80" autocomplete="off"></div>
+      <div class="field"><label for="sc-id" id="sc-id-label">OSCA ID number</label><input id="sc-id" maxlength="40" autocomplete="off"></div>
+      <label class="fee__check"><input type="checkbox" id="sc-sig"> Signature collected</label>
+      <fieldset class="sc-mode">
+        <legend>What does the discount cover?</legend>
+        <label class="fee__check"><input type="radio" name="sc-mode" value="exclusive" checked> Their own items</label>
+        <label class="fee__check"><input type="radio" name="sc-mode" value="shared"> Their share of a shared order</label>
+      </fieldset>
+      <ul class="sc-lines" id="sc-lines"></ul>
+      <div class="field" id="sc-diners-box" hidden><label for="sc-diners">People sharing (incl. them)</label>
+        <input id="sc-diners" type="number" min="1" max="100" inputmode="numeric"></div>
+      <p class="hint">20% off the regular price; if a sale or voucher is cheaper for them, that is used instead.</p>
+      <p class="field__err" id="sc-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--danger-ghost" type="button" id="sc-remove" hidden>Remove</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--ghost" type="button" id="sc-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Open tabs -->
+<dialog class="modal" id="tabs-dialog" aria-labelledby="tabs-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="tabs-title">Open tabs</h2>
+      <button class="icon-btn" type="button" id="tabs-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <ul class="tabs" id="tabs"></ul>
+      <p class="hint" id="tabs-empty" hidden>No open tabs.</p>
+    </div>
+  </div>
+</dialog>
+
+<!-- A reason (void, service charge) -->
+<dialog class="modal modal--sm" id="reason-dialog" aria-labelledby="reason-title">
+  <form method="dialog" class="modal__form" id="reason-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="reason-title">Reason</h2></div>
+    <div class="modal__body">
+      <p class="hint" id="reason-lead"></p>
+      <div class="field"><label for="reason-text" id="reason-label">Reason</label><input id="reason-text" maxlength="200" autocomplete="off"></div>
+      <p class="field__err" id="reason-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="reason-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit" id="reason-ok">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Payment -->
+<dialog class="modal" id="pay-dialog" aria-labelledby="pay-title">
+  <form method="dialog" class="modal__form" id="pay-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="pay-title">Payment</h2>
+      <button class="icon-btn" type="button" id="pay-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <dl class="paysum" id="paysum"></dl>
+      <ul class="paid-list" id="paid-list"></ul>
+      <div class="pay-entry" id="pay-entry">
+        <div class="methods" id="methods" role="radiogroup" aria-label="Payment method"></div>
+        <div class="tfields tfields--wrap">
+          <div class="field field--xs"><label for="pay-amount">Amount (Php)</label><input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs" id="tender-box"><label for="pay-tendered">Cash handed over</label><input id="pay-tendered" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow" id="ref-box" hidden><label for="pay-ref">Reference number</label><input id="pay-ref" maxlength="60" autocomplete="off"></div>
+        </div>
+        <div class="quick" id="quick" role="group" aria-label="Cash handed over">
+          <button type="button" class="chip" data-cash="exact">Exact</button>
+          <button type="button" class="chip" data-cash="100">Php 100</button>
+          <button type="button" class="chip" data-cash="200">Php 200</button>
+          <button type="button" class="chip" data-cash="500">Php 500</button>
+          <button type="button" class="chip" data-cash="1000">Php 1,000</button>
+        </div>
+        <p class="change" id="change" aria-live="polite"></p>
+        <label class="fee__check" id="pay-send-box"><input type="checkbox" id="pay-send" checked> Send to the kitchen when paid</label>
+        <p class="field__err" id="pay-err" hidden></p>
+      </div>
+      <div class="paid-done" id="pay-done" hidden>
+        <p class="paid-done__title">Paid</p>
+        <p class="paid-done__change" id="pay-done-change"></p>
+      </div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="pay-print" hidden>Print receipt</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--primary" type="submit" id="pay-submit">Take payment</button>
+      <button class="btn btn--primary" type="button" id="pay-next" hidden>New ticket</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Shift and cash drawer -->
+<dialog class="modal" id="shift-dialog" aria-labelledby="shift-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="shift-title">Shift</h2>
+      <button class="icon-btn" type="button" id="shift-close-x" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <form class="tfields tfields--wrap" id="shift-open-form" hidden novalidate>
+        <p class="hint field--full">No shift is open. Count the cash in the drawer to start.</p>
+        <div class="field field--xs"><label for="shift-opening">Starting cash (Php)</label><input id="shift-opening" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <button class="btn btn--primary" type="submit">Open shift</button>
+      </form>
+      <div id="shift-open-view" hidden>
+        <div class="reading" id="reading"></div>
+        <form class="tfields tfields--wrap" id="cash-form" novalidate>
+          <h3 class="panel__sub field--full">Cash in or out of the drawer</h3>
+          <div class="seg seg--sm field--full" id="cash-kind" role="radiogroup" aria-label="Cash in or out">
+            <button type="button" role="radio" data-kind="out" aria-checked="true">Cash out</button>
+            <button type="button" role="radio" data-kind="in" aria-checked="false">Cash in</button>
+          </div>
+          <div class="field field--xs"><label for="cash-amount">Amount (Php)</label><input id="cash-amount" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow"><label for="cash-reason">What for</label><input id="cash-reason" maxlength="200" placeholder="Bought ice" autocomplete="off"></div>
+          <button class="btn btn--ghost" type="submit">Record</button>
+        </form>
+        <form class="tfields tfields--wrap" id="close-form" novalidate>
+          <h3 class="panel__sub field--full">Close the shift</h3>
+          <div class="field field--xs"><label for="close-counted">Cash counted (Php)</label><input id="close-counted" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow"><label for="close-note">Note (needed if it is off)</label><input id="close-note" maxlength="300" autocomplete="off"></div>
+          <button class="btn btn--danger" type="submit">Close shift</button>
+        </form>
+      </div>
+      <p class="field__err" id="shift-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="shift-print" hidden>Print reading</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Paid orders: reprint and refund -->
+<dialog class="modal" id="receipts-dialog" aria-labelledby="receipts-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="receipts-title">Paid orders</h2>
+      <button class="icon-btn" type="button" id="receipts-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <ul class="tabs" id="receipts"></ul>
+      <p class="hint" id="receipts-empty" hidden>No paid orders yet.</p>
+    </div>
+  </div>
+</dialog>
+
+<!-- Refund -->
+<dialog class="modal" id="refund-dialog" aria-labelledby="refund-title">
+  <form method="dialog" class="modal__form" id="refund-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="refund-title">Refund</h2></div>
+    <div class="modal__body">
+      <p class="hint" id="refund-lead"></p>
+      <fieldset class="sc-mode">
+        <legend>What is refunded?</legend>
+        <label class="fee__check"><input type="radio" name="refund-kind" value="full" checked> Everything not refunded yet</label>
+        <label class="fee__check"><input type="radio" name="refund-kind" value="lines"> Some items</label>
+      </fieldset>
+      <ul class="sc-lines" id="refund-lines" hidden></ul>
+      <div class="field"><label for="refund-method">Paid back by</label><select id="refund-method"></select></div>
+      <div class="field"><label for="refund-ref">Reference (GCash, Maya, card)</label><input id="refund-ref" maxlength="60" autocomplete="off"></div>
+      <div class="field"><label for="refund-reason">Reason</label><input id="refund-reason" maxlength="200" autocomplete="off"></div>
+      <p class="hint">Refunds need the owner.</p>
+      <p class="field__err" id="refund-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="refund-cancel">Cancel</button>
+      <button class="btn btn--danger" type="submit">Refund</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- What gets printed: a receipt, a kitchen ticket or a shift reading -->
+<div class="print-area" id="print-area" aria-hidden="true"></div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="/admin/common.js"></script>
+<script src="/admin/staff-gate.js"></script>
+<script src="/admin/pos.js"></script>
+<script src="/admin/pos-pay.js"></script>
+</body>
+</html>
