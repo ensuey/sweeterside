@@ -415,8 +415,11 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 #cart-discount, #done-discount { color: #2E7D52; }
 
 .cart__lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+/* Thumbnail on the left; beside it the name and price on one row, then the
+   stepper and the line total. The cart is never wider than 480px, so this
+   two-row layout is used at every width and the name always has room. */
 .cline {
-  display: grid; grid-template-columns: 56px 1fr auto; grid-template-areas: "thumb main total" "thumb step step";
+  display: grid; grid-template-columns: 56px 1fr auto; grid-template-areas: "thumb main main" "thumb step total";
   gap: var(--sp-2) var(--sp-3); align-items: center;
   padding: var(--sp-3) 0; border-bottom: 1px solid var(--line);
 }
@@ -438,7 +441,8 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .cline__name { font-weight: 700; overflow-wrap: anywhere; }
 .cline__each { font-size: .875rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .cline__total {
-  grid-area: total; font-family: "Fredoka", sans-serif; font-weight: 600;
+  grid-area: total; justify-self: end; text-align: right;
+  font-family: "Fredoka", sans-serif; font-weight: 600;
   color: var(--coral-ink); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .stepper {
@@ -453,11 +457,6 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .stepper__btn:hover:not(:disabled) { background: var(--cream); }
 .stepper__btn:disabled { opacity: .35; cursor: not-allowed; }
 .stepper__n { min-width: 2ch; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
-@media (min-width: 420px) {
-  .cline { grid-template-columns: 56px 1fr auto auto; grid-template-areas: "thumb main step total"; }
-  .cline__thumb { align-self: center; }
-  .cline__total { min-width: 5.5rem; text-align: right; }
-}
 
 .cart__sum { margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
 .cart__sum div { display: flex; justify-content: space-between; gap: var(--sp-3); }
