@@ -125,9 +125,15 @@ function renderCats() {
 function shotHtml(i) {
   const src = esc(`/${encPath(i.image)}`);
   if (i.crop_w != null) {
-    return `<div class="shot" style="--x:${i.crop_x}; --y:${i.crop_y}; --w:${i.crop_w}; --h:${i.crop_h}"><img src="${src}" alt="" loading="lazy"></div>`;
+    // In a square box as wide as the crop: the poster (1021px wide, as on the
+    // customer menu) is scaled so the crop fills the width, moved left by the
+    // crop's x, and up by its y plus half of any height beyond the square.
+    const pct = (n) => `${Math.round(n * 1000) / 1000}%`;
+    const w = Number(i.crop_w);
+    const pos = `width:${pct(102100 / w)};left:${pct((-i.crop_x * 100) / w)};top:${pct((-i.crop_y * 100) / w - (i.crop_h / w - 1) * 50)}`;
+    return `<div class="shot"><img src="${src}" alt="" style="${pos}"></div>`;
   }
-  return `<div class="shot shot--plain"><img src="${src}" alt="" loading="lazy"></div>`;
+  return `<div class="shot shot--plain"><img src="${src}" alt=""></div>`;
 }
 
 function renderGrid() {

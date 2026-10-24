@@ -17,6 +17,8 @@
   --shadow: 0 1px 2px rgba(74,53,32,.06), 0 6px 18px rgba(74,53,32,.08);
   --shadow-lg: 0 8px 40px rgba(74,53,32,.22);
   --ease: cubic-bezier(.4, 0, .2, 1);
+  /* Side space of the admin pages: 1rem on a phone, up to 2.5rem on a wide screen. */
+  --gutter: max(clamp(1rem, 3vw, 2.5rem), env(safe-area-inset-left, 0px));
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -141,7 +143,8 @@ a { color: var(--navy); }
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
 .topbar__inner {
-  width: min(100% - 2rem, 1040px); margin-inline: auto;
+  /* Full width on every screen, with the same side gutter as the page. */
+  margin-inline: var(--gutter);
   display: flex; align-items: center; gap: .75rem; padding: .7rem 0; flex-wrap: wrap;
 }
 .topbar__logo { width: 38px; height: 38px; border-radius: 50%; }
@@ -164,7 +167,7 @@ a { color: var(--navy); }
 }
 
 /* ---------------- admin body ---------------- */
-.admin { width: min(100% - 2rem, 1040px); margin-inline: auto; padding-block: 2rem 4rem; }
+.admin { margin-inline: var(--gutter); padding-block: 2rem 4rem; }
 .admin__head {
   display: flex; align-items: flex-end; justify-content: space-between;
   gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap;
@@ -197,7 +200,8 @@ a { color: var(--navy); }
 .tab__n { font-size: .8125rem; opacity: .75; font-variant-numeric: tabular-nums; }
 
 .orders__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; }
-@media (min-width: 820px) { .orders__list { grid-template-columns: 1fr 1fr; } }
+/* As many order cards across as fit: one on a phone, two on a tablet, more on a wide screen. */
+@media (min-width: 820px) { .orders__list { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); } }
 
 .order {
   display: flex; flex-direction: column; gap: .8rem; padding: 1rem;
