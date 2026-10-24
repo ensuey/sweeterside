@@ -131,4 +131,64 @@ function updatePosSettings(input) {
   return posSettings();
 }
 
-module.exports = { getSetting, saveSetting, vatRegistered, posSettings, updatePosSettings };
+/* ---------------------------- receipts ---------------------------- */
+
+/* What the printed slip says. Until the owner turns on BIR mode it is an
+   order slip and says so; BIR mode adds the registered name, address, Non-VAT
+   TIN and PTU, and the non-VAT notice once a TIN is filled in. */
+const RECEIPT_DEFAULTS = {
+  receipt_shop_name: 'Sweeter Side by Dachel',
+  receipt_address: '',
+  receipt_contact: '',
+  receipt_width: '80',
+  receipt_footer: 'Thank you! See you again soon.',
+  bir_mode: '0',
+  bir_business_name: '',
+  bir_address: '',
+  bir_tin: '',
+  bir_ptu: '',
+  bir_notice: 'THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX',
+};
+const ORDER_SLIP = 'ORDER SLIP — THIS IS NOT AN OFFICIAL RECEIPT';
+const RECEIPT_LIMITS = {
+  receipt_shop_name: 60, receipt_address: 200, receipt_contact: 80, receipt_footer: 200,
+  bir_business_name: 80, bir_address: 200, bir_tin: 30, bir_ptu: 60, bir_notice: 120,
+};
+
+function receiptSettings() {
+  const s = Object.fromEntries(Object.entries(RECEIPT_DEFAULTS).map(([k, d]) => [k, getSetting(k, d)]));
+  return {
+    ...s,
+    receipt_width: s.receipt_width === '58' ? 58 : 80,
+    bir_mode: s.bir_mode === '1',
+    order_slip: ORDER_SLIP,
+  };
+}
+
+function updateReceiptSettings(input) {
+  const values = {};
+  const errors = {};
+  for (const [key, max] of Object.entries(RECEIPT_LIMITS)) {
+    if (!(key in input)) continue;
+    const v = String(input[key] ?? '').trim().replace(/[ \t]+/g, ' ');
+    if (v.length > max) errors[key] = `Keep it under ${max} characters.`;
+    else values[key] = v;
+  }
+  if ('receipt_shop_name' in values && !values.receipt_shop_name) errors.receipt_shop_name = 'Enter the shop name.';
+  if ('receipt_width' in input) {
+    const w = String(input.receipt_width);
+    if (w !== '58' && w !== '80') errors.receipt_width = 'Choose 58 mm or 80 mm paper.';
+    else values.receipt_width = w;
+  }
+  if ('bir_mode' in input) {
+    try { values.bir_mode = onOff('bir_mode')(input.bir_mode); } catch (err) { Object.assign(errors, err.errors); }
+  }
+  if (Object.keys(errors).length) throw new ValidationError(errors);
+  transaction(() => Object.entries(values).forEach(([key, v]) => saveSetting(key, v)));
+  return receiptSettings();
+}
+
+module.exports = {
+  getSetting, saveSetting, vatRegistered, posSettings, updatePosSettings,
+  ORDER_SLIP, receiptSettings, updateReceiptSettings,
+};

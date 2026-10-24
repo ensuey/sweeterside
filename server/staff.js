@@ -247,11 +247,11 @@ function lock(token) {
 function authorise(actor, permission, override, now = Date.now()) {
   if (actor && can(actor.role, permission)) return { approver: null };
   if (!override || override.staff_id === undefined) {
-    throw httpError(403, 'This needs a manager: ask the owner to enter their PIN.', { override_required: true, permission });
+    throw httpError(403, 'This needs a manager: ask the owner to enter their PIN.', { override_required: true, needs: [permission] });
   }
   const approver = verifyPin(override.staff_id, override.pin, now);
   if (!can(approver.role, permission)) {
-    throw httpError(403, `${approver.name} cannot approve this. Ask the owner.`, { override_required: true, permission });
+    throw httpError(403, `${approver.name} cannot approve this. Ask the owner.`, { override_required: true, needs: [permission] });
   }
   return { approver };
 }

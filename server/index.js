@@ -21,6 +21,8 @@ const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
 const staff = require('./staff');
 const pos = require('./pos');
 const settings = require('./settings');
+const payments = require('./payments');
+const shifts = require('./shifts');
 const audit = require('./audit');
 const render = require('./render');
 const imagesize = require('./imagesize');
@@ -720,7 +722,7 @@ async function route(req, res) {
     return sendJson(res, saved.replayed ? 200 : 201, saved);
   }
 
-  const posOrderMatch = pathname.match(/^\/api\/pos\/orders\/(\d+)(?:\/(table|merge|void))?$/);
+  const posOrderMatch = pathname.match(/^\/api\/pos\/orders\/(\d+)(?:\/(table|merge|void|pay|refund|receipt))?$/);
   if (posOrderMatch) {
     const id = Number(posOrderMatch[1]);
     const action = posOrderMatch[2];
@@ -729,7 +731,20 @@ async function route(req, res) {
       if (!who) return;
       const order = pos.view(id, who.staff);
       if (!order) return sendJson(res, 404, { error: 'That order is not a POS order or no longer exists.' });
-      return sendJson(res, 200, { order });
+      return sendJson(res, 200, { order, balance: payments.balance(id) });
+    }
+    if (action === 'receipt' && method === 'GET') {
+      const who = requireStaff(req, res);
+      if (!who) return;
+      return sendJson(res, 200, payments.receipt(id, who.staff));
+    }
+    if ((action === 'pay' || action === 'refund') && method === 'POST') {
+      const who = requireStaff(req, res, { csrf: true });
+      if (!who) return;
+      const body = await readJson(req);
+      const done = action === 'pay' ? payments.pay(id, body, who.staff) : payments.refund(id, body, who.staff);
+      if (!done.replayed) console.log(`[pos] #${id} ${action} by staff ${who.staff.id}`);
+      return sendJson(res, 200, done);
     }
     if (!action && (method === 'PUT' || method === 'PATCH')) {
       const who = requireStaff(req, res, { csrf: true });
@@ -744,6 +759,62 @@ async function route(req, res) {
       if (action === 'merge') return sendJson(res, 200, { order: pos.merge(id, Number(body.into), who.staff) });
       return sendJson(res, 200, pos.voidOrder(id, body, who.staff));
     }
+  }
+
+  if (pathname === '/api/pos/recent' && method === 'GET') {
+    if (!requireStaff(req, res)) return;
+    return sendJson(res, 200, { orders: payments.recent() });
+  }
+
+  /* ---- POS: shifts and the cash drawer ---- */
+  if (pathname === '/api/pos/shift' && method === 'GET') {
+    if (!requireStaff(req, res)) return;
+    const open = shifts.current();
+    return sendJson(res, 200, {
+      shift: open ? shifts.reading(open) : null,
+      methods: Object.entries(payments.METHODS).map(([id, m]) => ({ id, label: m.label, reference: m.reference, drawer: !!m.drawer })),
+    });
+  }
+
+  const shiftAction = pathname.match(/^\/api\/pos\/shift\/(open|cash|close)$/);
+  if (shiftAction && method === 'POST') {
+    const action = shiftAction[1];
+    const who = requireStaff(req, res, { csrf: true, permission: action === 'cash' ? 'cash_movement' : 'manage_shift' });
+    if (!who) return;
+    const body = await readJson(req);
+    if (action === 'open') return sendJson(res, 201, { shift: shifts.open(body, who.staff) });
+    if (action === 'cash') return sendJson(res, 200, { shift: shifts.cashMove(body, who.staff) });
+    return sendJson(res, 200, { report: shifts.close(body, who.staff) });
+  }
+
+  if (pathname === '/api/pos/shifts' && method === 'GET') {
+    if (!requireStaff(req, res, { permission: 'manage_shift' })) return;
+    return sendJson(res, 200, { shifts: shifts.recent() });
+  }
+
+  const shiftMatch = pathname.match(/^\/api\/pos\/shifts\/(\d+)$/);
+  if (shiftMatch && method === 'GET') {
+    if (!requireStaff(req, res, { permission: 'manage_shift' })) return;
+    const report = shifts.report(Number(shiftMatch[1]));
+    if (!report) return sendJson(res, 404, { error: 'No such shift.' });
+    return sendJson(res, 200, { report });
+  }
+
+  /* ---- Receipt settings: printed by everyone, changed by the owner ---- */
+  if (pathname === '/api/pos/receipt-settings' && method === 'GET') {
+    if (!requireStaff(req, res)) return;
+    return sendJson(res, 200, settings.receiptSettings());
+  }
+
+  if (pathname === '/api/pos/receipt-settings' && (method === 'PUT' || method === 'PATCH')) {
+    const who = requireStaff(req, res, { csrf: true, permission: 'tax_settings' });
+    if (!who) return;
+    const before = settings.receiptSettings();
+    const after = settings.updateReceiptSettings(await readJson(req));
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      audit.record({ action: 'settings_change', staff: who.staff, details: { receipt: { before, after } } });
+    }
+    return sendJson(res, 200, after);
   }
 
   /* ---- POS settings: everyone at the POS reads them, the owner changes them ---- */

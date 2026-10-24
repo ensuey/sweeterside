@@ -576,6 +576,7 @@ function save(id, body, actor, now = new Date()) {
   if (id !== null) {
     if (!existing) throw httpError(404, 'That order is not a POS order or no longer exists.');
     if (existing.paid_at) throw httpError(409, 'This order is paid. Refund it instead of changing it.');
+    if (paidCents(existing.id)) throw httpError(409, 'Payment has started on this order. Finish taking payment first.');
     if (['cancelled', 'completed'].includes(existing.status)) throw httpError(409, 'This order is closed.');
     if (Number(body.version) !== existing.pos_version) {
       throw httpError(409, 'This order was changed on another device. Reload it to see the changes.', { stale: true });
@@ -626,14 +627,7 @@ function save(id, body, actor, now = new Date()) {
       p.meta.address, p.meta.landmark, JSON.stringify(d), String(body.request_key), prevVersion + 1, actor.id, orderId);
 
     // What goes to the kitchen now: units added since the last send.
-    let kitchen = [];
-    if (send) {
-      kitchen = lineRows(orderId).filter((l) => l.qty > l.sent_qty)
-        .map((l) => ({ name: l.name, qty: l.qty - l.sent_qty, note: l.note }));
-      db.prepare('UPDATE order_items SET sent_qty = qty WHERE order_id = ?').run(orderId);
-      db.prepare(`UPDATE orders SET kitchen_sent_at = COALESCE(kitchen_sent_at, datetime('now')),
-                    status = CASE WHEN status = 'new' THEN 'confirmed' ELSE status END WHERE id = ?`).run(orderId);
-    }
+    const kitchen = send ? sendToKitchen(orderId) : [];
 
     // The audit trail for anything that moved money or needed a manager.
     const by = { staff: actor, approver, order_id: orderId };
@@ -664,6 +658,25 @@ function save(id, body, actor, now = new Date()) {
   });
 
   return { order: view(result.orderId, actor), kitchen: result.kitchen, replayed: false };
+}
+
+/**
+ * Send what the kitchen has not seen yet: every unit added since the last
+ * send. The order joins the queue as Confirmed the first time.
+ * @returns [{ name, qty, note }] the units sent now
+ */
+function sendToKitchen(orderId) {
+  const kitchen = lineRows(orderId).filter((l) => l.qty > l.sent_qty)
+    .map((l) => ({ name: l.name, qty: l.qty - l.sent_qty, note: l.note }));
+  db.prepare('UPDATE order_items SET sent_qty = qty WHERE order_id = ?').run(orderId);
+  db.prepare(`UPDATE orders SET kitchen_sent_at = COALESCE(kitchen_sent_at, datetime('now')),
+                status = CASE WHEN status = 'new' THEN 'confirmed' ELSE status END WHERE id = ?`).run(orderId);
+  return kitchen;
+}
+
+/** Centavos paid towards an order so far. */
+function paidCents(orderId) {
+  return db.prepare('SELECT COALESCE(SUM(amount_cents), 0) AS n FROM payments WHERE order_id = ?').get(orderId).n;
 }
 
 /** The service charge that was removed, for the audit log. */
@@ -751,6 +764,7 @@ function merge(id, intoId, actor) {
  */
 function voidOrder(id, body, actor) {
   const o = openOrder(id);
+  if (paidCents(o.id)) throw httpError(409, 'Part of this order is paid. Refund the payments before voiding it.');
   const sent = o.lines.some((l) => l.sent_qty > 0);
   const reason = text(body.reason, REASON_MAX);
   let approver = null;
@@ -770,4 +784,7 @@ function voidOrder(id, body, actor) {
   return { ok: true, discarded: !sent };
 }
 
-module.exports = { KEY_RE, view, open, posMenu, plan, quote, save, moveTable, merge, voidOrder, loadOrder };
+module.exports = {
+  KEY_RE, view, open, posMenu, plan, quote, save, moveTable, merge, voidOrder, loadOrder,
+  sendToKitchen, paidCents, lineRows, httpError,
+};

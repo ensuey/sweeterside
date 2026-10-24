@@ -474,6 +474,83 @@ const ORDER_ITEM_TICKET_COLUMNS = {
 };
 addMissingColumns('order_items', ORDER_ITEM_TICKET_COLUMNS);
 
+/* Payments, refunds and the cash drawer.
+
+   A shift is one turn of the cash drawer: opened with the starting cash,
+   closed with the cash counted. Only one is open at a time (one drawer).
+   Cash payments need an open shift; every payment and refund is tied to the
+   shift that was open, for the X and Z readings.
+
+   payments.amount_cents is what went towards the order; for cash,
+   tendered_cents is what the customer handed over and change_cents what they
+   got back. request_key makes a retried payment count once. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS shifts (
+  id                  INTEGER PRIMARY KEY,
+  opened_by           INTEGER NOT NULL REFERENCES staff(id),
+  opened_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+  opening_cash_cents  INTEGER NOT NULL,
+  closed_by           INTEGER REFERENCES staff(id),
+  closed_at           TEXT,
+  counted_cash_cents  INTEGER,
+  expected_cash_cents INTEGER,
+  close_note          TEXT    NOT NULL DEFAULT '',
+  z_report            TEXT    NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_shifts_one_open ON shifts((closed_at IS NULL)) WHERE closed_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS cash_movements (
+  id           INTEGER PRIMARY KEY,
+  shift_id     INTEGER NOT NULL REFERENCES shifts(id),
+  kind         TEXT    NOT NULL CHECK (kind IN ('in','out')),
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  reason       TEXT    NOT NULL,
+  staff_id     INTEGER NOT NULL REFERENCES staff(id),
+  at           TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id             INTEGER PRIMARY KEY,
+  order_id       INTEGER NOT NULL REFERENCES orders(id),
+  shift_id       INTEGER REFERENCES shifts(id),
+  method         TEXT    NOT NULL,
+  amount_cents   INTEGER NOT NULL CHECK (amount_cents > 0),
+  tendered_cents INTEGER,
+  change_cents   INTEGER NOT NULL DEFAULT 0,
+  reference      TEXT    NOT NULL DEFAULT '',
+  staff_id       INTEGER NOT NULL REFERENCES staff(id),
+  request_key    TEXT,
+  at             TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
+
+CREATE TABLE IF NOT EXISTS refunds (
+  id           INTEGER PRIMARY KEY,
+  order_id     INTEGER NOT NULL REFERENCES orders(id),
+  shift_id     INTEGER REFERENCES shifts(id),
+  method       TEXT    NOT NULL,
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  reference    TEXT    NOT NULL DEFAULT '',
+  reason       TEXT    NOT NULL,
+  lines        TEXT    NOT NULL DEFAULT '',   -- JSON [{ line_id, name, qty, amount_cents }], '' for a full refund
+  staff_id     INTEGER NOT NULL REFERENCES staff(id),
+  approved_by  INTEGER REFERENCES staff(id),
+  request_key  TEXT,
+  at           TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_refunds_order ON refunds(order_id);
+`);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_request ON payments(request_key) WHERE request_key IS NOT NULL;
+         CREATE UNIQUE INDEX IF NOT EXISTS idx_refunds_request ON refunds(request_key) WHERE request_key IS NOT NULL;`);
+
+/* paid_shift_id: the shift the order was fully paid in (its sales count in
+   that shift's reading). refunded_cents: refunds so far. */
+addMissingColumns('orders', {
+  paid_shift_id: 'INTEGER REFERENCES shifts(id)',
+  refunded_cents: 'INTEGER NOT NULL DEFAULT 0',
+});
+
 /* Items can be left out of the SC/PWD discount (non-food items added later). */
 addMissingColumns('items', { sc_eligible: 'INTEGER NOT NULL DEFAULT 1' });
 
