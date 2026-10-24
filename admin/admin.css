@@ -146,12 +146,14 @@ a { color: var(--navy); }
 .topbar__spacer { flex: 1; }
 .topbar__nav { display: flex; gap: .25rem; }
 .topbar__nav a {
-  min-height: 38px; display: inline-flex; align-items: center; padding: 0 .9rem;
+  min-height: 38px; display: inline-flex; align-items: center; padding: 0 .75rem;
   font-weight: 700; font-size: .9375rem; color: var(--ink); text-decoration: none; border-radius: var(--r-full);
 }
 .topbar__nav a:hover { background: var(--cream); }
 .topbar__nav a[aria-current="page"] { background: var(--ink); color: #fff; }
 .topbar__user { font-size: .875rem; color: var(--ink-soft); }
+/* With six pages in the nav, the email makes room on narrower screens. */
+@media (max-width: 1180px) { .topbar__user { display: none; } }
 
 /* ---------------- admin body ---------------- */
 .admin { width: min(100% - 2rem, 1040px); margin-inline: auto; padding-block: 2rem 4rem; }
@@ -195,6 +197,7 @@ a { color: var(--navy); }
   border-left: 5px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow);
 }
 .order[data-status="new"]        { border-left-color: var(--coral-ink); }
+.order[data-status="confirmed"]  { border-left-color: #8E5BB5; }
 .order[data-status="preparing"]  { border-left-color: #C98A1B; }
 .order[data-status="delivering"] { border-left-color: var(--navy); }
 .order[data-status="completed"]  { border-left-color: var(--ok); }
@@ -437,3 +440,32 @@ a { color: var(--navy); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* ---------------- fake-order protection ---------------- */
+.order__landmark { overflow-wrap: anywhere; color: var(--ink-soft); }
+.order__landmark strong { color: var(--ink); }
+.order__flags { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .35rem; }
+.flag {
+  padding: .15rem .55rem; border-radius: var(--r-full); font-size: .8125rem; font-weight: 700;
+  background: var(--cream); color: var(--ink-soft); white-space: nowrap;
+}
+.flag--new  { background: #EAF1F7; color: var(--navy); }
+.flag--good { background: #EEF6F0; color: #1F5A3A; }
+.flag--bad  { background: #FDF3F1; color: var(--danger); }
+.flag--wait { background: var(--danger); color: #fff; }
+.order__actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.order__actions [data-confirm] { min-width: 7rem; }
+
+.trust { margin-bottom: 3rem; }
+.trust .admin__sub { margin-bottom: 1rem; }
+.trust__form { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; max-width: 40rem; }
+.trust__form .field { width: 100%; max-width: 22rem; }
+.trust__rule { display: flex; flex-wrap: wrap; gap: .6rem 1rem; width: 100%; }
+.trust__rule .field { width: 14rem; }
+.reasons { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; }
+.reasons legend { margin-bottom: .35rem; }
+
+/* Blocked numbers page */
+.block-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem; margin-bottom: 1.5rem; }
+.block-add .field { width: 14rem; }
+.block-add .field--wide { width: min(100%, 22rem); }

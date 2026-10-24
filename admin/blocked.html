@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blocked numbers — Sweeter Side admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="/admin/admin.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar__inner">
+    <img class="topbar__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="1563" height="1563">
+    <h1 class="topbar__title">Menu admin</h1>
+    <nav class="topbar__nav" aria-label="Admin pages">
+      <a href="/admin">Orders</a>
+      <a href="/admin/items">Items</a>
+      <a href="/admin/vouchers">Vouchers</a>
+      <a href="/admin/cakes">Cakes <span class="nav__n" id="nav-cakes-n" hidden></span></a>
+      <a href="/admin/blocked" aria-current="page">Blocked</a>
+    </nav>
+    <div class="topbar__spacer"></div>
+    <a class="shop-pill" id="shop-pill" href="/admin#shop" hidden></a>
+    <span class="topbar__user" id="who"></span>
+    <a class="btn btn--ghost" href="/" target="_blank" rel="noopener">View menu</a>
+    <button class="btn btn--ghost" type="button" id="signout">Sign out</button>
+  </div>
+</header>
+
+<main class="admin">
+  <div class="admin__head">
+    <div>
+      <h2 class="admin__title">Blocked numbers</h2>
+      <p class="admin__sub" id="summary">Loading…</p>
+    </div>
+  </div>
+
+  <p class="alert" id="page-error" role="alert" hidden></p>
+
+  <!-- Blocked numbers cannot order from the menu or book a cake online. They
+       are told to call or message instead, never that they are blocked. -->
+  <form class="block-add" id="add-form" novalidate>
+    <div class="field">
+      <label for="b-phone">Mobile number</label>
+      <input id="b-phone" type="tel" inputmode="tel" maxlength="20" autocomplete="off" placeholder="0917 123 4567" required>
+    </div>
+    <div class="field field--wide">
+      <label for="b-reason">Reason <span class="hint">(optional, only you see it)</span></label>
+      <input id="b-reason" type="text" maxlength="200" autocomplete="off">
+    </div>
+    <button class="btn btn--danger" type="submit" id="add-save">Block number</button>
+  </form>
+  <p class="field__err" id="add-err" hidden></p>
+
+  <ul class="rows" id="blocked"></ul>
+
+  <p class="empty-note" id="empty" hidden>
+    No blocked numbers. Block one here, or with <strong>Block this number</strong> on an order.
+  </p>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- ---------- Unblock confirmation ---------- -->
+<dialog class="modal modal--sm" id="confirm" aria-labelledby="confirm-title">
+  <div class="modal__head">
+    <h2 class="modal__title" id="confirm-title">Unblock this number?</h2>
+  </div>
+  <div class="modal__body">
+    <p id="confirm-text"></p>
+  </div>
+  <div class="modal__foot">
+    <button class="btn btn--ghost" type="button" id="confirm-cancel">Keep blocked</button>
+    <button class="btn btn--primary" type="button" id="confirm-ok">Unblock</button>
+  </div>
+</dialog>
+
+<script src="/admin/common.js" defer></script>
+<script src="/admin/blocked.js" defer></script>
+</body>
+</html>
