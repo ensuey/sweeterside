@@ -496,6 +496,46 @@
     render();
   }
 
+  /** 0917 123 4567, +63 917 123 4567 or 639171234567: the forms the server accepts. */
+  function isPhMobile(raw) {
+    var s = String(raw || '').trim();
+    if (!/^\+?[\d\s()-]+$/.test(s)) return false;
+    return /^(\+63|63|0)9\d{9}$/.test(s.replace(/[\s()-]/g, ''));
+  }
+
+  /* ---------------------------- checkout token ---------------------------- */
+
+  /* The server only takes an order that carries a token it signed at least a
+     few seconds earlier and at most two hours before. One is fetched when the
+     cart opens and renewed once it gets old. */
+  var token = null; // { value, at: when it arrived (this clock), minMs }
+  var TOKEN_RENEW_MS = 100 * 60 * 1000;
+
+  function fetchToken() {
+    return fetch('api/checkout-token', { cache: 'no-store' })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (data) {
+        token = data && data.token ? { value: data.token, at: Date.now(), minMs: data.min_ms || 3000 } : null;
+        return token;
+      })
+      .catch(function () { return null; });
+  }
+
+  function freshToken() {
+    if (token && Date.now() - token.at < TOKEN_RENEW_MS) return Promise.resolve(token);
+    return fetchToken();
+  }
+
+  /** The token, once it is old enough for the server (a fast customer waits a moment). */
+  function readyToken() {
+    return freshToken().then(function (t) {
+      if (!t) return null;
+      var wait = t.minMs + 500 - (Date.now() - t.at);
+      if (wait <= 0) return t;
+      return new Promise(function (resolve) { setTimeout(function () { resolve(t); }, wait); });
+    });
+  }
+
   /* Every field is required. The server checks all of this too; checking here
      saves a round trip and points the customer at what is missing. */
   function checkFields() {
@@ -504,16 +544,19 @@
     if (!name) errors.name = 'Enter your full name.';
 
     if (type !== 'dinein') {
-      var phoneDigits = form.elements.phone.value.replace(/\D/g, '');
-      if (!phoneDigits) errors.phone = 'Enter a phone number we can call.';
-      else if (phoneDigits.length < 7 || phoneDigits.length > 15) errors.phone = 'That phone number does not look right.';
+      var phone = form.elements.phone.value;
+      if (!phone.replace(/\D/g, '')) errors.phone = 'Enter a phone number we can call.';
+      else if (!isPhMobile(phone)) errors.phone = 'Please enter a valid PH mobile number, e.g. 0917 123 4567.';
     }
 
     if (type === 'delivery') {
       var address = form.elements.address.value.trim();
+      var landmark = form.elements.landmark.value.trim();
       var cashRaw = form.elements.cash.value.trim();
       var cash = Number(cashRaw);
       if (!address) errors.address = 'Enter the delivery address.';
+      if (!landmark) errors.landmark = 'Add a landmark or directions, e.g. beside 7-Eleven, green gate.';
+      else if (landmark.length < 5) errors.landmark = 'Tell us a little more so the rider can find you.';
       if (!cashRaw) errors.cash = 'Enter how much cash you will pay with.';
       else if (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash) errors.cash = 'Enter the cash as a whole number of pesos.';
       else if (cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
@@ -577,22 +620,27 @@
       name: form.elements.name.value,
       phone: type === 'dinein' ? '' : form.elements.phone.value,
       address: type === 'delivery' ? form.elements.address.value : '',
+      landmark: type === 'delivery' ? form.elements.landmark.value : '',
       cash: type === 'delivery' ? form.elements.cash.value.trim() : '',
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
       voucher: voucher ? voucher.code : '',
       items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
       expected_total: total(),
+      website: form.elements.website.value, // the honeypot: empty for people
     };
 
     sending = true;
     submitBtn.disabled = true;
     render();
 
-    fetch('api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    readyToken().then(function (t) {
+      payload.checkout_token = t ? t.value : '';
+      return fetch('api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
         return { status: res.status, ok: res.ok, data: data };
@@ -601,6 +649,7 @@
       if (r.ok && r.data.order) {
         lines = [];
         setVoucher(null); // a code is used once per order; the next one starts fresh
+        token = null;     // and so does the checkout token
         save();
         form.reset();
         setType(type); // reset() unchecked the type; keep it for next time
@@ -617,6 +666,14 @@
         shopClosed = true;
         $('cart-closed').textContent = r.data.error;
         render();
+        return;
+      }
+      // The token was missing or too old (a page left open for hours): get a
+      // new one, and the next tap goes through.
+      if (r.status === 409 && r.data.retry) {
+        token = null;
+        fetchToken();
+        formError(r.data.error);
         return;
       }
       if (r.status === 409 && r.data.quote) {
@@ -644,6 +701,7 @@
     view.hidden = false;
     done.hidden = true;
     refreshTypes(); // the page may have been open a while: recheck pick-up times
+    freshToken();
     dialog.showModal();
   }
 

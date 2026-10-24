@@ -597,3 +597,6 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
   .card:hover { transform: none; }
   .card:hover .shot img { transform: none; }
 }
+
+/* Checkout honeypot: off-screen rather than display:none, so form-filling bots still see it. */
+.hp { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }

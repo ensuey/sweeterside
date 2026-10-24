@@ -146,8 +146,14 @@
 
       <div class="cfield" data-for="delivery">
         <label for="o-address">Delivery address</label>
-        <textarea id="o-address" name="address" rows="3" autocomplete="street-address" maxlength="400" placeholder="House no., street, barangay, city. Add a landmark if it helps." required></textarea>
+        <textarea id="o-address" name="address" rows="3" autocomplete="street-address" maxlength="400" placeholder="House no., street, barangay, city" required></textarea>
         <p class="cfield__err" data-err="address" hidden></p>
+      </div>
+
+      <div class="cfield" data-for="delivery">
+        <label for="o-landmark">Landmark / directions</label>
+        <input id="o-landmark" name="landmark" type="text" minlength="5" maxlength="200" autocomplete="off" placeholder="e.g. beside 7-Eleven, green gate" required>
+        <p class="cfield__err" data-err="landmark" hidden></p>
       </div>
 
       <div class="cfield" data-for="delivery">
@@ -176,6 +182,13 @@
           <button class="voucher__remove" type="button" id="v-remove">Remove</button>
         </p>
         <p class="cfield__err" id="voucher-err" role="alert" hidden></p>
+      </div>
+
+      <!-- Left empty by people, who never see it; bots that fill every field
+           fill this one too, and the server refuses the order. -->
+      <div class="hp" aria-hidden="true">
+        <label for="o-website">Website</label>
+        <input id="o-website" name="website" type="text" tabindex="-1" autocomplete="off">
       </div>
 
       <p class="cfield__err" data-err="items" hidden></p>
