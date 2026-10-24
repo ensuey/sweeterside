@@ -37,7 +37,7 @@ function blankTicket() {
   return {
     id: null, version: null, status: null, held: true, type: 'dinein', table_no: '', pax: '',
     customer_name: '', phone: '', address: '', landmark: '', lines: [],
-    discounts: blankDiscounts(), discountsTouched: false, pendingKey: null,
+    discounts: blankDiscounts(), discountsTouched: false, pendingKey: null, dirty: false,
   };
 }
 
@@ -64,7 +64,7 @@ function fromOrder(o) {
       delivery_fee: i.delivery_fee_cents === null || i.delivery_fee_cents === undefined ? null : i.delivery_fee_cents / 100,
       fee_reason: i.fee_reason || '',
     },
-    discountsTouched: false, pendingKey: null,
+    discountsTouched: false, pendingKey: null, dirty: false,
   };
 }
 
@@ -78,6 +78,7 @@ function persist() {
 /** After any edit: the old request key is for a different ticket now. */
 function changed({ discounts = false } = {}) {
   P.t.pendingKey = null;
+  P.t.dirty = true;
   if (discounts) P.t.discountsTouched = true;
   persist();
   renderTicket();
@@ -357,6 +358,8 @@ function renderSummary() {
   const blocked = !P.online || P.saving;
   $('save-btn').disabled = blocked || !P.t.lines.length;
   $('send-btn').disabled = blocked || !P.t.lines.some((l) => l.qty > 0);
+  $('pay-btn').hidden = !staffGate.can('take_payment');
+  $('pay-btn').disabled = $('send-btn').disabled;
 }
 
 /* ---------------------------- saving ---------------------------- */
@@ -416,7 +419,7 @@ function showFieldErrors(fields) {
  * Save the ticket (and send it to the kitchen). Owner approval, a void
  * reason or a fresh copy are asked for as the server needs them.
  */
-async function submit(send) {
+async function submit(send, { keep = false } = {}) {
   if (!P.online) return toast('No connection: the ticket is kept here until it is back.', 'error');
   if (P.saving) return;
   const t = P.t;
@@ -445,7 +448,7 @@ async function submit(send) {
         const res = t.id
           ? await staffGate.call(`/api/pos/orders/${t.id}`, { method: 'PUT', body })
           : await staffGate.call('/api/pos/orders', { method: 'POST', body });
-        return saved(res, send);
+        return saved(res, send, keep);
       } catch (e) {
         if (e.offline) {
           setOnline(false);
@@ -488,18 +491,34 @@ async function submit(send) {
   }
 }
 
-function saved(res, send) {
+/**
+ * After a save: a fresh ticket for the next customer, with a line offering
+ * to print the kitchen ticket. With keep (saving before payment) the saved
+ * order stays on screen instead. @returns the order id
+ */
+function saved(res, send, keep = false) {
   const o = res.order;
   const what = o.order_type === 'dinein' ? `Table ${o.table_no}` : `#${o.id}`;
+  P.last = { id: o.id, kitchen: res.kitchen };
   if (send) {
     const list = res.kitchen.map((k) => `${k.qty} × ${k.name}`).join(', ');
     toast(res.kitchen.length ? `${what} sent to the kitchen: ${list}` : `${what} saved. Nothing new for the kitchen.`);
-  } else {
+  } else if (!keep) {
     toast(`${what} saved.`);
   }
-  startNew();
   refreshTabs();
   loadMenu().catch(() => {});
+  if (keep) {
+    P.t = fromOrder(o);
+    P.quote = o.pricing;
+    persist();
+    renderTicket();
+    return o.id;
+  }
+  startNew();
+  $('after-text').textContent = send ? `${what} sent.` : `${what} saved.`;
+  $('after').hidden = !(send && res.kitchen.length);
+  return o.id;
 }
 
 function startNew() {
@@ -509,9 +528,19 @@ function startNew() {
   P.voids = [];
   showFieldErrors(null);
   ticketError('');
+  $('after').hidden = true;
   persist();
   renderTicket();
   showPanel('menu');
+}
+
+/**
+ * Before taking payment the order must be saved as it is on screen.
+ * @returns the order id, or null if the save did not go through
+ */
+async function saveForPayment() {
+  if (P.t.id && !P.t.dirty) return P.t.id;
+  return submit(false, { keep: true });
 }
 
 /** Load a saved order onto the screen. Asks first if the current ticket has unsaved items. */
@@ -783,6 +812,7 @@ function bind() {
   const bindField = (id, key) => $(id).addEventListener('input', (e) => {
     P.t[key] = e.target.value;
     P.t.pendingKey = null;
+    P.t.dirty = true;
     persist();
     showFieldErrors(null);
     if (key === 'customer_name') { $('t-name').value = e.target.value; $('d-name').value = e.target.value; }
@@ -947,7 +977,10 @@ function bind() {
   window.addEventListener('offline', () => setOnline(false));
   staffGate.onChange((s) => {
     $('who-staff').textContent = s ? `${s.staff.name} · ${staffGate.ROLE[s.staff.role]}` : '';
-    if (s) renderTicket();
+    if (s) {
+      renderTicket();
+      loadShift().catch(() => {});
+    }
   });
 }
 
@@ -964,6 +997,17 @@ adminBoot(async () => {
   showPanel('menu');
   setOnline(navigator.onLine);
   await staffGate.start();
+  // A tab kept from before: reload it, or drop it if it was paid or closed meanwhile.
+  if (P.t.id) {
+    try {
+      const { order } = await staffGate.call(`/api/pos/orders/${P.t.id}`);
+      if (order.paid || ['cancelled', 'completed'].includes(order.status)) P.t = blankTicket();
+      else if (!P.t.dirty) P.t = fromOrder(order);
+    } catch {
+      P.t = blankTicket();
+    }
+    persist();
+  }
   await loadMenu();
   renderTicket();
   requestQuote();

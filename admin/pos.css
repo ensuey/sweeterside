@@ -122,7 +122,8 @@ body.pos {
 .seg button[aria-checked="true"] { background: var(--surface); box-shadow: var(--shadow); color: var(--coral-ink); }
 .seg--sm button { min-height: 40px; }
 
-.tfields { display: flex; gap: .6rem; }
+.tfields { display: flex; gap: .6rem; align-items: flex-end; }
+.tfields .hint { margin: 0; }
 .tfields--wrap { flex-wrap: wrap; }
 .tfields .field { width: 7rem; }
 .tfields .field--grow { flex: 1; width: auto; min-width: 9rem; }
@@ -211,3 +212,71 @@ body.pos {
 .tab__total { font-family: "Fredoka", sans-serif; font-weight: 600; }
 .tab__actions { grid-column: 1 / -1; display: flex; gap: .4rem; flex-wrap: wrap; }
 .tab__actions select { min-height: 44px; border-radius: var(--r-full); border: 1.5px solid var(--line); padding: 0 .8rem; font: inherit; }
+
+/* ---------------- payments, shift, receipts ---------------- */
+.btn--pay { background: var(--ok); color: #fff; }
+.btn--pay:hover:not(:disabled) { filter: brightness(1.08); }
+.shift-btn[data-open="0"] { border-color: #E6C27A; background: #FFF4E0; }
+.after { margin: 0; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-weight: 700; color: var(--ok); }
+
+.paysum, .rd { margin: 0; display: flex; flex-direction: column; gap: .25rem; }
+.paysum div, .rd div { display: flex; justify-content: space-between; gap: 1rem; }
+.paysum dd, .rd dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; }
+.paysum .is-total { font-size: 1.3rem; font-family: "Fredoka", sans-serif; }
+.paysum .is-total dd { color: var(--coral-ink); }
+.paid-list { list-style: none; margin: 0; padding: 0; font-size: .9375rem; }
+.paid-list li { display: flex; justify-content: space-between; gap: 1rem; padding: .2rem 0; }
+.pay-entry { display: flex; flex-direction: column; gap: .7rem; }
+.methods { display: flex; flex-wrap: wrap; gap: .4rem; }
+.method {
+  min-height: 48px; padding: 0 1rem; cursor: pointer; font: 700 .9375rem "Nunito", sans-serif; color: var(--ink);
+  border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+}
+.method[aria-checked="true"] { border-color: var(--coral-ink); background: #FDF1EE; color: var(--coral-ink); }
+.method:disabled { opacity: .45; cursor: not-allowed; }
+.quick { display: flex; flex-wrap: wrap; gap: .4rem; }
+.quick .chip { min-height: 44px; }
+.change { margin: 0; min-height: 1.5em; font: 600 1.2rem "Fredoka", sans-serif; color: var(--ok); }
+.paid-done { text-align: center; }
+.paid-done__title { margin: 0; font: 600 2rem "Fredoka", sans-serif; color: var(--ok); }
+.paid-done__change { margin: .2rem 0 0; font: 600 1.5rem "Fredoka", sans-serif; }
+
+.reading { display: flex; flex-direction: column; gap: .4rem; }
+.reading h4 { margin: .6rem 0 .1rem; font-size: .9375rem; }
+.reading__kind { margin: 0; font-weight: 700; color: var(--navy); }
+.rd .is-strong { font-weight: 700; }
+.rd-moves { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .875rem; color: var(--ink-soft); }
+.slip__meta { margin: 0; font-size: .8125rem; color: var(--ink-soft); }
+
+/* ---------------- printing ---------------- */
+.print-area { display: none; }
+
+@media print {
+  body.pos { height: auto; overflow: visible; display: block; background: #fff; }
+  body.pos > *:not(.print-area) { display: none !important; }
+  .print-area {
+    display: block; color: #000; background: #fff;
+    font: 400 11px/1.35 ui-monospace, "Courier New", monospace;
+  }
+  .slip--58 { width: 54mm; }
+  .slip--80 { width: 76mm; }
+  .slip p { margin: 0; }
+  .slip__title { text-align: center; font-weight: 700; font-size: 14px; margin-bottom: 2px !important; }
+  .slip__big { text-align: center; font-weight: 700; font-size: 20px; }
+  .slip__center { text-align: center; }
+  .slip__notice { text-align: center; font-weight: 700; margin: 4px 0 !important; }
+  .slip__meta { color: #000; font-size: 11px; margin: 4px 0 !important; }
+  .slip__rule { border-top: 1px dashed #000; margin: 4px 0; }
+  .slip__line, .slip__sub, .slip > div:not(.slip__rule):not(.slip__claim), .slip__claim div, .slip .rd div {
+    display: flex; justify-content: space-between; gap: 6px;
+  }
+  .slip__sub { padding-left: 10px; font-size: 10px; }
+  .slip__claim { margin: 3px 0; }
+  .slip .is-total { font-weight: 700; font-size: 14px; border-top: 1px solid #000; padding-top: 2px; margin-top: 2px; }
+  .slip .is-strong { font-weight: 700; }
+  .slip__kline { font-size: 15px; margin: 3px 0 !important; }
+  .slip h4 { margin: 6px 0 2px; font-size: 12px; border-bottom: 1px solid #000; }
+  .slip .rd { display: block; margin: 0; }
+  .slip .rd dd { margin: 0; }
+  .slip .rd-moves { padding-left: 12px; color: #000; font-size: 10px; }
+}

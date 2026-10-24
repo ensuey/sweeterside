@@ -22,6 +22,8 @@
   <h1 class="pos-bar__title">POS</h1>
   <button class="btn btn--ghost btn--sm" type="button" id="tabs-btn">Open tabs <span class="nav__n" id="tabs-n" hidden></span></button>
   <button class="btn btn--ghost btn--sm" type="button" id="new-btn">New ticket</button>
+  <button class="btn btn--ghost btn--sm" type="button" id="receipts-btn">Receipts</button>
+  <button class="btn btn--ghost btn--sm shift-btn" type="button" id="shift-btn" data-open="0">Shift</button>
   <div class="pos-bar__spacer"></div>
   <span class="net" id="net" role="status" hidden>Offline</span>
   <span class="pos-bar__who" id="who-staff"></span>
@@ -106,10 +108,17 @@
     <p class="ticket__needs" id="needs" hidden></p>
     <p class="alert" id="ticket-error" role="alert" hidden></p>
 
+    <p class="after" id="after" hidden>
+      <span id="after-text"></span>
+      <button class="link" type="button" id="after-kitchen">Print kitchen ticket</button>
+      <button class="link" type="button" id="after-receipt" hidden>Print receipt</button>
+    </p>
+
     <div class="ticket__actions">
       <button class="btn btn--danger-ghost" type="button" id="void-btn" hidden>Void</button>
       <button class="btn btn--ghost" type="button" id="save-btn">Save tab</button>
       <button class="btn btn--primary" type="button" id="send-btn">Send to kitchen</button>
+      <button class="btn btn--pay" type="button" id="pay-btn" hidden>Pay</button>
     </div>
   </section>
 </main>
@@ -242,10 +251,135 @@
   </form>
 </dialog>
 
+<!-- Payment -->
+<dialog class="modal" id="pay-dialog" aria-labelledby="pay-title">
+  <form method="dialog" class="modal__form" id="pay-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="pay-title">Payment</h2>
+      <button class="icon-btn" type="button" id="pay-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <dl class="paysum" id="paysum"></dl>
+      <ul class="paid-list" id="paid-list"></ul>
+      <div class="pay-entry" id="pay-entry">
+        <div class="methods" id="methods" role="radiogroup" aria-label="Payment method"></div>
+        <div class="tfields tfields--wrap">
+          <div class="field field--xs"><label for="pay-amount">Amount (Php)</label><input id="pay-amount" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs" id="tender-box"><label for="pay-tendered">Cash handed over</label><input id="pay-tendered" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow" id="ref-box" hidden><label for="pay-ref">Reference number</label><input id="pay-ref" maxlength="60" autocomplete="off"></div>
+        </div>
+        <div class="quick" id="quick" role="group" aria-label="Cash handed over">
+          <button type="button" class="chip" data-cash="exact">Exact</button>
+          <button type="button" class="chip" data-cash="100">Php 100</button>
+          <button type="button" class="chip" data-cash="200">Php 200</button>
+          <button type="button" class="chip" data-cash="500">Php 500</button>
+          <button type="button" class="chip" data-cash="1000">Php 1,000</button>
+        </div>
+        <p class="change" id="change" aria-live="polite"></p>
+        <label class="fee__check" id="pay-send-box"><input type="checkbox" id="pay-send" checked> Send to the kitchen when paid</label>
+        <p class="field__err" id="pay-err" hidden></p>
+      </div>
+      <div class="paid-done" id="pay-done" hidden>
+        <p class="paid-done__title">Paid</p>
+        <p class="paid-done__change" id="pay-done-change"></p>
+      </div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="pay-print" hidden>Print receipt</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--primary" type="submit" id="pay-submit">Take payment</button>
+      <button class="btn btn--primary" type="button" id="pay-next" hidden>New ticket</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Shift and cash drawer -->
+<dialog class="modal" id="shift-dialog" aria-labelledby="shift-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="shift-title">Shift</h2>
+      <button class="icon-btn" type="button" id="shift-close-x" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <form class="tfields tfields--wrap" id="shift-open-form" hidden novalidate>
+        <p class="hint field--full">No shift is open. Count the cash in the drawer to start.</p>
+        <div class="field field--xs"><label for="shift-opening">Starting cash (Php)</label><input id="shift-opening" type="number" min="0" step="0.01" inputmode="decimal"></div>
+        <button class="btn btn--primary" type="submit">Open shift</button>
+      </form>
+      <div id="shift-open-view" hidden>
+        <div class="reading" id="reading"></div>
+        <form class="tfields tfields--wrap" id="cash-form" novalidate>
+          <h3 class="panel__sub field--full">Cash in or out of the drawer</h3>
+          <div class="seg seg--sm field--full" id="cash-kind" role="radiogroup" aria-label="Cash in or out">
+            <button type="button" role="radio" data-kind="out" aria-checked="true">Cash out</button>
+            <button type="button" role="radio" data-kind="in" aria-checked="false">Cash in</button>
+          </div>
+          <div class="field field--xs"><label for="cash-amount">Amount (Php)</label><input id="cash-amount" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow"><label for="cash-reason">What for</label><input id="cash-reason" maxlength="200" placeholder="Bought ice" autocomplete="off"></div>
+          <button class="btn btn--ghost" type="submit">Record</button>
+        </form>
+        <form class="tfields tfields--wrap" id="close-form" novalidate>
+          <h3 class="panel__sub field--full">Close the shift</h3>
+          <div class="field field--xs"><label for="close-counted">Cash counted (Php)</label><input id="close-counted" type="number" min="0" step="0.01" inputmode="decimal"></div>
+          <div class="field field--xs field--grow"><label for="close-note">Note (needed if it is off)</label><input id="close-note" maxlength="300" autocomplete="off"></div>
+          <button class="btn btn--danger" type="submit">Close shift</button>
+        </form>
+      </div>
+      <p class="field__err" id="shift-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="shift-print" hidden>Print reading</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Paid orders: reprint and refund -->
+<dialog class="modal" id="receipts-dialog" aria-labelledby="receipts-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="receipts-title">Paid orders</h2>
+      <button class="icon-btn" type="button" id="receipts-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <ul class="tabs" id="receipts"></ul>
+      <p class="hint" id="receipts-empty" hidden>No paid orders yet.</p>
+    </div>
+  </div>
+</dialog>
+
+<!-- Refund -->
+<dialog class="modal" id="refund-dialog" aria-labelledby="refund-title">
+  <form method="dialog" class="modal__form" id="refund-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="refund-title">Refund</h2></div>
+    <div class="modal__body">
+      <p class="hint" id="refund-lead"></p>
+      <fieldset class="sc-mode">
+        <legend>What is refunded?</legend>
+        <label class="fee__check"><input type="radio" name="refund-kind" value="full" checked> Everything not refunded yet</label>
+        <label class="fee__check"><input type="radio" name="refund-kind" value="lines"> Some items</label>
+      </fieldset>
+      <ul class="sc-lines" id="refund-lines" hidden></ul>
+      <div class="field"><label for="refund-method">Paid back by</label><select id="refund-method"></select></div>
+      <div class="field"><label for="refund-ref">Reference (GCash, Maya, card)</label><input id="refund-ref" maxlength="60" autocomplete="off"></div>
+      <div class="field"><label for="refund-reason">Reason</label><input id="refund-reason" maxlength="200" autocomplete="off"></div>
+      <p class="hint">Refunds need the owner.</p>
+      <p class="field__err" id="refund-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="refund-cancel">Cancel</button>
+      <button class="btn btn--danger" type="submit">Refund</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- What gets printed: a receipt, a kitchen ticket or a shift reading -->
+<div class="print-area" id="print-area" aria-hidden="true"></div>
+
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="/admin/common.js"></script>
 <script src="/admin/staff-gate.js"></script>
 <script src="/admin/pos.js"></script>
+<script src="/admin/pos-pay.js"></script>
 </body>
 </html>
