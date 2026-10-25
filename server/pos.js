@@ -246,6 +246,14 @@ function parseDiscounts(raw, keyOf, errors, now) {
 }
 
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+// A manual discount compared without the approval kept with it.
+const withoutApproval = (m) => (m ? { ...m, approved_bp: undefined } : m);
+
+/** The share of its base a manual discount takes, in basis points, rounded up. */
+function manualShareBp(manual) {
+  if (!manual || !manual.base_cents) return 0;
+  return Math.ceil((manual.discount * 10000) / manual.base_cents);
+}
 
 /* ---------------------------- pricing ---------------------------- */
 
@@ -270,7 +278,12 @@ function engineInput(type, lines, d, voucherRow, actor, discountApproved) {
     manual: d.manual || null,
     service: { ...pos.service_charge, removed_reason: d.service_removed_reason },
     delivery: { default_cents: orders.getDeliveryFee() * 100, cents: d.delivery_fee_cents, reason: d.fee_reason },
-    limits: { manual_bp: actor.role === 'owner' ? 10000 : pos.cashier_discount_limit_bp },
+    // A manual discount the owner approved may stay at the share of the order
+    // they approved (approved_bp); anything above that needs them again.
+    limits: {
+      manual_bp: actor.role === 'owner' ? 10000
+        : Math.max(pos.cashier_discount_limit_bp, (d.manual && d.manual.approved_bp) || 0),
+    },
     // Prices on the lines were approved when they were set. A manual discount
     // above the limit needs approving when it changes.
     override: { prices: true, discount: discountApproved },
@@ -467,11 +480,13 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
 
   const changed = {
     voucher: discounts.voucher_code !== (stored.voucher_code || ''),
-    manual: !same(discounts.manual, stored.manual),
+    manual: !same(withoutApproval(discounts.manual), withoutApproval(stored.manual)),
     claimants: !same(discounts.claimants, stored.claimants || []) || !same(discounts.diners, stored.diners ?? null),
     service: discounts.service_removed_reason !== (stored.service_removed_reason ?? null),
     fee: discounts.delivery_fee_cents !== (stored.delivery_fee_cents ?? null),
   };
+  // An unchanged discount keeps the share the owner approved, if any.
+  if (!changed.manual && discounts.manual) discounts.manual.approved_bp = (stored.manual && stored.manual.approved_bp) || 0;
   if (changed.voucher) need('apply_voucher');
   if (changed.manual) need('manual_discount');
   if (changed.claimants) need('claim_sc_pwd');
@@ -481,13 +496,15 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
   if (!result.length) errors.lines = errors.lines || 'Add at least one item.';
   if (Object.keys(errors).length) throw new ValidationError(errors);
 
-  // Price it. A changed manual discount above the cashier limit needs the owner.
+  // Price it. A manual discount above the cashier limit (or above what the
+  // owner approved) needs the owner: checked on every save against the order
+  // as it is now, so taking items off cannot stretch a discount.
   let priced;
   try {
-    priced = pricing.price(engineInput(meta.type, result, discounts, voucherRow, actor, !changed.manual));
+    priced = pricing.price(engineInput(meta.type, result, discounts, voucherRow, actor, false));
   } catch (err) {
     if (!(err instanceof pricing.PricingError) || err.code !== 'override_required' || err.field !== 'manual') {
-      priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, !changed.manual));
+      priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, false));
     }
     needs.add('discount_over_limit');
     priced = priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, true));
@@ -616,6 +633,11 @@ function save(id, body, actor, now = new Date()) {
 
     const priced = priceOrThrow(engineInput(p.meta.type, savedEngineLines(orderId), d, p.voucherRow, actor, true));
     writePricing(orderId, priced);
+    // Keep the share of the order the owner approved (or gave), so later saves
+    // can hold it there without asking again, but not stretch it.
+    const ownerApproved = actor.role === 'owner' || p.needs.has('discount_over_limit');
+    if (d.manual && ownerApproved) d.manual.approved_bp = manualShareBp(priced.manual);
+    else if (d.manual && !d.manual.approved_bp) delete d.manual.approved_bp;
 
     const prevVersion = existing ? existing.pos_version : -1;
     db.prepare(`
@@ -639,7 +661,7 @@ function save(id, body, actor, now = new Date()) {
       audit.record({ ...by, action: 'price_change', reason: c.reason,
         details: { line: c.line.name, from_cents: c.from, to_cents: c.to } });
     }
-    if (p.changed.manual && priced.manual) {
+    if ((p.changed.manual || p.needs.has('discount_over_limit')) && priced.manual) {
       audit.record({ ...by, action: 'manual_discount', amount_cents: priced.manual.discount, reason: priced.manual.reason,
         details: { kind: priced.manual.kind, bp: priced.manual.bp, cents: priced.manual.cents, line: priced.manual.line } });
     }

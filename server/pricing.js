@@ -369,9 +369,11 @@ function price(input) {
 
   let manualLines = zeros();
   let manualOff = 0;
+  let manualBase = 0;
   if (manual) {
     const weights = scope(pool);
     const base = sum(weights);
+    manualBase = base;
     manualOff = manualAmount(manual, base);
     const limitBp = input.limits && Number.isSafeInteger(input.limits.manual_bp) ? input.limits.manual_bp : 0;
     const over = manual.kind === 'percent' ? manual.bp > limitBp : manualOff * 10000 > limitBp * base;
@@ -461,7 +463,7 @@ function price(input) {
     voucher: voucher ? { code: voucher.code, label: voucher.label || '', discount: voucherOff } : null,
     manual: manual ? {
       kind: manual.kind, bp: manual.bp, cents: manual.cents, line: manual.line,
-      reason: manual.reason, discount: manualOff,
+      reason: manual.reason, discount: manualOff, base_cents: manualBase,
     } : null,
     service,
     delivery,
