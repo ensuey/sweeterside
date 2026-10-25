@@ -597,6 +597,11 @@ function withLines(order, { fullIds = false } = {}) {
     .filter((l) => l.qty > l.voided_qty)
     .map((l) => ({ ...l, qty: l.qty - l.voided_qty, price: l.price_cents / 100 }));
   order.pricing = order.pricing ? JSON.parse(order.pricing) : null;
+  // pos_input is what the cashier typed, SC/PWD ID numbers in full; the POS
+  // reads it from the database itself (pos.view masks it per role). Neither
+  // it nor the request key ever goes out with an order.
+  delete order.pos_input;
+  delete order.last_request_key;
   if (order.pricing && !fullIds) {
     order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
   }

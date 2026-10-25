@@ -164,6 +164,34 @@ test('waiters take dine-in only and cannot give discounts', () => {
   assert.strictEqual(added.total, 270 - 27);
 });
 
+test('taking items off cannot stretch a discount past the limit or past what the owner approved', () => {
+  // Php 27 off two pastas (Php 270) is exactly the 10% cashier limit.
+  const big = pos.save(null, {
+    request_key: key(), type: 'pickup', lines: [newLine(PASTA(), 2)],
+    discounts: { manual: { kind: 'amount', value: 27, reason: 'Regular' } },
+  }, cashier).order;
+  assert.strictEqual(big.manual_discount, 27, 'exactly the 10% limit: allowed');
+
+  // One pasta off (never sent: free). Php 27 of 135 is 20%: the owner again.
+  const shrink = (o, extra = {}) => ({ ...ticketOf(o, { lines: [{ id: o.lines[0].id, key: o.lines[0].key, qty: 1 }] }), ...extra });
+  const needs = errorOf(() => pos.save(big.id, shrink(big), cashier));
+  assert.deepStrictEqual([needs.status, needs.body.needs], [403, ['discount_over_limit']]);
+  assert.deepStrictEqual(errorOf(() => pos.save(big.id, shrink(big, { discounts: { ...big.input, manual:
+    { kind: 'amount', value: 27, reason: 'Regular' } } }), cashier)).body.needs, ['discount_over_limit'], 'resending it changes nothing');
+  assert.deepStrictEqual(pos.quote(big.id, shrink(big), cashier).needs, ['discount_over_limit'], 'the preview says so too');
+
+  const approved = pos.save(big.id, shrink(big, { override: OWNER_OK }), cashier).order;
+  assert.strictEqual(approved.manual_discount, 27);
+  const log = audit.list({ action: 'manual_discount' })[0];
+  assert.deepStrictEqual([log.order_id, log.approver_name, log.amount_cents], [big.id, 'Dachel', 2700]);
+
+  // Approved at 20%: saving it again needs nobody; making it a bigger share does.
+  assert.strictEqual(pos.save(approved.id, ticketOf(approved), cashier).order.manual_discount, 27);
+  const again = pos.view(approved.id, cashier);
+  const matchaOnly = { ...ticketOf(again), lines: [newLine(MATCHA())] }; // 27 of 129: 20.9%
+  assert.deepStrictEqual(errorOf(() => pos.save(again.id, matchaOnly, cashier)).body.needs, ['discount_over_limit']);
+});
+
 test('a manual discount above the cashier limit needs the owner; it is audited', () => {
   const body = {
     request_key: key(), type: 'pickup', lines: [newLine(PASTA(), 2)],
@@ -200,6 +228,13 @@ test('SC/PWD, vouchers, service charge and the delivery fee through the POS', ()
   assert.strictEqual(order.input.claimants[0].id_no, 'OSCA-55501234', 'the cashier sees the full ID');
   assert.strictEqual(pos.view(order.id, waiter).input.claimants[0].id_no, '****1234', 'the waiter does not');
   assert.strictEqual(orders.get(order.id).pricing.claimants[0].id_no, '****1234', 'nor does the order queue');
+  // Nowhere in what a waiter or the order queue gets: not in the raw input either.
+  for (const [what, data] of [['waiter view', pos.view(order.id, waiter)], ['order', orders.get(order.id)],
+    ['queue', orders.list('all')], ['full-id order', orders.get(order.id, { fullIds: true })]]) {
+    const json = JSON.stringify(data);
+    assert.ok(!json.includes('pos_input') && !json.includes('last_request_key'), `${what}: no raw columns`);
+    if (what !== 'full-id order') assert.ok(!json.includes('OSCA-55501234'), `${what}: ID masked everywhere`);
+  }
 
   const removed = pos.save(order.id, ticketOf(order, {
     discounts: { ...order.input, service_removed_reason: 'Slow service' },
