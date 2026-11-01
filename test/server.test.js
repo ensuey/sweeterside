@@ -139,6 +139,23 @@ test('crop must be complete and inside the image', () => {
   assert.strictEqual(ok.crop_w, 184);
 });
 
+test('an item with no photo gets the logo, not a menu poster', () => {
+  for (const blank of [undefined, null, '', '   ']) {
+    const row = menu.validate({ ...base, image: blank });
+    assert.strictEqual(row.image, menu.DEFAULT_IMAGE, `blank image: ${JSON.stringify(blank)}`);
+    assert.strictEqual(row.crop_w, null, 'the logo is shown whole');
+  }
+  assert.ok(menu.resolveImage(menu.DEFAULT_IMAGE), 'the logo file exists');
+  // A path that does not resolve is still an error, never quietly the logo.
+  assert.ok(errorsFor({ ...base, image: 'assets/does-not-exist.jpg' }).image);
+  assert.ok(errorsFor({ ...base, image: '../server/db.js' }).image);
+});
+
+test('the image list marks only the logo as the default', () => {
+  const marked = menu.availableImages().filter((i) => i.default);
+  assert.deepStrictEqual(marked.map((i) => i.path), [menu.DEFAULT_IMAGE]);
+});
+
 /* ---------------------------- categories ---------------------------- */
 
 function categoryErrors(input, id) {
