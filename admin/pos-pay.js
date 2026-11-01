@@ -101,9 +101,11 @@ function shiftError(e) {
 
 /* ---------------------------- paying ---------------------------- */
 
-/** Open the payment screen for a saved order. */
-async function openPay(orderId) {
+/** Open the payment screen for a saved order. from: 'pos-online' when opened
+    from an online order in the POS, so closing goes back to that order. */
+async function openPay(orderId, { from = null } = {}) {
   const [{ order, balance }] = await Promise.all([staffGate.call(`/api/pos/orders/${orderId}`), loadShift()]);
+  PAY.from = from;
   PAY.order = order;
   PAY.balance = balance;
   PAY.key = newKey();
@@ -114,7 +116,7 @@ async function openPay(orderId) {
   $('pay-next').hidden = true;
   $('pay-print').hidden = true;
   $('pay-send-box').hidden = order.online || (!order.held && !order.lines.some((l) => l.qty > l.sent_qty - l.voided_qty));
-  $('pay-next').textContent = order.online ? 'Back to orders' : 'New ticket';
+  $('pay-next').textContent = from === 'pos-online' ? 'Back to the order' : order.online ? 'Back to orders' : 'New ticket';
   renderPay();
   // A delivery customer said what they would pay with; the rider brings that back.
   if (order.online && order.order_type === 'delivery' && order.cash > 0 && PAY.method === 'cash') {
@@ -180,6 +182,7 @@ async function takePayment() {
         }
         if (e.status === 403 && data.wrong_pin) { toast(e.message, 'error'); delete body.override; continue; }
         if (data.code === 'no_shift') {
+          PAY.from = null; // the shift dialog comes next, not the online order
           $('pay-dialog').close();
           toast('Open a shift first to take cash.', 'error');
           return showShift();
@@ -436,11 +439,19 @@ function bindPay() {
   $('pay-close').addEventListener('click', () => $('pay-dialog').close());
   // A paid order is done: closing the dialog any way starts the next ticket.
   $('pay-dialog').addEventListener('close', () => {
+    if (PAY.from === 'pos-online') {
+      // Back to the online order it came from, with its new paid state.
+      const id = PAY.order.id;
+      PAY.from = null;
+      loadOnlineList().then(() => openOnline(id)).catch((e) => toast(e.message, 'error'));
+      return;
+    }
     if (PAY.balance && PAY.balance.paid && P.t.id === PAY.order.id) startNew();
   });
   $('pay-print').addEventListener('click', () => printReceipt(PAY.lastReceipt).catch((e) => toast(e.message, 'error')));
   $('pay-next').addEventListener('click', () => {
     // An online order came from the Orders page: go back there, and leave the ticket alone.
+    if (PAY.from === 'pos-online') { $('pay-dialog').close(); return; }
     if (PAY.order && PAY.order.online) { location.href = '/admin/'; return; }
     $('pay-dialog').close();
     startNew();

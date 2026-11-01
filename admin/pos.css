@@ -211,6 +211,26 @@ body.pos {
 .tab__actions { grid-column: 1 / -1; display: flex; gap: .4rem; flex-wrap: wrap; }
 .tab__actions select { min-height: 44px; border-radius: var(--r-full); border: 1.5px solid var(--line); padding: 0 .8rem; font: inherit; }
 
+/* ---------------- online orders ---------------- */
+/* The count turns red and pulses while a New order has not been opened. */
+.nav__n--alert { background: var(--danger); animation: online-pulse 1.4s ease-in-out infinite; }
+@keyframes online-pulse { 50% { transform: scale(1.18); } }
+@media (prefers-reduced-motion: reduce) { .nav__n--alert { animation: none; } }
+.bell-btn { min-width: 44px; padding-inline: .5rem; }
+.sound-hint { border-color: var(--danger); color: var(--danger); }
+.sound-hint[hidden] { display: none; }
+.tab--unopened { border-color: var(--danger); background: #FDF3F1; }
+.tab--unopened .tab__title::before { content: "● "; color: var(--danger); }
+.od__state { margin: 0 0 .6rem; }
+.od__who { display: flex; flex-direction: column; gap: .15rem; margin-bottom: .8rem; }
+.od__name { font-weight: 700; font-size: 1.1rem; }
+.od__lines { padding-bottom: .5rem; margin-bottom: .5rem; border-bottom: 1px dashed var(--line); }
+.od__lines dt { font-weight: 600; }
+.od__cash { margin: .6rem 0 0; padding: .5rem .7rem; border-radius: var(--r-sm); background: #EEF6F0; }
+.od__cancel { margin-top: 1rem; }
+.od__cancel summary { cursor: pointer; color: var(--ink-soft); font-size: .875rem; }
+.od__cancel[open] { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
+
 /* ---------------- payments, shift, receipts ---------------- */
 .btn--pay { background: var(--ok); color: #fff; }
 .btn--pay:hover:not(:disabled) { filter: brightness(1.08); }

@@ -1024,6 +1024,7 @@ adminBoot(async () => {
     history.replaceState(null, '', '/admin/pos');
     openPay(payId).catch((e) => toast(e.message, 'error'));
   }
+  startOnline();
   // Keep the stock and the open tabs current.
   setInterval(() => {
     if (!P.online || document.hidden) return;

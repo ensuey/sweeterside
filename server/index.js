@@ -709,6 +709,56 @@ async function route(req, res) {
     return sendJson(res, 200, { orders: pos.open() });
   }
 
+  /* What the bell needs: active online orders by id, type and status only,
+     no customer details. Admin session only, so it still rings while the
+     POS is locked; the details below need a staff PIN. */
+  if (pathname === '/api/pos/online/pending' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    const list = orders.list('active').filter((o) => o.source === 'online')
+      .map((o) => ({ id: o.id, order_type: o.order_type, status: o.status }));
+    return sendJson(res, 200, { orders: list });
+  }
+
+  /* Online orders at the POS: the active ones, and moving them along.
+     Waiters take dine-in only, so they see and move online dine-in orders only. */
+  if (pathname === '/api/pos/online' && method === 'GET') {
+    const who = requireStaff(req, res);
+    if (!who) return;
+    const allTypes = staff.can(who.staff.role, 'takeout_and_delivery');
+    const list = orders.list('active')
+      .filter((o) => o.source === 'online' && (allTypes || o.order_type === 'dinein'));
+    return sendJson(res, 200, { orders: list });
+  }
+
+  const posOnlineMatch = pathname.match(/^\/api\/pos\/online\/(\d+)$/);
+  if (posOnlineMatch && method === 'PATCH') {
+    const who = requireStaff(req, res, { csrf: true });
+    if (!who) return;
+    const id = Number(posOnlineMatch[1]);
+    const current = orders.get(id);
+    if (!current || current.source !== 'online') return sendJson(res, 404, { error: 'That online order no longer exists.' });
+    if (current.order_type !== 'dinein' && !staff.can(who.staff.role, 'takeout_and_delivery')) {
+      return sendJson(res, 403, { error: 'Only the owner or a cashier can do that.' });
+    }
+    const body = await readJson(req);
+    const status = String(body.status ?? '');
+    const reason = body.reason === undefined ? undefined : String(body.reason);
+    // setStatus allows a cancel without a reason (the Orders page asks for one);
+    // at the POS a reason is always needed, and it is audited.
+    if (status === 'cancelled' && !orders.CANCEL_REASONS.includes(reason)) {
+      throw new menu.ValidationError({ reason: 'Choose why the order was cancelled.' });
+    }
+    const order = transaction(() => {
+      const changed = orders.setStatus(id, status, { reason });
+      if (status === 'cancelled' && current.status !== 'cancelled') {
+        audit.record({ action: 'order_cancel', staff: who.staff, order_id: id, reason, details: { from: current.status } });
+      }
+      return changed;
+    });
+    console.log(`[pos] online #${id} ${status} by staff ${who.staff.id}`);
+    return sendJson(res, 200, { order });
+  }
+
   if (pathname === '/api/pos/quote' && method === 'POST') {
     const who = requireStaff(req, res, { csrf: true });
     if (!who) return;
