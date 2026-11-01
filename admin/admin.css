@@ -465,8 +465,14 @@ a { color: var(--navy); }
 .flag--good { background: #EEF6F0; color: #1F5A3A; }
 .flag--bad  { background: #FDF3F1; color: var(--danger); }
 .flag--wait { background: var(--danger); color: #fff; }
-.order__actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.order__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .order__actions [data-confirm] { min-width: 7rem; }
+/* Block number: there when needed, but not something to tap by accident. */
+.link-quiet {
+  margin-left: auto; padding: .25rem; border: 0; background: none; cursor: pointer;
+  font: inherit; font-size: .8125rem; color: var(--ink-soft); text-decoration: underline;
+}
+.link-quiet:hover, .link-quiet:focus-visible { color: var(--danger); }
 
 .trust { margin-bottom: 3rem; }
 .trust .admin__sub { margin-bottom: 1rem; }

@@ -80,6 +80,7 @@ function historyText(h) {
 function flagsHtml(o) {
   const flags = [];
   if (o.source === 'pos') flags.push(`<span class="flag">Counter${o.paid_at ? ' · paid' : ''}</span>`);
+  else if (o.paid_at) flags.push('<span class="flag flag--good">Paid</span>');
   if (o.blocked) flags.push('<span class="flag flag--bad">Blocked number</span>');
   if (o.history) {
     const kind = o.history.no_show || o.history.fake ? 'bad'
@@ -96,14 +97,18 @@ function flagsHtml(o) {
   return flags.length ? `<div class="order__flags">${flags.join('')}</div>` : '';
 }
 
-/** Confirm (New orders) and Block this number (orders with a mobile number). */
+/** Confirm (New orders), Take payment (unpaid orders, on the POS pay screen)
+    and a quiet Block number link (orders with a mobile number). */
 function actionsHtml(o) {
   const actions = [];
   if (o.status === 'new') {
     actions.push(`<button class="btn btn--primary btn--sm" type="button" data-confirm>Confirm</button>`);
   }
+  if (!o.paid_at && o.status !== 'cancelled') {
+    actions.push(`<a class="btn btn--ghost btn--sm" href="/admin/pos?pay=${o.id}">Take payment</a>`);
+  }
   if (o.phone_norm && !o.blocked) {
-    actions.push(`<button class="btn btn--danger-ghost btn--sm" type="button" data-block>Block this number</button>`);
+    actions.push(`<button class="link-quiet" type="button" data-block>Block number</button>`);
   }
   return actions.length ? `<div class="order__actions">${actions.join('')}</div>` : '';
 }
@@ -119,7 +124,9 @@ function orderHtml(o) {
     .join('');
 
   // Delivery collects cash at the door; the other types pay at the counter.
-  const payment = o.source === 'pos'
+  const payment = o.source === 'online' && o.paid_at
+    ? '<dd class="order__change">Paid</dd>'
+    : o.source === 'pos'
     ? `<dd class="order__change">${o.paid_at ? 'Paid at the counter' : 'Not paid yet'}</dd>`
     : type === 'delivery'
     ? `<dt>Customer pays with</dt><dd>${money(o.cash)}</dd>
