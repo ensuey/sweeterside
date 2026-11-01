@@ -1,5 +1,5 @@
 'use strict';
-/* Payments and refunds on POS orders, and what goes on the receipt.
+/* Payments and refunds on POS and online orders, and what goes on the receipt.
 
    An order can be paid in parts, by more than one method; it is Paid only
    when the payments cover the total. Cash needs an open shift (the drawer)
@@ -58,9 +58,11 @@ function refundsOf(orderId) {
     .map((r) => ({ ...r, lines: r.lines ? JSON.parse(r.lines) : null, label: (METHODS[r.method] || { label: r.method }).label }));
 }
 
-function posOrder(id) {
-  const o = db.prepare("SELECT * FROM orders WHERE id = ? AND source = 'pos'").get(Number(id));
-  if (!o) throw httpError(404, 'That order is not a POS order or no longer exists.');
+/* POS orders and online orders are both paid here. Online orders are paid
+   when the customer pays at the counter, or the rider brings the cash back. */
+function payableOrder(id) {
+  const o = db.prepare("SELECT * FROM orders WHERE id = ? AND source IN ('pos', 'online')").get(Number(id));
+  if (!o) throw httpError(404, 'That order no longer exists.');
   return o;
 }
 
@@ -91,7 +93,7 @@ function balance(orderId) {
 function pay(orderId, body, actor) {
   const key = checkKey(body.request_key);
   const done = db.prepare('SELECT order_id FROM payments WHERE request_key = ? LIMIT 1').get(key);
-  const o = posOrder(orderId);
+  const o = payableOrder(orderId);
   if (done) return result(o.id, actor, 0, [], true);
 
   const approver = staff.authorise(actor, 'take_payment', body.override).approver;
@@ -140,7 +142,8 @@ function pay(orderId, body, actor) {
       db.prepare("UPDATE orders SET paid_at = datetime('now'), paid_shift_id = ?, updated_at = datetime('now') WHERE id = ?")
         .run(shift ? shift.id : null, o.id);
     }
-    const kitchen = body.send === true ? pos.sendToKitchen(o.id) : [];
+    // An online order goes through the order queue, never the kitchen send.
+    const kitchen = body.send === true && o.source === 'pos' ? pos.sendToKitchen(o.id) : [];
     return result(o.id, actor, rows.reduce((s, r) => s + r.change, 0), kitchen, false);
   });
 }
@@ -162,7 +165,7 @@ function result(orderId, actor, change, kitchen, replayed) {
  */
 function refund(orderId, body, actor) {
   const key = checkKey(body.request_key);
-  const o = posOrder(orderId);
+  const o = payableOrder(orderId);
   if (db.prepare('SELECT 1 FROM refunds WHERE request_key = ?').get(key)) {
     return { order: pos.view(o.id, actor), balance: balance(o.id), refunds: refundsOf(o.id), replayed: true };
   }
@@ -226,7 +229,7 @@ function refund(orderId, body, actor) {
  * the owner and cashiers (the slip goes to the customer); masked otherwise.
  */
 function receipt(orderId, actor) {
-  const o = posOrder(orderId);
+  const o = payableOrder(orderId);
   const order = orders.get(o.id, { fullIds: staff.can(actor.role, 'see_id_numbers') });
   const cashier = db.prepare(`SELECT s.name FROM payments p JOIN staff s ON s.id = p.staff_id
                               WHERE p.order_id = ? ORDER BY p.id DESC LIMIT 1`).get(o.id)
@@ -237,12 +240,13 @@ function receipt(orderId, actor) {
   };
 }
 
-/** Recent POS orders for reprinting and refunds: paid ones, newest first. */
+/** Recent paid orders (POS and online) for reprinting and refunds, newest first. */
 function recent(limit = 40) {
   return db.prepare(`
-    SELECT o.id, o.order_type, o.table_no, o.customer_name, o.total_cents, o.refunded_cents, o.paid_at, o.status,
+    SELECT o.id, o.source, o.order_type, o.table_no, o.customer_name, o.total_cents, o.refunded_cents, o.paid_at, o.status,
            (SELECT GROUP_CONCAT(DISTINCT method) FROM payments WHERE order_id = o.id) AS methods
-    FROM orders o WHERE o.source = 'pos' AND o.paid_at IS NOT NULL ORDER BY o.paid_at DESC, o.id DESC LIMIT ?`)
+    FROM orders o WHERE o.source IN ('pos', 'online') AND o.paid_at IS NOT NULL
+    ORDER BY o.paid_at DESC, o.id DESC LIMIT ?`)
     .all(limit);
 }
 

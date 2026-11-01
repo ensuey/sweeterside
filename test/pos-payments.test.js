@@ -193,3 +193,66 @@ test('a refunded line takes back its share of the service charge', () => {
   assert.strictEqual(r.refunds[0].amount_cents, 12900 + 1290);
   settings.updatePosSettings({ service_charge_on: false });
 });
+
+/* ---------------------------- online orders ---------------------------- */
+
+const orders = require('../server/orders');
+const checkout = require('../server/checkout');
+
+let phoneSeq = 100;
+/** An online delivery order of one Matcha Frappe (129), paid with 200 cash. */
+function onlineOrder() {
+  return orders.create({
+    type: 'delivery', name: 'Online Customer', phone: `0917 123 4${++phoneSeq}`,
+    address: '12 Mabini St, Brgy. Uno', landmark: 'green gate', cash: 200,
+    items: [{ id: item('Matcha Frappe').id, qty: 1 }], expected_total: 129,
+    checkout_token: checkout.issue(new Date(Date.now() - 10000)),
+  });
+}
+
+test('an online order can be paid at the POS, and the POS view never offers to send it', () => {
+  const o = onlineOrder();
+  const view = pos.view(o.id, cashier);
+  assert.deepStrictEqual([view.source, view.online, view.held], ['online', true, false]);
+  assert.ok(view.lines.every((l) => l.sent_qty >= l.qty), 'nothing to send to the kitchen');
+  assert.strictEqual(view.pos_input, undefined);
+
+  const res = pay(o.id, [{ method: 'gcash', amount: 129, reference: 'GC-ONLINE-1' }], { send: true });
+  assert.strictEqual(res.balance.paid, true);
+  assert.deepStrictEqual(res.kitchen, [], 'send is ignored for an online order');
+  const row = db.prepare('SELECT paid_at, kitchen_sent_at FROM orders WHERE id = ?').get(o.id);
+  assert.ok(row.paid_at);
+  assert.strictEqual(row.kitchen_sent_at, null);
+  assert.ok(payments.recent().some((r) => r.id === o.id && r.source === 'online'), 'listed for reprint and refund');
+  assert.strictEqual(payments.receipt(o.id, cashier).order.id, o.id);
+});
+
+test('cash for an online order goes into the open shift drawer; waiters need the owner', () => {
+  const o = onlineOrder();
+  const before = shifts.reading(shifts.current()).cash.expected_cents;
+  const denied = errorOf(() => payments.pay(o.id, { request_key: key(), payments: [{ method: 'cash', amount: 129 }] }, waiter));
+  assert.deepStrictEqual([denied.status, denied.body.override_required], [403, true]);
+
+  const res = pay(o.id, [{ method: 'cash', amount: 129, tendered: 200 }]);
+  assert.strictEqual(res.change_cents, 7100);
+  assert.strictEqual(shifts.reading(shifts.current()).cash.expected_cents, before + 12900);
+});
+
+test('online orders still cannot be edited or voided as POS tabs', () => {
+  const o = onlineOrder();
+  const saved = errorOf(() => pos.save(o.id, { request_key: key(), type: 'takeout', lines: [line('Matcha Frappe')] }, cashier));
+  assert.ok(saved.status === 404 || saved.status === 409, `save refused (${saved.status})`);
+  const voided = errorOf(() => pos.voidOrder(o.id, { reason: 'x', override: OWNER_OK }, cashier));
+  assert.ok(voided.status === 404 || voided.status === 409, `void refused (${voided.status})`);
+});
+
+test('a paid order cannot be cancelled until it is refunded', () => {
+  const o = onlineOrder();
+  pay(o.id, [{ method: 'maya', amount: 129, reference: 'MY-1' }]);
+  const err = errorOf(() => orders.setStatus(o.id, 'cancelled', { reason: 'customer' }));
+  assert.strictEqual(err.status, 409);
+  assert.strictEqual(orders.get(o.id).status, 'new');
+
+  payments.refund(o.id, { request_key: key(), method: 'maya', reference: 'MY-R1', reason: 'Customer changed mind' }, owner);
+  assert.strictEqual(orders.setStatus(o.id, 'cancelled', { reason: 'customer' }).status, 'cancelled');
+});
