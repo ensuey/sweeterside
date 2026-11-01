@@ -10,7 +10,7 @@ const { manilaDateStartSql, addDays } = require('./clock');
 const ACTIONS = [
   'void', 'refund', 'override', 'price_change', 'manual_discount', 'service_charge_removed',
   'delivery_fee_changed', 'cash_in', 'cash_out', 'shift_open', 'shift_close',
-  'staff_add', 'staff_change', 'staff_pin_change', 'settings_change',
+  'staff_add', 'staff_change', 'staff_pin_change', 'settings_change', 'order_cancel',
 ];
 
 /**

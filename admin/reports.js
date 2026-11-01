@@ -15,6 +15,7 @@ const ACTION = {
   delivery_fee_changed: 'Delivery fee changed', cash_in: 'Cash in', cash_out: 'Cash out',
   shift_open: 'Shift opened', shift_close: 'Shift closed', staff_add: 'Staff added',
   staff_change: 'Staff changed', staff_pin_change: 'PIN changed', settings_change: 'Settings changed',
+  order_cancel: 'Online order cancelled',
 };
 
 /* ---------------------------- dates (Manila) ---------------------------- */
