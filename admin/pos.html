@@ -21,6 +21,9 @@
   </a>
   <h1 class="pos-bar__title">POS</h1>
   <button class="btn btn--ghost btn--sm" type="button" id="tabs-btn">Open tabs <span class="nav__n" id="tabs-n" hidden></span></button>
+  <button class="btn btn--ghost btn--sm" type="button" id="online-btn">Online orders <span class="nav__n" id="online-n" hidden></span></button>
+  <button class="btn btn--ghost btn--sm bell-btn" type="button" id="bell-btn" aria-pressed="false" aria-label="New order bell">🔔</button>
+  <button class="btn btn--ghost btn--sm sound-hint" type="button" id="sound-hint" hidden>Tap to turn on sound</button>
   <button class="btn btn--ghost btn--sm" type="button" id="new-btn">New ticket</button>
   <button class="btn btn--ghost btn--sm" type="button" id="receipts-btn">Receipts</button>
   <button class="btn btn--ghost btn--sm shift-btn" type="button" id="shift-btn" data-open="0">Shift</button>
@@ -235,6 +238,31 @@
   </div>
 </dialog>
 
+<!-- Online orders: the list, and one order with its next step -->
+<dialog class="modal" id="online-dialog" aria-labelledby="online-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="online-title">Online orders</h2>
+      <button class="icon-btn" type="button" id="online-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <ul class="tabs" id="online-list"></ul>
+      <p class="hint" id="online-empty" hidden>No online orders right now. New ones ring the bell.</p>
+    </div>
+  </div>
+</dialog>
+
+<dialog class="modal" id="online-detail" aria-labelledby="od-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="od-title">Online order</h2>
+      <button class="icon-btn" type="button" id="od-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body" id="od-body"></div>
+    <div class="modal__foot" id="od-foot"></div>
+  </div>
+</dialog>
+
 <!-- A reason (void, service charge) -->
 <dialog class="modal modal--sm" id="reason-dialog" aria-labelledby="reason-title">
   <form method="dialog" class="modal__form" id="reason-form" novalidate>
@@ -381,5 +409,6 @@
 <script src="/admin/staff-gate.js"></script>
 <script src="/admin/pos.js"></script>
 <script src="/admin/pos-pay.js"></script>
+<script src="/admin/pos-online.js"></script>
 </body>
 </html>
