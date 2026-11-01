@@ -4,7 +4,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { db } = require('./db');
+const { db, LOGO_IMAGE } = require('./db');
 const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
 const { manilaDayStartSql } = require('./clock');
@@ -13,6 +13,8 @@ const MAX_PRICE = 100000;
 const NAME_MAX = 80;
 const ALT_MAX = 300;
 const SALE_PERCENT_MAX = 90;
+// An item without a photo of its own shows the logo, not a menu poster.
+const DEFAULT_IMAGE = LOGO_IMAGE;
 
 class ValidationError extends Error {
   constructor(errors) {
@@ -91,7 +93,8 @@ function validate(input) {
     && db.prepare('SELECT 1 FROM categories WHERE id = ?').get(categoryId);
   if (!categoryOk) errors.category = 'Choose a category.';
 
-  const image = resolveImage(input.image);
+  const imageGiven = String(input.image ?? '').trim();
+  const image = resolveImage(imageGiven || DEFAULT_IMAGE);
   if (!image) errors.image = 'Choose an image that exists in assets/.';
 
   const alt = String(input.alt ?? '').trim().slice(0, ALT_MAX);
@@ -321,7 +324,7 @@ function availableImages() {
         const size = imagesize.fromFile(abs);
         if (size && !seen.has(url)) {
           seen.add(url);
-          out.push({ path: url, width: size.width, height: size.height });
+          out.push({ path: url, width: size.width, height: size.height, default: url === DEFAULT_IMAGE });
         }
       }
     }
@@ -335,5 +338,5 @@ function availableImages() {
 module.exports = {
   ValidationError,
   AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice,
-  availableImages, resolveImage, validate,
+  availableImages, resolveImage, validate, DEFAULT_IMAGE,
 };

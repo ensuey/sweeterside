@@ -569,30 +569,40 @@ CREATE TABLE IF NOT EXISTS blocked_phones (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 )`);
 
+/* ---------- Items without a photo show the logo ---------- */
+
+const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';
+const POSTER_IMAGES = ['assets/Menu Frappe.jpg', 'assets/Meals.jpg'];
+
+/* Crops of the printed posters are too small and look pixelated. Once, every
+   item still on a poster moves to the logo, whole. Its alt text described the
+   poster photo, so it is cleared and the item name is used instead. The flag
+   keeps a poster the owner picks again later. */
+function replacePosterImages() {
+  const done = db.prepare("SELECT 1 FROM settings WHERE key = 'poster_images_replaced'").get();
+  if (done) return;
+  transaction(() => {
+    db.prepare(`UPDATE items SET image = ?, alt = '', crop_x = NULL, crop_y = NULL,
+                  crop_w = NULL, crop_h = NULL, updated_at = datetime('now')
+                WHERE image IN (?, ?)`).run(LOGO_IMAGE, ...POSTER_IMAGES);
+    db.prepare("INSERT INTO settings (key, value) VALUES ('poster_images_replaced', '1')").run();
+  });
+}
+
+replacePosterImages();
+
 /* ---------- First-run seed: the nine items from the printed posters ---------- */
 
-const POSTER_DRINKS = 'assets/Menu Frappe.jpg';
-const POSTER_FOOD = 'assets/Meals.jpg';
-
 const SEED = [
-  ['Matcha Frappe', 129, 'drinks', POSTER_DRINKS,
-    'Matcha Frappe — pale green blended drink with whipped cream in a clear cup', 113, 530, 184, 245],
-  ['Biscoff Frappe', 129, 'drinks', POSTER_DRINKS,
-    'Biscoff Frappe — caramel-coloured blended drink topped with cookie crumble', 427, 539, 170, 227],
-  ['Cookies and Cream Frappe', 105, 'drinks', POSTER_DRINKS,
-    'Cookies and Cream Frappe — grey blended drink with cookie pieces on whipped cream', 725, 530, 184, 245],
-  ['Seasalt Caramel Frappe', 149, 'drinks', POSTER_DRINKS,
-    'Seasalt Caramel Frappe — golden blended drink with caramel drizzle', 113, 1050, 184, 245],
-  ['Strawberry Cheesecake Frappe', 139, 'drinks', POSTER_DRINKS,
-    'Strawberry Cheesecake Frappe — pink blended drink with strawberry sauce on top', 418, 1050, 184, 245],
-  ['Dark Chocolate Frappe', 105, 'drinks', POSTER_DRINKS,
-    'Dark Chocolate Frappe — deep brown blended drink topped with chocolate chips', 728, 1050, 184, 245],
-  ['Beef Penne Pasta', 135, 'food', POSTER_FOOD,
-    'Beef Penne Pasta — penne in red sauce on a grey plate with toasted bread', 45, 335, 270, 270],
-  ['Chicken Pesto Pasta', 135, 'food', POSTER_FOOD,
-    'Chicken Pesto Pasta — fusilli in green pesto topped with cheese, with toasted bread', 378, 335, 270, 270],
-  ['Bacon and Egg Sandwich', 85, 'food', POSTER_FOOD,
-    'Bacon and Egg Sandwich — layered sandwich with egg, bacon and avocado in a takeaway box', 690, 335, 270, 270],
+  ['Matcha Frappe', 129, 'drinks'],
+  ['Biscoff Frappe', 129, 'drinks'],
+  ['Cookies and Cream Frappe', 105, 'drinks'],
+  ['Seasalt Caramel Frappe', 149, 'drinks'],
+  ['Strawberry Cheesecake Frappe', 139, 'drinks'],
+  ['Dark Chocolate Frappe', 105, 'drinks'],
+  ['Beef Penne Pasta', 135, 'food'],
+  ['Chicken Pesto Pasta', 135, 'food'],
+  ['Bacon and Egg Sandwich', 85, 'food'],
 ];
 
 /* Seeds only a brand-new database. Once the admin has categories of their
@@ -604,12 +614,12 @@ function seedIfEmpty() {
 
   // SEED rows name their category by slug.
   const insert = db.prepare(`
-    INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position)
-    VALUES (?, ?, (SELECT id FROM categories WHERE slug = ?), ?, ?, ?, ?, ?, ?, ?)`);
+    INSERT INTO items (name, price, category_id, image, position)
+    VALUES (?, ?, (SELECT id FROM categories WHERE slug = ?), ?, ?)`);
 
   transaction(() => {
     insertDefaultCategories();
-    SEED.forEach((row, i) => insert.run(...row, i));
+    SEED.forEach((row, i) => insert.run(...row, LOGO_IMAGE, i));
   });
   return true;
 }
@@ -619,4 +629,6 @@ function pruneSessions() {
   db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
 }
 
-module.exports = { db, seedIfEmpty, pruneSessions, transaction, DB_PATH, ROOT };
+module.exports = {
+  db, seedIfEmpty, replacePosterImages, pruneSessions, transaction, DB_PATH, ROOT, LOGO_IMAGE,
+};

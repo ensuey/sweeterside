@@ -196,7 +196,7 @@ function imageMeta(path) {
 function fillImageOptions(selected) {
   const sel = $('f-image');
   sel.innerHTML = state.images
-    .map((img) => `<option value="${img.path}">${img.path} (${img.width}×${img.height})</option>`)
+    .map((img) => `<option value="${esc(img.path)}">${esc(img.path)} (${img.width}×${img.height})${img.default ? ' (logo, no photo)' : ''}</option>`)
     .join('');
   if (selected) sel.value = selected;
 }
@@ -260,7 +260,9 @@ function openEditor(item) {
   $('f-price').value = item ? item.price : '';
   fillCategoryOptions(item ? item.category_id : state.categories[0].id);
   $('f-alt').value = item ? item.alt : '';
-  fillImageOptions(item ? item.image : (state.images[0] && state.images[0].path));
+  // A new item starts on the logo until a photo is uploaded or chosen.
+  const logo = state.images.find((i) => i.default);
+  fillImageOptions(item ? item.image : (logo || state.images[0] || {}).path);
   $('f-cx').value = item && item.crop_x != null ? item.crop_x : '';
   $('f-cy').value = item && item.crop_y != null ? item.crop_y : '';
   $('f-cw').value = item && item.crop_w != null ? item.crop_w : '';

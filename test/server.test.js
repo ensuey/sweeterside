@@ -139,6 +139,50 @@ test('crop must be complete and inside the image', () => {
   assert.strictEqual(ok.crop_w, 184);
 });
 
+test('an item with no photo gets the logo, not a menu poster', () => {
+  for (const blank of [undefined, null, '', '   ']) {
+    const row = menu.validate({ ...base, image: blank });
+    assert.strictEqual(row.image, menu.DEFAULT_IMAGE, `blank image: ${JSON.stringify(blank)}`);
+    assert.strictEqual(row.crop_w, null, 'the logo is shown whole');
+  }
+  assert.ok(menu.resolveImage(menu.DEFAULT_IMAGE), 'the logo file exists');
+  // A path that does not resolve is still an error, never quietly the logo.
+  assert.ok(errorsFor({ ...base, image: 'assets/does-not-exist.jpg' }).image);
+  assert.ok(errorsFor({ ...base, image: '../server/db.js' }).image);
+});
+
+test('items still on a menu poster move to the logo, once', () => {
+  const { replacePosterImages, LOGO_IMAGE } = require('../server/db');
+  const add = db.prepare(`INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h)
+                          VALUES (?, 100, ?, ?, ?, ?, ?, ?, ?)`);
+  const crop = add.run('Poster Crop', DRINKS_ID, 'assets/Menu Frappe.jpg', 'grey drink', 725, 530, 184, 245).lastInsertRowid;
+  const whole = add.run('Whole Poster', DRINKS_ID, 'assets/Meals.jpg', '', null, null, null, null).lastInsertRowid;
+  const upload = add.run('Uploaded', DRINKS_ID, 'assets/uploads/abc.jpg', 'a photo', null, null, null, null).lastInsertRowid;
+  const get = db.prepare('SELECT image, alt, crop_x, crop_y, crop_w, crop_h FROM items WHERE id = ?');
+
+  db.prepare("DELETE FROM settings WHERE key = 'poster_images_replaced'").run();
+  replacePosterImages();
+
+  for (const id of [crop, whole]) {
+    assert.deepStrictEqual({ ...get.get(id) },
+      { image: LOGO_IMAGE, alt: '', crop_x: null, crop_y: null, crop_w: null, crop_h: null });
+  }
+  assert.strictEqual(get.get(upload).image, 'assets/uploads/abc.jpg', 'uploaded photos are kept');
+  assert.strictEqual(get.get(upload).alt, 'a photo');
+
+  // A poster the owner picks again later is left alone.
+  db.prepare("UPDATE items SET image = 'assets/Meals.jpg' WHERE id = ?").run(whole);
+  replacePosterImages();
+  assert.strictEqual(get.get(whole).image, 'assets/Meals.jpg');
+
+  db.prepare('DELETE FROM items WHERE id IN (?, ?, ?)').run(crop, whole, upload);
+});
+
+test('the image list marks only the logo as the default', () => {
+  const marked = menu.availableImages().filter((i) => i.default);
+  assert.deepStrictEqual(marked.map((i) => i.path), [menu.DEFAULT_IMAGE]);
+});
+
 /* ---------------------------- categories ---------------------------- */
 
 function categoryErrors(input, id) {

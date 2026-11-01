@@ -1053,7 +1053,7 @@ const server = http.createServer((req, res) => {
 
 if (require.main === module) {
   const seeded = seedIfEmpty();
-  if (seeded) console.log('Seeded the menu with the nine items from the posters.');
+  if (seeded) console.log('Seeded the menu with the nine items from the posters, shown with the logo.');
   if (auth.countUsers() === 0) {
     console.log('\n  No admin account yet. Create one with:  npm run create-admin\n');
   }
