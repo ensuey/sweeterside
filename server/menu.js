@@ -4,7 +4,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { db } = require('./db');
+const { db, LOGO_IMAGE } = require('./db');
 const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
 const { manilaDayStartSql } = require('./clock');
@@ -14,7 +14,7 @@ const NAME_MAX = 80;
 const ALT_MAX = 300;
 const SALE_PERCENT_MAX = 90;
 // An item without a photo of its own shows the logo, not a menu poster.
-const DEFAULT_IMAGE = 'assets/Sweeter Side - PNG.png';
+const DEFAULT_IMAGE = LOGO_IMAGE;
 
 class ValidationError extends Error {
   constructor(errors) {
