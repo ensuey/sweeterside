@@ -732,7 +732,7 @@ async function route(req, res) {
       const who = requireStaff(req, res);
       if (!who) return;
       const order = pos.view(id, who.staff);
-      if (!order) return sendJson(res, 404, { error: 'That order is not a POS order or no longer exists.' });
+      if (!order) return sendJson(res, 404, { error: 'That order no longer exists.' });
       return sendJson(res, 200, { order, balance: payments.balance(id) });
     }
     if (action === 'receipt' && method === 'GET') {

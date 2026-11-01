@@ -1018,6 +1018,12 @@ adminBoot(async () => {
   renderTicket();
   requestQuote();
   refreshTabs();
+  // "Take payment" on an order card links here with ?pay=<order id>.
+  const payId = Number(new URLSearchParams(location.search).get('pay'));
+  if (Number.isInteger(payId) && payId > 0) {
+    history.replaceState(null, '', '/admin/pos');
+    openPay(payId).catch((e) => toast(e.message, 'error'));
+  }
   // Keep the stock and the open tabs current.
   setInterval(() => {
     if (!P.online || document.hidden) return;

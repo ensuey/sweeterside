@@ -13,6 +13,8 @@ const PAY = {
 };
 
 const centsOf = (raw) => Math.round(Number(raw) * 100);
+// Online orders name their types as the customer saw them.
+const ONLINE_TYPE = { delivery: 'delivery', pickup: 'pick-up', dinein: 'dine-in' };
 
 /** '2026-10-24 03:38:07' (UTC, as SQLite writes it) -> Manila date and time. */
 function manilaTime(sql) {
@@ -111,8 +113,14 @@ async function openPay(orderId) {
   $('pay-submit').hidden = false;
   $('pay-next').hidden = true;
   $('pay-print').hidden = true;
-  $('pay-send-box').hidden = !order.held && !order.lines.some((l) => l.qty > l.sent_qty - l.voided_qty);
+  $('pay-send-box').hidden = order.online || (!order.held && !order.lines.some((l) => l.qty > l.sent_qty - l.voided_qty));
+  $('pay-next').textContent = order.online ? 'Back to orders' : 'New ticket';
   renderPay();
+  // A delivery customer said what they would pay with; the rider brings that back.
+  if (order.online && order.order_type === 'delivery' && order.cash > 0 && PAY.method === 'cash') {
+    $('pay-tendered').value = order.cash.toFixed(2);
+    showChange();
+  }
   $('pay-dialog').showModal();
   $('pay-tendered').focus();
 }
@@ -120,7 +128,8 @@ async function openPay(orderId) {
 function renderPay() {
   const b = PAY.balance;
   const o = PAY.order;
-  $('pay-title').textContent = o.order_type === 'dinein' ? `Pay · Table ${o.table_no} (#${o.id})` : `Pay · #${o.id}`;
+  const online = o.online ? ` (online ${ONLINE_TYPE[o.order_type] || ''})` : '';
+  $('pay-title').textContent = o.order_type === 'dinein' ? `Pay · Table ${o.table_no} (#${o.id})${online}` : `Pay · #${o.id}${online}`;
   $('paysum').innerHTML = `
     <div><dt>Total</dt><dd>${moneyC(b.total_cents)}</dd></div>
     ${b.paid_cents ? `<div><dt>Paid so far</dt><dd>${moneyC(b.paid_cents)}</dd></div>` : ''}
@@ -430,7 +439,12 @@ function bindPay() {
     if (PAY.balance && PAY.balance.paid && P.t.id === PAY.order.id) startNew();
   });
   $('pay-print').addEventListener('click', () => printReceipt(PAY.lastReceipt).catch((e) => toast(e.message, 'error')));
-  $('pay-next').addEventListener('click', () => { $('pay-dialog').close(); startNew(); });
+  $('pay-next').addEventListener('click', () => {
+    // An online order came from the Orders page: go back there, and leave the ticket alone.
+    if (PAY.order && PAY.order.online) { location.href = '/admin/'; return; }
+    $('pay-dialog').close();
+    startNew();
+  });
 
   $('shift-btn').addEventListener('click', () => showShift().catch((e) => toast(e.message, 'error')));
   $('shift-close-x').addEventListener('click', () => $('shift-dialog').close());

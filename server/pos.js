@@ -68,8 +68,12 @@ function lineRows(orderId) {
   return db.prepare('SELECT * FROM order_items WHERE order_id = ? ORDER BY id').all(orderId);
 }
 
-function loadOrder(id) {
-  const row = db.prepare("SELECT * FROM orders WHERE id = ? AND source = 'pos'").get(Number(id));
+/* Saving, voiding and moving tabs stay POS-only. Only view() (for taking
+   payment) also reads an online order. */
+function loadOrder(id, { anySource = false } = {}) {
+  const row = anySource
+    ? db.prepare("SELECT * FROM orders WHERE id = ? AND source IN ('pos', 'online')").get(Number(id))
+    : db.prepare("SELECT * FROM orders WHERE id = ? AND source = 'pos'").get(Number(id));
   if (!row) return null;
   return { ...row, lines: lineRows(row.id), input: row.pos_input ? JSON.parse(row.pos_input) : {} };
 }
@@ -83,13 +87,16 @@ function loadOrder(id) {
 function view(id, actor) {
   const fullIds = staff.can(actor.role, 'see_id_numbers');
   const order = orders.get(id, { fullIds });
-  if (!order || order.source !== 'pos') return null;
-  const row = loadOrder(id);
+  if (!order || !['pos', 'online'].includes(order.source)) return null;
+  const row = loadOrder(id, { anySource: true });
+  // An online order is only ever paid here: it goes through the order queue,
+  // not the kitchen, so it is never held and has nothing to send.
+  const online = row.source === 'online';
   const input = JSON.parse(JSON.stringify(row.input));
   if (!fullIds && input.claimants) input.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
   const lines = row.lines.map((l) => ({
     id: l.id, key: String(l.id), item_id: l.item_id, name: l.name, note: l.note,
-    qty: l.qty - l.voided_qty, sent_qty: l.sent_qty, voided_qty: l.voided_qty, void_reason: l.void_reason,
+    qty: l.qty - l.voided_qty, sent_qty: online ? l.qty : l.sent_qty, voided_qty: l.voided_qty, void_reason: l.void_reason,
     unit_cents: l.override_cents ?? l.menu_sale_cents ?? l.price_cents,
     menu_price_cents: l.menu_price_cents ?? l.regular_price_cents,
     override_cents: l.override_cents, override_reason: l.override_reason,
@@ -99,7 +106,7 @@ function view(id, actor) {
   const nameOf = (sid) => (people.find((p) => p.id === sid) || {}).name || '';
   return {
     ...order, items: undefined, lines, input, version: row.pos_version,
-    held: !row.kitchen_sent_at, paid: !!row.paid_at,
+    online, held: !online && !row.kitchen_sent_at, paid: !!row.paid_at,
     taken_by: nameOf(row.staff_id), updated_by_name: nameOf(row.updated_by),
   };
 }

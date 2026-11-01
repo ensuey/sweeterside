@@ -672,8 +672,16 @@ function counts() {
  */
 function setStatus(id, status, { reason } = {}) {
   if (!STATUSES.includes(status)) throw new ValidationError({ status: 'Choose a valid status.' });
-  const order = db.prepare('SELECT status, order_type, cancel_reason FROM orders WHERE id = ?').get(Number(id));
+  const order = db.prepare('SELECT status, order_type, cancel_reason, refunded_cents FROM orders WHERE id = ?').get(Number(id));
   if (!order) return null;
+
+  // Money taken stays with a sale: refund it before cancelling.
+  if (status === 'cancelled' && order.status !== 'cancelled') {
+    const { paid } = db.prepare('SELECT COALESCE(SUM(amount_cents), 0) AS paid FROM payments WHERE order_id = ?').get(Number(id));
+    if (paid - order.refunded_cents > 0) {
+      throw Object.assign(new Error('This order has a payment. Refund it first (POS → Receipts).'), { status: 409 });
+    }
+  }
 
   if (order.status === 'new' && ['preparing', 'delivering'].includes(status) && requiresConfirmation(order.order_type)) {
     throw new ValidationError({ status: 'Confirm this order first: call the customer, then tap Confirm.' });
