@@ -709,6 +709,16 @@ async function route(req, res) {
     return sendJson(res, 200, { orders: pos.open() });
   }
 
+  /* What the bell needs: active online orders by id, type and status only,
+     no customer details. Admin session only, so it still rings while the
+     POS is locked; the details below need a staff PIN. */
+  if (pathname === '/api/pos/online/pending' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    const list = orders.list('active').filter((o) => o.source === 'online')
+      .map((o) => ({ id: o.id, order_type: o.order_type, status: o.status }));
+    return sendJson(res, 200, { orders: list });
+  }
+
   /* Online orders at the POS: the active ones, and moving them along.
      Waiters take dine-in only, so they see and move online dine-in orders only. */
   if (pathname === '/api/pos/online' && method === 'GET') {

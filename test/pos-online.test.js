@@ -101,6 +101,26 @@ test('the list needs a PIN, shows active online orders only, and never pos_input
   });
 });
 
+test('the bell feed works while locked and carries no customer details', async () => {
+  const o = online('pickup');
+  await withPos(async ({ call }) => {
+    const res = await call('/api/pos/online/pending');
+    assert.strictEqual(res.status, 200, 'admin session only, no PIN');
+    const { orders: list } = await res.json();
+    const row = list.find((x) => x.id === o.id);
+    assert.deepStrictEqual(row, { id: o.id, order_type: 'pickup', status: 'new' });
+    assert.ok(list.every((x) => Object.keys(x).sort().join() === 'id,order_type,status'), 'ids, types and statuses only');
+  });
+  const { server } = require('../server/index');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/pos/online/pending`);
+    assert.strictEqual(res.status, 401, 'signed out');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('moving an order along: confirm first, then preparing, handed over, completed', async () => {
   const o = online('delivery');
   await withPos(async ({ call, tokens }) => {
