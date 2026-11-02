@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 166 (`npm test`):
+**Tests:** 167 (`npm test`):
 - 60 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -17,7 +17,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 3 in `test/canonical.test.js`
 - 6 in `test/client-ip.test.js`
 - 6 in `test/imagemeta.test.js`
-- 8 in `test/push.test.js`
+- 9 in `test/push.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -125,9 +125,9 @@ Fixes since the POS went live:
     owner-approved discount keeps the share it was approved at
     (`approved_bp`), and re-approvals are audited.
 
-## Since 2026-11-01: online orders at the POS, the domain, security, order alerts (#21–#29)
+## Since 2026-11-01: online orders at the POS, the domain, security, order alerts, phones (#21–#32)
 
-All merged and deployed (Fly v15–v23).
+All merged and deployed (Fly v15–v25).
 
 - **#21 (v15): the logo for items without a photo.**
   - New items start on the logo instead of the first image in `assets/` (the
@@ -208,6 +208,28 @@ All merged and deployed (Fly v15–v23).
     **Do not make new keys:** that turns alerts off on every device.
   - Live: the owner's iPhone turned alerts on and the test alert arrived
     (2026-11-02).
+- **#31 (v24): the admin on phones.** Measured at iPhone 17 Plus width
+  (434 px):
+  - **Top bar:** the eight page links ran 194 px off the screen, so every
+    admin page scrolled sideways, and the bar was 167 px and pinned. Under
+    760 px the logo, shop pill and buttons share one row, and the links go on
+    a second row that scrolls sideways and fades at the edge; the current
+    page's link is brought into view (`common.js`). The bar is 101 px and
+    scrolls away.
+  - **No zoom on tap:** every field was 14–15 px, so iPhone Safari zoomed in
+    on each tap. On touch screens (`pointer: coarse`) fields are 16 px.
+  - **Home Screen app:** the admin top bar and the POS bar leave room for the
+    status bar (`env(safe-area-inset-top)`).
+  - **Report tables** scroll inside their box.
+  - Not yet confirmed on the real iPhone.
+- **#32 (v25): Settings page** (`/admin/settings`, admin sign-in, in every
+  page's nav).
+  - Holds **Fake-order protection** and **Order alerts**, moved off the
+    Orders page. Ordering hours, the delivery fee, order types and the shop
+    switch stay on Orders.
+  - The fake-order code moved from `orders.js` to `settings.js`, and
+    `push.js` loads on Settings. It still saves through `/api/settings` and
+    `/api/push`.
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -261,6 +283,9 @@ After deploying (owner, once):
 - POS order #12 (a takeout saved at the counter, never sent) is still open on
   the live site: send it, take payment, or void it.
 - Check the POS item photos on the counter iPad.
+- Check the admin layout on the iPhone after #31: no sideways scrolling, the
+  link row swipes with the current page in view, no zoom when tapping a field,
+  nothing under the clock or Dynamic Island.
 - On the counter iPad, open `https://sweeterside.ph/admin/pos`, enter a PIN
   and tap once so the new-order bell can play. Keep the tab open and the
   screen on during service; check that the bell rings for a test order.
