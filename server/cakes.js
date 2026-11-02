@@ -15,6 +15,7 @@ const orders = require('./orders');
 const blocklist = require('./blocklist');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 const imagesize = require('./imagesize');
+const imagemeta = require('./imagemeta');
 const { manilaDate, addDays } = require('./clock');
 const { CAKE_PHOTO_DIR } = require('./paths');
 
@@ -185,14 +186,16 @@ function availability(now = new Date()) {
 
 const PHOTO_RE = /^[a-f0-9]{32}\.(jpg|png|webp)$/;
 
-/** Save uploaded bytes if they really are an image. @returns the token, or null. */
+/** Save uploaded bytes if they really are an image, without the photo's
+    metadata (a phone photo can carry where it was taken). @returns the token, or null. */
 function savePhoto(buf) {
   const info = imagesize.fromBuffer(buf);
-  if (!info) return null;
+  const clean = info && imagemeta.strip(buf);
+  if (!clean) return null;
   const ext = info.type === 'jpeg' ? 'jpg' : info.type;
   const token = `${crypto.randomBytes(16).toString('hex')}.${ext}`;
   fs.mkdirSync(CAKE_PHOTO_DIR, { recursive: true });
-  fs.writeFileSync(path.join(CAKE_PHOTO_DIR, token), buf);
+  fs.writeFileSync(path.join(CAKE_PHOTO_DIR, token), clean);
   return token;
 }
 

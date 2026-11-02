@@ -27,6 +27,7 @@ const reports = require('./reports');
 const audit = require('./audit');
 const render = require('./render');
 const imagesize = require('./imagesize');
+const imagemeta = require('./imagemeta');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -343,14 +344,16 @@ async function handleUpload(req, res, session) {
 
   // Trust the bytes, not the filename or the declared content type.
   const info = imagesize.fromBuffer(buf);
-  if (!info) {
+  // Menu photos are public: save them without GPS, camera and other metadata.
+  const clean = info && imagemeta.strip(buf);
+  if (!clean) {
     return sendJson(res, 400, { error: 'That file is not a JPEG, PNG or WebP image.' });
   }
 
   const ext = info.type === 'jpeg' ? '.jpg' : `.${info.type}`;
   const name = `${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}${ext}`;
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
+  fs.writeFileSync(path.join(UPLOAD_DIR, name), clean);
 
   return sendJson(res, 201, {
     path: `assets/uploads/${name}`, width: info.width, height: info.height,

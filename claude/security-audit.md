@@ -52,7 +52,7 @@ Legend:
 | `POST /api/orders` | — | | 5 / 10 min | Prices and totals recomputed on the server; stale total refused. Honeypot field, PH mobile check, blocklist, max 3 open orders per number. Refusals logged by reason code only. |
 | `POST /api/vouchers/check` | — | | 20 / 10 min | Every check counts, to stop code guessing. |
 | `GET /api/cakes/availability` | — | | | Dates and slots only. |
-| `POST /api/cakes/photo` | — | | 5 / 10 min | Magic bytes checked (JPEG/PNG/WebP), 5 MB, random file name, private folder. Unattached photos removed after a day. See **F2**. |
+| `POST /api/cakes/photo` | — | | 5 / 10 min | Magic bytes checked (JPEG/PNG/WebP), 5 MB, random file name, private folder, metadata stripped (F2). Unattached photos removed after a day. |
 | `POST /api/cakes` | — | | 3 / 10 min | Booking; same phone checks and blocklist as orders. |
 | `GET /assets/…`, `GET /admin/*.js|css` | — | | | Static files; path containment in `safeResolve`. The admin HTML shells are never served this way. |
 | `GET /assets/uploads/…` | — | | | Menu item photos only (public by design), resolved through `menu.resolveImage`. |
@@ -76,7 +76,7 @@ Legend:
 | `POST /api/items/reorder`, `PATCH /api/items/:id/stock` | S | ✓ | | |
 | `POST /api/categories`, `PUT|PATCH|DELETE /api/categories/:id`, `POST /api/categories/reorder` | S | ✓ | | A category with items cannot be deleted (FK `RESTRICT`). |
 | `GET /api/images` | S | | | Image list from `assets/` and uploads. |
-| `POST /api/images` | S | ✓ | | Item photo upload: magic bytes, 5 MB, random name. Public once used on the menu. See **F2**. |
+| `POST /api/images` | S | ✓ | | Item photo upload: magic bytes, 5 MB, random name, metadata stripped (F2). Public once used on the menu. |
 | `GET /api/vouchers`, `POST /api/vouchers`, `PUT|PATCH|DELETE /api/vouchers/:id`, `PATCH /api/vouchers/:id/active` | S | ✓ (writes) | | |
 | `GET|PUT|PATCH /api/settings` | S | ✓ (writes) | | Ordering settings, delivery fee, shop open/closed. |
 | `GET|PUT|PATCH /api/cake-settings` | S | ✓ (writes) | | |
@@ -153,11 +153,11 @@ Legend:
   - Add a test that a forged `X-Forwarded-For` does not reset the limits.
 - **Status:** fixed 2026-11-02. `clientIp()` reads `Fly-Client-IP` only when running on Fly (`FLY_APP_NAME` set) and the socket address otherwise. `X-Forwarded-For` is ignored. Sign-in also has a per-email lock (20 fails from any address, 15 min), and a lock that has run out starts the count again. Tests: `test/client-ip.test.js`.
 
-### F2 (medium): EXIF metadata is not stripped from uploads
+### F2 (medium, fixed for new uploads): EXIF metadata was not stripped from uploads
 - **Where:** `cakes.savePhoto` and `handleUpload` (item photos) write the bytes as received.
 - **Effect:** a customer's cake photo can carry GPS coordinates and the device model. It stays private behind the admin session, but it is still personal data kept for no reason. Item photos are public once on the menu, so their metadata is public too.
 - **Fix:** remove the JPEG APP1 (EXIF/XMP) segments, the PNG `eXIf`/`tEXt`/`iTXt`/`zTXt` chunks and the WebP `EXIF`/`XMP ` chunks before saving. This can be done with plain buffer parsing (no dependency, as `imagesize.js` does). Test with a JPEG that has GPS.
-- **Status:** open.
+- **Status:** fixed 2026-11-02 for new uploads. `server/imagemeta.js` strips EXIF/XMP/IPTC/comments (JPEG), text/EXIF/time chunks (PNG) and EXIF/XMP chunks (WebP), and drops anything after the end of the image. A JPEG keeps only its orientation. Both upload paths save the cleaned file. Photos already on the volume are cleaned with `node scripts/strip-photo-metadata.js --apply`. Tests: `test/imagemeta.test.js`.
 
 ### Lower priority
 - **Session cookie:** `fly.toml` sets `FORCE_SECURE_COOKIES=1`, so it is always `Secure` on the live site. Local runs fall back to `X-Forwarded-Proto`.
@@ -166,5 +166,6 @@ Legend:
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-02: F2 fixed for new uploads; cleanup script for existing photos.
 - 2026-11-02: F1 fixed (client IP, per-email sign-in lock).
 - 2026-11-01: file created from `server/index.js` (PRs up to #23). F1 and F2 recorded.
