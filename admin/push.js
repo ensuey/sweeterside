@@ -1,6 +1,6 @@
 'use strict';
-/* Orders page: order alerts on this device (Web Push). Loaded after
-   orders.js; uses api(), toast() and state.csrf from common.js.
+/* Settings page: order alerts on this device (Web Push). Loaded after
+   settings.js; uses api(), toast() and state.csrf from common.js.
 
    An iPhone only allows push from the admin added to the Home Screen, so in
    plain Safari this explains how to add it instead of offering the button. */

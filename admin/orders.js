@@ -303,41 +303,6 @@ function showSettings(s) {
   $('pickup-close').value = s.pickup_close;
   ORDER_TYPES.forEach((t) => { $(`on-${t}`).checked = s[`${t}_enabled`]; });
   showShop(s);
-  showTrust(s);
-}
-
-/* ---------------------------- fake-order protection ---------------------------- */
-
-function showTrust(s) {
-  ORDER_TYPES.forEach((t) => { $(`confirm-${t}`).checked = s[`require_confirm_${t}`]; });
-  $('max-open').value = s.max_open_orders;
-  $('auto-confirm').checked = s.auto_confirm_trusted;
-  $('trusted-completed').value = s.trusted_min_completed;
-  $('trusted-flags').value = s.trusted_max_flags;
-}
-
-async function saveTrust(event) {
-  event.preventDefault();
-  const err = $('trust-err');
-  err.hidden = true;
-  $('trust-save').disabled = true;
-  try {
-    const body = {
-      max_open_orders: $('max-open').value,
-      auto_confirm_trusted: $('auto-confirm').checked,
-      trusted_min_completed: $('trusted-completed').value,
-      trusted_max_flags: $('trusted-flags').value,
-    };
-    ORDER_TYPES.forEach((t) => { body[`require_confirm_${t}`] = $(`confirm-${t}`).checked; });
-    showTrust(await api('/api/settings', { method: 'PUT', body }));
-    toast('Saved.');
-    await loadOrders(); // the Waiting badges depend on which types need confirming
-  } catch (e) {
-    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
-    err.hidden = false;
-  } finally {
-    $('trust-save').disabled = false;
-  }
 }
 
 /* ---------------------------- open / closed ---------------------------- */
@@ -442,7 +407,6 @@ $('cancel-form').addEventListener('submit', submitCancel);
 $('cancel-back').addEventListener('click', () => $('cancel-dialog').close());
 $('block-form').addEventListener('submit', submitBlock);
 $('block-back').addEventListener('click', () => $('block-dialog').close());
-$('trust-form').addEventListener('submit', saveTrust);
 
 document.querySelectorAll('.tab[data-show]').forEach((tab) => {
   tab.addEventListener('click', async () => {
