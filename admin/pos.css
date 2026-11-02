@@ -13,7 +13,8 @@ body.pos {
 /* ---------------- top bar ---------------- */
 .pos-bar {
   display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
-  padding: .5rem max(.75rem, env(safe-area-inset-right)) .5rem max(.75rem, env(safe-area-inset-left));
+  /* The top inset leaves room for the status bar in the Home Screen app. */
+  padding: max(.5rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-right)) .5rem max(.75rem, env(safe-area-inset-left));
   background: var(--cream); border-bottom: 1px solid var(--line);
 }
 .pos-bar__back img { display: block; width: 36px; height: 36px; border-radius: 50%; }

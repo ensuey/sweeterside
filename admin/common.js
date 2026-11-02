@@ -109,6 +109,23 @@ async function adminBoot(load) {
   }
 }
 
+// On a phone the page links scroll sideways; bring this page's link into view.
+// Again whenever any link changes size: the web font arrives later and makes
+// the links wider, which moves this one along.
+const currentLink = document.querySelector('.topbar__nav [aria-current="page"]');
+function showCurrentLink() {
+  const nav = currentLink.parentElement;
+  const left = currentLink.getBoundingClientRect().left - nav.getBoundingClientRect().left + nav.scrollLeft;
+  nav.scrollLeft = left - (nav.clientWidth - currentLink.offsetWidth) / 2;
+}
+if (currentLink) {
+  showCurrentLink();
+  if ('ResizeObserver' in window) {
+    const watch = new ResizeObserver(showCurrentLink);
+    for (const a of currentLink.parentElement.children) watch.observe(a);
+  }
+}
+
 // The POS has no sign-out button: the counter tablet stays signed in.
 if ($('signout')) {
   $('signout').addEventListener('click', async () => {

@@ -139,7 +139,9 @@ a { color: var(--navy); }
 
 /* ---------------- topbar ---------------- */
 .topbar {
-  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+  position: sticky; top: 0; z-index: 10;
+  /* Room for the status bar and Dynamic Island in the Home Screen app. */
+  padding-top: env(safe-area-inset-top, 0px);
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
 .topbar__inner {
@@ -164,6 +166,25 @@ a { color: var(--navy); }
 .topbar__title, .topbar__user {
   position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
+}
+
+/* Phones: the eight page links do not fit across. The logo, shop pill and
+   buttons share the first row; the links go on a second row that scrolls
+   sideways, fading at the edge to show there is more. The bar scrolls away
+   with the page instead of keeping a quarter of the screen. */
+@media (max-width: 760px) {
+  .topbar { position: static; }
+  .topbar__inner { gap: .5rem; padding: .5rem 0 0; }
+  .topbar__logo { width: 32px; height: 32px; }
+  .topbar .btn { min-height: 36px; padding: 0 .8rem; font-size: .875rem; }
+  .topbar__nav {
+    order: 10; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto;
+    margin-inline: calc(-1 * var(--gutter)); padding: 0 var(--gutter) .5rem;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+  }
+  .topbar__nav::-webkit-scrollbar { display: none; }
+  .topbar__nav a { flex: none; white-space: nowrap; min-height: 40px; }
 }
 
 /* ---------------- admin body ---------------- */
@@ -453,6 +474,15 @@ a { color: var(--navy); }
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
 
+/* iPhone Safari zooms into any field with text under 16px when it is tapped,
+   and the page then looks broken until you pinch back out. On touch screens
+   every field is 16px. !important because many fields set their own size. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
+    font-size: 16px !important;
+  }
+}
+
 /* ---------------- fake-order protection ---------------- */
 .order__landmark { overflow-wrap: anywhere; color: var(--ink-soft); }
 .order__landmark strong { color: var(--ink); }
@@ -608,6 +638,8 @@ body.is-locked { overflow: hidden; }
 .report-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: .6rem; }
 .report-head .hint { margin: 0; }
 .rtable { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: .9rem 1rem; min-width: 0; }
+/* A wide table scrolls inside its box on a phone, not the whole page. */
+.rtable { overflow-x: auto; }
 .rtable__title { font-size: 1rem; margin-bottom: .5rem; }
 .rtable__scroll { overflow-x: auto; }
 .rtable table { width: 100%; border-collapse: collapse; font-size: .875rem; }
