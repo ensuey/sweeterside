@@ -1,26 +1,41 @@
 # Sweeter Side — dev status
 
-Live at https://sweeterside.fly.dev (Fly.io app `sweeterside`, region `sin`,
-volume `sweeterside_data` at `/data`). Node 22, no npm dependencies, SQLite
-via `node:sqlite`.
+Live at https://sweeterside.ph (Fly.io app `sweeterside`, region `sin`,
+volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
+`sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
+npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 130 (`npm test`):
-- 57 in `test/server.test.js`
+**Tests:** 166 (`npm test`):
+- 60 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
-- 12 in `test/pos-orders.test.js`
-- 8 in `test/pos-payments.test.js`
+- 13 in `test/pos-orders.test.js`
+- 12 in `test/pos-payments.test.js`
 - 7 in `test/pos-reports.test.js`
+- 5 in `test/pos-online.test.js`
+- 3 in `test/canonical.test.js`
+- 6 in `test/client-ip.test.js`
+- 6 in `test/imagemeta.test.js`
+- 8 in `test/push.test.js`
 
-## In-store POS (plan in `claude/pos-plan.md`)
+## In-store POS (live; plan in `claude/pos-plan.md`)
 
 | Phase | Branch | PR | State |
 |---|---|---|---|
-| 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | open |
-| 2. POS order-taking UI | `pos-2-order-taking` | #14 | open (stacked on #13) |
-| 3. Payments, shifts, receipts | `pos-3-payments` | #15 | open (stacked on #14) |
-| 4. Reports and audit UI | `pos-4-reports` | #16 | open (stacked on #15) |
+| 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | merged, deployed |
+| 2. POS order-taking UI | `pos-2-order-taking` | #14 → #17 | merged, deployed |
+| 3. Payments, shifts, receipts | `pos-3-payments` | #15 → #17 | merged, deployed |
+| 4. Reports and audit UI | `pos-4-reports` | #16 → #17 | merged, deployed |
+
+Phases 2–4 reached `main` through #17. Deleting #13's branch on merge closed
+the stacked #14 and #16, and #15 merged into the phase 2 branch, so #17
+carried the same commits. Next time, merge stacked PRs without
+`--delete-branch`, or retarget each to `main` first.
+
+Deployed 2026-10-24 (Fly v12). Before the one-way centavo migration, the
+live database was copied on the volume to `/data/app-before-pos-2026-10-24.db`
+(8 orders, 9 items). After the deploy, every order and line matched it × 100.
 
 What Phase 1 shipped:
 - **Money in centavos:** the order and line money columns are renamed to
@@ -60,6 +75,7 @@ What Phase 2 shipped:
   with `wrong_pin`.
 - **Elsewhere:** Items page "Eligible for SC/PWD"; the queue shows Counter
   orders, notes and the POS discounts; POS and Staff in the admin nav.
+
 What Phase 3 shipped:
 - **Payments:** cash with tendered, change and quick buttons; GCash, Maya, QR
   Ph and card with a reference; split payments, paid only when covered;
@@ -73,6 +89,7 @@ What Phase 3 shipped:
   payments and change; the ORDER SLIP notice until BIR mode; kitchen tickets;
   X and Z readings.
 - **Staff page:** receipt settings and BIR details.
+
 What Phase 4 shipped:
 - **Reports page** (`/admin/reports`, owner PIN): sales by day, item,
   category, type, source and staff; payments by method; discounts; refunds.
@@ -83,6 +100,114 @@ What Phase 4 shipped:
 - **Php 3M tracker** (year to date): warnings at 80% and 95%.
 - **CSV exports** are formula-safe; every report endpoint is owner-only on the
   server.
+
+Fixes since the POS went live:
+- **#18 (v13): held POS tabs counted as new orders.** The Orders page said
+  "1 new order to confirm" with an empty list. A tab saved but not sent to
+  the kitchen is left out of the queue, but `orders.counts()` still counted
+  it. The counts now use the same filter as the list.
+- **#19 (v13): admin pages full width.** All admin pages and the top bar use
+  the whole screen with a side gutter, and the order queue adds columns on
+  wide screens.
+- **#19 (v13): POS item photos on iPad.** The photo box is now made square
+  with padding instead of `aspect-ratio`. The sprite position is set in JS as
+  plain percentages instead of nested `calc()`. Photos are no longer
+  lazy-loaded inside the scrolling grid. Not yet confirmed on a real iPad.
+- **#20 (v14): security review fixes.**
+  - **SC/PWD IDs in `pos_input`.** Every order response carried the raw
+    `pos_input` column (what the cashier typed, with ID numbers in full), past
+    the masking. It reached waiters through the POS, and the counter tablet's
+    admin session through `/api/orders`. `withLines()` now drops `pos_input`
+    and `last_request_key`.
+  - **Manual discount limit bypass.** Removing unsent items could stretch an
+    allowed discount past the cashier limit with no owner PIN. The limit is
+    now checked on every save against the order as it then stands. An
+    owner-approved discount keeps the share it was approved at
+    (`approved_bp`), and re-approvals are audited.
+
+## Since 2026-11-01: online orders at the POS, the domain, security, order alerts (#21–#29)
+
+All merged and deployed (Fly v15–v23).
+
+- **#21 (v15): the logo for items without a photo.**
+  - New items start on the logo instead of the first image in `assets/` (the
+    `Meals.jpg` poster), and the server falls back to it when no image is sent.
+  - A one-time migration (`replacePosterImages`, flag
+    `poster_images_replaced`) moved every item still on a poster to the logo
+    with no crop. On the live site that was Cookies and Cream (a pixelated
+    184×245 crop), Spanish Latte and Hazelnut Latte. New databases are seeded
+    with the logo. Backup before it:
+    `/data/app-backup-20261101-081931-before-logo.db`.
+- **#22 (v16): take payment for online orders; quieter Block number.**
+  - Unpaid order cards have **Take payment**, which opens the POS pay screen
+    for that order (`/admin/pos?pay=<id>`).
+  - `payments.pay`, `refund` and `receipt` accept online orders. `pos.view`
+    reads them (`online: true`, never held). Save, void, move and merge stay
+    POS-only.
+  - Cancelling an order with money paid on it is refused until it is refunded.
+  - "Block this number" is now a small grey "Block number" link.
+- **#23 (v17): online orders in the POS window, with a bell.**
+  - An **Online orders** button in the POS bar. New orders ring a Web Audio
+    bell (no sound file), then again every 30 s while a New order is unopened
+    on that tablet. It rings while the POS is locked, and a 🔔/🔕 button mutes
+    it.
+  - Opening an order shows the details and the next step: Confirm → Start
+    preparing (prints the kitchen ticket) → Ready / Out for delivery / Served
+    → Completed. Take payment comes first if it is still unpaid; Cancel needs
+    a reason.
+  - Waiters see and move dine-in online orders only.
+  - Routes:
+    - `GET /api/pos/online/pending`: ids, types and statuses only, no PIN;
+    - `GET /api/pos/online`: needs a PIN;
+    - `PATCH /api/pos/online/:id`: needs a PIN and CSRF, and audits a cancel
+      as `order_cancel`.
+- **#24 (v18): `claude/security-audit.md`.** Every route with its auth, CSRF
+  and limits, plus the open findings. Keep it updated with each new route.
+- **#25 (v18) + secret (v21): the domain.**
+  - `CANONICAL_HOST=sweeterside.ph` (a Fly secret, set 2026-11-02) sends GET
+    and HEAD on `www.sweeterside.ph` and `sweeterside.fly.dev` to
+    `https://sweeterside.ph` with a 301.
+  - Saves and `/healthz` are never moved.
+  - Let's Encrypt certificates for both names, issued by Fly.
+  - DNS is at dot.ph (`dns1`/`dns2.domains.ph`): A `66.241.125.143`, AAAA
+    `2a09:8280:1::1c7:3fc3:0`.
+- **#26 (v19): F1, the client IP.**
+  - `clientIp()` read the first `X-Forwarded-For` entry, which the client
+    writes, so the sign-in lock and every public rate limit could be bypassed.
+    It now reads `Fly-Client-IP` on Fly (`FLY_APP_NAME`) and the socket
+    address elsewhere.
+  - Sign-in also locks an email for 15 min after 20 wrong passwords from any
+    addresses.
+  - A lock that has run out starts the count again.
+  - Confirmed on the live site: a forged header no longer resets the voucher
+    check limit.
+- **#27 (v20) + #28: F2, photo metadata.**
+  - `server/imagemeta.js` strips GPS, camera and other metadata from JPEG,
+    PNG and WebP uploads (menu and cake photos), and drops images appended
+    after the end. A JPEG keeps only its orientation.
+  - The 13 existing menu photos on the volume were cleaned with
+    `scripts/strip-photo-metadata.js --apply` (9 changed). There are no cake
+    photos yet.
+- **#29 (v22) + keys (v23): order alerts (Web Push).**
+  - Every new online order and cake booking is pushed to each device that
+    turned alerts on: "New order #31 · Pick-up · ASAP · Php 258". The alert
+    has the number, type and total only (cakes: number, date, size), never
+    names, phones or addresses. Tapping it opens Orders (or Cakes).
+  - Turned on from **Orders → Order alerts**. On an iPhone this works only
+    from the admin added to the Home Screen, on iOS 16.4 or later. The panel
+    has a test alert and a device list with Remove.
+  - `server/push.js` uses `node:crypto` only: aes128gcm per device
+    (RFC 8291) and VAPID ES256 (RFC 8292). Push addresses must be at a known
+    push service (no SSRF). Devices reported gone (404/410) are removed.
+    Alerts go out after the response.
+  - `/admin/sw.js` shows notifications and caches nothing; there is also
+    `/admin/manifest.webmanifest`, and Home Screen links on every admin page.
+    The `push_subscriptions` table is capped at 20 devices.
+  - Keys: the `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` Fly secrets, set
+    2026-11-02 with `node scripts/vapid-keys.js | flyctl secrets import`.
+    **Do not make new keys:** that turns alerts off on every device.
+  - Live: the owner's iPhone turned alerts on and the test alert arrived
+    (2026-11-02).
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -133,3 +258,20 @@ After deploying (owner, once):
 - Dachel to replace the placeholder cake sizes, prices and flavours.
 - Dachel to set the real pick-up hours (still 10:00–20:00).
 - Owner notifications (Messenger / WhatsApp) were discussed and put on hold.
+- POS order #12 (a takeout saved at the counter, never sent) is still open on
+  the live site: send it, take payment, or void it.
+- Check the POS item photos on the counter iPad.
+- On the counter iPad, open `https://sweeterside.ph/admin/pos`, enter a PIN
+  and tap once so the new-order bell can play. Keep the tab open and the
+  screen on during service; check that the bell rings for a test order.
+- Staff sign in again on `https://sweeterside.ph` (sign-ins do not carry over
+  from `sweeterside.fly.dev`).
+- Update links to `https://sweeterside.ph`: the Messenger page button, social
+  profiles, Google Business profile, printed QR codes.
+- Turn on order alerts on any other phone or tablet that should get them
+  (Dachel's phone, the counter iPad): Home Screen app → Orders → Order alerts.
+- Delete the photo backup with the metadata still in it:
+  `/data/photos-backup-20261102-033855-before-strip.tar.gz` (the owner runs
+  the `rm` through `flyctl ssh console`).
+- Do a real print test of the 58/80 mm receipts on the thermal printer.
+- The owner setup steps above (PINs, receipts, POS settings) are still to do.
