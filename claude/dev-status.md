@@ -4,32 +4,23 @@ Live at https://sweeterside.fly.dev (Fly.io app `sweeterside`, region `sin`,
 volume `sweeterside_data` at `/data`). Node 22, no npm dependencies, SQLite
 via `node:sqlite`.
 
-**Tests:** 131 (`npm test`):
+**Tests:** 130 (`npm test`):
 - 57 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
-- 13 in `test/pos-orders.test.js`
+- 12 in `test/pos-orders.test.js`
 - 8 in `test/pos-payments.test.js`
 - 7 in `test/pos-reports.test.js`
 
-## In-store POS (live; plan in `claude/pos-plan.md`)
+## In-store POS (plan in `claude/pos-plan.md`)
 
 | Phase | Branch | PR | State |
 |---|---|---|---|
-| 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | merged, deployed |
-| 2. POS order-taking UI | `pos-2-order-taking` | #14 → #17 | merged, deployed |
-| 3. Payments, shifts, receipts | `pos-3-payments` | #15 → #17 | merged, deployed |
-| 4. Reports and audit UI | `pos-4-reports` | #16 → #17 | merged, deployed |
-
-Phases 2–4 reached `main` through #17. Deleting #13's branch on merge closed
-the stacked #14 and #16, and #15 merged into the phase 2 branch, so #17
-carried the same commits. Next time, merge stacked PRs without
-`--delete-branch`, or retarget each to `main` first.
-
-Deployed 2026-10-24 (Fly v12). Before the one-way centavo migration, the
-live database was copied on the volume to `/data/app-before-pos-2026-10-24.db`
-(8 orders, 9 items). After the deploy, every order and line matched it × 100.
+| 1. Data model, pricing engine, tests | `pos-1-pricing` | #13 | open |
+| 2. POS order-taking UI | `pos-2-order-taking` | #14 | open (stacked on #13) |
+| 3. Payments, shifts, receipts | `pos-3-payments` | #15 | open (stacked on #14) |
+| 4. Reports and audit UI | `pos-4-reports` | #16 | open (stacked on #15) |
 
 What Phase 1 shipped:
 - **Money in centavos:** the order and line money columns are renamed to
@@ -69,7 +60,6 @@ What Phase 2 shipped:
   with `wrong_pin`.
 - **Elsewhere:** Items page "Eligible for SC/PWD"; the queue shows Counter
   orders, notes and the POS discounts; POS and Staff in the admin nav.
-
 What Phase 3 shipped:
 - **Payments:** cash with tendered, change and quick buttons; GCash, Maya, QR
   Ph and card with a reference; split payments, paid only when covered;
@@ -83,7 +73,6 @@ What Phase 3 shipped:
   payments and change; the ORDER SLIP notice until BIR mode; kitchen tickets;
   X and Z readings.
 - **Staff page:** receipt settings and BIR details.
-
 What Phase 4 shipped:
 - **Reports page** (`/admin/reports`, owner PIN): sales by day, item,
   category, type, source and staff; payments by method; discounts; refunds.
@@ -94,30 +83,6 @@ What Phase 4 shipped:
 - **Php 3M tracker** (year to date): warnings at 80% and 95%.
 - **CSV exports** are formula-safe; every report endpoint is owner-only on the
   server.
-
-Fixes since the POS went live:
-- **#18 (v13): held POS tabs counted as new orders.** The Orders page said
-  "1 new order to confirm" with an empty list. A tab saved but not sent to
-  the kitchen is left out of the queue, but `orders.counts()` still counted
-  it. The counts now use the same filter as the list.
-- **#19 (v13): admin pages full width.** All admin pages and the top bar use
-  the whole screen with a side gutter, and the order queue adds columns on
-  wide screens.
-- **#19 (v13): POS item photos on iPad.** The photo box is now made square
-  with padding instead of `aspect-ratio`. The sprite position is set in JS as
-  plain percentages instead of nested `calc()`. Photos are no longer
-  lazy-loaded inside the scrolling grid. Not yet confirmed on a real iPad.
-- **#20 (v14): security review fixes.**
-  - **SC/PWD IDs in `pos_input`.** Every order response carried the raw
-    `pos_input` column (what the cashier typed, with ID numbers in full), past
-    the masking. It reached waiters through the POS, and the counter tablet's
-    admin session through `/api/orders`. `withLines()` now drops `pos_input`
-    and `last_request_key`.
-  - **Manual discount limit bypass.** Removing unsent items could stretch an
-    allowed discount past the cashier limit with no owner PIN. The limit is
-    now checked on every save against the order as it then stands. An
-    owner-approved discount keeps the share it was approved at
-    (`approved_bp`), and re-approvals are audited.
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -168,8 +133,3 @@ After deploying (owner, once):
 - Dachel to replace the placeholder cake sizes, prices and flavours.
 - Dachel to set the real pick-up hours (still 10:00–20:00).
 - Owner notifications (Messenger / WhatsApp) were discussed and put on hold.
-- POS order #12 (a takeout saved at the counter, never sent) is still open on
-  the live site: send it, take payment, or void it.
-- Check the POS item photos on the counter iPad.
-- Do a real print test of the 58/80 mm receipts on the thermal printer.
-- The owner setup steps above (PINs, receipts, POS settings) are still to do.
