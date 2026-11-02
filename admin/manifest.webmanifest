@@ -1,0 +1,13 @@
+{
+  "name": "Sweeter Side admin",
+  "short_name": "Sweeter Side",
+  "description": "Orders, cakes and the POS for Sweeter Side by Dachel.",
+  "start_url": "/admin",
+  "scope": "/admin",
+  "display": "standalone",
+  "background_color": "#FBF8F1",
+  "theme_color": "#FBF8F1",
+  "icons": [
+    { "src": "/assets/Sweeter%20Side%20-%20PNG.png", "sizes": "1563x1563", "type": "image/png", "purpose": "any" }
+  ]
+}

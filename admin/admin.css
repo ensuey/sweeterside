@@ -480,6 +480,20 @@ a { color: var(--navy); }
 .trust__form .field { width: 100%; max-width: 22rem; }
 .trust__rule { display: flex; flex-wrap: wrap; gap: .6rem 1rem; width: 100%; }
 .trust__rule .field { width: 14rem; }
+
+/* Order alerts (Web Push) on the Orders page. */
+.alerts { margin-bottom: 3rem; max-width: 40rem; }
+.alerts .admin__sub { margin-bottom: 1rem; }
+.alerts__state { font-weight: 700; margin: 0 0 .8rem; }
+.alerts__how { padding: .8rem 1rem; margin-bottom: 1rem; border-radius: var(--r-md); background: var(--cream); }
+.alerts__how p { margin: 0 0 .4rem; }
+.alerts__how ol { margin: 0; padding-left: 1.3rem; }
+.alerts__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1.2rem; }
+.alerts__actions [hidden] { display: none; }
+.alerts__subtitle { font-size: 1rem; margin: 0 0 .5rem; }
+.alerts__devices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+.alerts__device { display: flex; justify-content: space-between; align-items: center; gap: .8rem;
+  padding: .5rem .8rem; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
 .reasons { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; }
 .reasons legend { margin-bottom: .35rem; }
 

@@ -6,6 +6,11 @@
 <title>Orders — Sweeter Side admin</title>
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<link rel="manifest" href="/admin/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/assets/Sweeter%20Side%20-%20PNG.png">
+<meta name="apple-mobile-web-app-title" content="Sweeter Side">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
@@ -127,6 +132,28 @@
     </form>
     <p class="field__err" id="trust-err" hidden></p>
   </section>
+
+  <!-- Notifications on phones for new orders and cake bookings. -->
+  <section class="alerts" aria-labelledby="alerts-title">
+    <h2 class="admin__title" id="alerts-title">Order alerts</h2>
+    <p class="admin__sub">A notification on this phone or tablet for every new online order and cake booking, even when the app is closed. It shows the order number, type and total, never the customer's details.</p>
+    <p class="alerts__state" id="alerts-state" role="status">Checking this device…</p>
+    <div class="alerts__how" id="alerts-ios" hidden>
+      <p><strong>On an iPhone or iPad:</strong> alerts work from the Home Screen app.</p>
+      <ol>
+        <li>Open this page in Safari.</li>
+        <li>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li>
+        <li>Open <strong>Sweeter Side</strong> from the Home Screen, come back here and turn alerts on.</li>
+      </ol>
+    </div>
+    <div class="alerts__actions">
+      <button class="btn btn--primary" type="button" id="alerts-on" hidden>Turn on alerts on this device</button>
+      <button class="btn btn--ghost" type="button" id="alerts-test" hidden>Send a test alert</button>
+      <button class="link-quiet" type="button" id="alerts-off" hidden>Turn off on this device</button>
+    </div>
+    <h3 class="alerts__subtitle" id="alerts-devices-title" hidden>Devices with alerts on</h3>
+    <ul class="alerts__devices" id="alerts-devices"></ul>
+  </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -178,5 +205,6 @@
 
 <script src="/admin/common.js" defer></script>
 <script src="/admin/orders.js" defer></script>
+<script src="/admin/push.js" defer></script>
 </body>
 </html>

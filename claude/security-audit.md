@@ -130,6 +130,19 @@ Legend:
 | `GET /api/pos/online` | P | | | Active online orders. Waiters (no `takeout_and_delivery`) get **dine-in only**. No `pos_input`. |
 | `PATCH /api/pos/online/:id` | P | ✓ | | `{ status, reason? }` through `orders.setStatus`. Online orders only (a POS id is 404). Waiters dine-in only (403). Cancel needs a reason; audited as `order_cancel`. |
 
+### Order alerts (Web Push, PR #29)
+
+| Route | Auth | CSRF | Limit | Notes |
+|---|---|---|---|---|
+| `GET /api/push` | S | | | Whether alerts are set up, the public VAPID key, and the device list (label, push service host, dates, a short hash). Never the keys or the push address. |
+| `POST /api/push/subscriptions` | S | ✓ | 20 devices | Push address must be https at a known push service (Apple, Google, Mozilla, Microsoft), so the server cannot be pointed at internal addresses (SSRF). p256dh must be a point on P-256; auth 16 bytes. 503 when no VAPID keys. |
+| `DELETE /api/push/subscriptions` (by address), `DELETE /api/push/subscriptions/:id` | S | ✓ | | Turn alerts off for this device, or remove one from the list. |
+| `POST /api/push/test` | S | ✓ | | Sends a test alert to every device. |
+| `GET /admin/sw.js` | — | | | The alerts service worker: shows notifications, opens `/admin…` only, caches nothing. `Service-Worker-Allowed: /admin`, `no-cache`. |
+| `GET /admin/manifest.webmanifest` | — | | | Home Screen app manifest (`start_url /admin`). |
+
+Alerts are sent after a new online order or cake booking, encrypted per device (RFC 8291) and signed with the VAPID key (RFC 8292, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` fly secrets). They carry the order number, type and total (cakes: number, date, size), never names, phones or addresses. A device the push service reports gone (404/410) is removed.
+
 ### Reports and audit (owner)
 
 | Route | Auth | CSRF | Limit | Notes |
@@ -166,6 +179,7 @@ Legend:
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-02: order alerts (Web Push) routes added.
 - 2026-11-02: F2 fixed: new uploads are stripped, and the existing menu photos were cleaned on the live volume.
 - 2026-11-02: F1 fixed (client IP, per-email sign-in lock).
 - 2026-11-01: file created from `server/index.js` (PRs up to #23). F1 and F2 recorded.
