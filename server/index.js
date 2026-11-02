@@ -358,7 +358,28 @@ function afterMutation(res, status, payload) {
 
 /* ---------------------------- server ---------------------------- */
 
+/* The shop's own address. When CANONICAL_HOST is set (sweeterside.ph), page
+   visits to www.<it> or the .fly.dev address move there with a 301. Only
+   GET and HEAD move: a POS tablet still open on the old address finishes
+   what it is saving. The health check is never moved. The target host is
+   fixed, so the Host header cannot send anyone elsewhere. */
+function canonicalRedirect(req) {
+  const canonical = String(process.env.CANONICAL_HOST || '').trim().toLowerCase();
+  if (!canonical) return null;
+  const method = req.method.toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD') return null;
+  const host = String(req.headers.host || '').trim().toLowerCase().replace(/:\d+$/, '');
+  if (host === canonical) return null;
+  if (host !== `www.${canonical}` && !host.endsWith('.fly.dev')) return null;
+  const target = String(req.url || '/').startsWith('/') ? String(req.url) : '/';
+  if (target.split('?')[0].replace(/\/+$/, '') === '/healthz') return null;
+  return `https://${canonical}${target}`;
+}
+
 async function route(req, res) {
+  const moved = canonicalRedirect(req);
+  if (moved) return send(res, 301, '', { Location: moved });
+
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
   const method = req.method.toUpperCase();
