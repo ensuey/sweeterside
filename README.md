@@ -645,6 +645,7 @@ Your menu is then at `https://<app>.fly.dev/` and the admin at
 | `FORCE_SECURE_COOKIES` | unset | Set to `1` to always mark cookies `Secure` |
 | `ADMIN_PASSWORD` | unset | Skips the prompt in `create-admin` |
 | `CHECKOUT_SECRET` | generated | Key that signs checkout tokens. If unset, one is generated on first use and kept in the database |
+| `CANONICAL_HOST` | unset | The shop's own address, e.g. `sweeterside.ph`. When set, page visits to `www.` and the `.fly.dev` address move there (301). Saves and `/healthz` never move. Set it only once that address serves HTTPS |
 
 ## Still to fill in
 
