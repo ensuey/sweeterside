@@ -646,6 +646,7 @@ Your menu is then at `https://<app>.fly.dev/` and the admin at
 | `ADMIN_PASSWORD` | unset | Skips the prompt in `create-admin` |
 | `CHECKOUT_SECRET` | generated | Key that signs checkout tokens. If unset, one is generated on first use and kept in the database |
 | `CANONICAL_HOST` | unset | The shop's own address, e.g. `sweeterside.ph`. When set, page visits to `www.` and the `.fly.dev` address move there (301). Saves and `/healthz` never move. Set it only once that address serves HTTPS |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | unset | Keys that sign order alerts (Web Push). Make them with `node scripts/vapid-keys.js \| flyctl secrets import -a sweeterside`. Unset, alerts are off |
 
 ## Still to fill in
 

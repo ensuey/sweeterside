@@ -16,6 +16,7 @@ const orders = require('./orders');
 const vouchers = require('./vouchers');
 const cakes = require('./cakes');
 const checkout = require('./checkout');
+const push = require('./push');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
 const staff = require('./staff');
@@ -42,6 +43,7 @@ const MIME = {
   '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.png': 'image/png', '.webp': 'image/webp',
   '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
 };
 
 const CSP = [
@@ -195,7 +197,7 @@ function isJson(req) {
 
 /* ---------------------------- static ---------------------------- */
 
-function serveFile(req, res, absPath, { cache = 'public, max-age=300' } = {}) {
+function serveFile(req, res, absPath, { cache = 'public, max-age=300', headers = {} } = {}) {
   let stat;
   try {
     stat = fs.statSync(absPath);
@@ -206,7 +208,7 @@ function serveFile(req, res, absPath, { cache = 'public, max-age=300' } = {}) {
 
   const etag = `"${stat.size}-${Number(stat.mtimeMs).toString(36)}"`;
   if (req.headers['if-none-match'] === etag) {
-    send(res, 304, '', { ETag: etag, 'Cache-Control': cache });
+    send(res, 304, '', { ETag: etag, 'Cache-Control': cache, ...headers });
     return true;
   }
 
@@ -216,6 +218,7 @@ function serveFile(req, res, absPath, { cache = 'public, max-age=300' } = {}) {
     'Content-Length': stat.size,
     'Cache-Control': cache,
     ETag: etag,
+    ...headers,
   }));
   fs.createReadStream(absPath).pipe(res);
   return true;
@@ -565,6 +568,7 @@ async function route(req, res) {
     orderLimiter.record(ip);
     console.log(`[order] #${order.id} ${order.order_type} Php ${order.total} — ${order.items.length} line(s)`
       + (order.voucher_code ? ` — voucher ${order.voucher_code} -${order.discount}` : ''));
+    push.alert(push.orderMessage(order));
     return sendJson(res, 201, {
       order: {
         id: order.id, order_type: order.order_type, items: order.items, subtotal: order.subtotal,
@@ -996,6 +1000,45 @@ async function route(req, res) {
   }
 
   /* ---- settings ---- */
+  /* ---- order alerts (Web Push), all authenticated ---- */
+  if (pathname === '/api/push' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    const k = push.keys();
+    return sendJson(res, 200, {
+      enabled: !!k, public_key: k ? k.publicKey.toString('base64url') : null, devices: push.list(),
+    });
+  }
+
+  if (pathname === '/api/push/subscriptions' && method === 'POST') {
+    const session = requireApiAuth(req, res, { csrf: true });
+    if (!session) return;
+    if (!push.enabled()) return sendJson(res, 503, { error: 'Order alerts are not set up on the server yet.' });
+    const id = push.subscribe(await readJson(req), session.email);
+    console.log(`[push] device ${id} turned alerts on`);
+    return sendJson(res, 201, { id, devices: push.list() });
+  }
+
+  if (pathname === '/api/push/subscriptions' && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const body = await readJson(req);
+    push.removeEndpoint(body.endpoint);
+    return sendJson(res, 200, { devices: push.list() });
+  }
+
+  const pushDeviceMatch = pathname.match(/^\/api\/push\/subscriptions\/(\d+)$/);
+  if (pushDeviceMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!push.remove(Number(pushDeviceMatch[1]))) return sendJson(res, 404, { error: 'That device no longer has alerts on.' });
+    return sendJson(res, 200, { devices: push.list() });
+  }
+
+  if (pathname === '/api/push/test' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!push.enabled()) return sendJson(res, 503, { error: 'Order alerts are not set up on the server yet.' });
+    const result = await push.notifyAll({ title: 'Sweeter Side', body: 'Test alert: order alerts are working.', url: '/admin', tag: 'test' });
+    return sendJson(res, 200, { ...result, devices: push.list() });
+  }
+
   if (pathname === '/api/settings' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
     return sendJson(res, 200, orders.settings());
@@ -1043,6 +1086,7 @@ async function route(req, res) {
     }
     cakeLimiter.record(ip);
     console.log(`[cake] #${booking.id} for ${booking.needed_on} — ${booking.size}`);
+    push.alert(push.cakeMessage(booking));
     return sendJson(res, 201, { booking: { id: booking.id, needed_on: booking.needed_on, size: booking.size } });
   }
 
@@ -1100,6 +1144,13 @@ async function route(req, res) {
     const session = requireApiAuth(req, res, { csrf: true });
     if (!session) return;
     return handleUpload(req, res, session);
+  }
+
+  /* The alerts service worker. It lives in /admin/ but covers /admin itself
+     too, so it needs this header. Never cached, so a fix reaches phones. */
+  if (pathname === '/admin/sw.js' && (method === 'GET' || method === 'HEAD')) {
+    return serveFile(req, res, path.join(ROOT, 'admin', 'sw.js'),
+      { cache: 'no-cache', headers: { 'Service-Worker-Allowed': '/admin' } }) || send(res, 404, 'Not found');
   }
 
   /* ---- static files ---- */
