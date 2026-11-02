@@ -9,7 +9,7 @@ Last checked against `server/index.js` on 2026-11-01 (after PR #23).
 ## How a request is checked
 
 - **Admin session**: `requireApiAuth`.
-  - Hashed session token in the `HttpOnly; SameSite=Strict` cookie, `Secure` over HTTPS.
+  - Hashed session token in the `HttpOnly; SameSite=Strict` cookie, `Secure` on the live site (`FORCE_SECURE_COOKIES=1` in `fly.toml`).
   - No session: **401**. `common.js` takes a 401 to mean signed out.
 - **CSRF**: `requireApiAuth(…, { csrf: true })`.
   - The `X-CSRF-Token` header must match the session's token (checked with `timingSafeEqual`).
@@ -160,9 +160,10 @@ Legend:
 - **Status:** open.
 
 ### Lower priority
-- **Session cookie:** `Secure` depends on `X-Forwarded-Proto` (or `FORCE_SECURE_COOKIES=1`). Fly sets it and forces HTTPS, so this is fine on the live site. Setting `FORCE_SECURE_COOKIES=1` as a Fly secret would remove the dependency.
+- **Session cookie:** `fly.toml` sets `FORCE_SECURE_COOKIES=1`, so it is always `Secure` on the live site. Local runs fall back to `X-Forwarded-Proto`.
 - **HSTS:** no `Strict-Transport-Security` header. Fly redirects HTTP to HTTPS, but HSTS would stop the first plain request.
 - **Bell feed:** `GET /api/pos/online/pending` deliberately skips the PIN. It returns ids, types and statuses only. Keep it that way: never add names, phones or totals to it.
+- **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
 - 2026-11-01: file created from `server/index.js` (PRs up to #23). F1 and F2 recorded.
