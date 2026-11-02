@@ -12,6 +12,9 @@ const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
 // Throttling: after MAX_FAILS bad attempts the key is locked for LOCK_MS.
 const MAX_FAILS = 6;
 const LOCK_MS = 15 * 60 * 1000;
+// The lock on an email alone, from any address. Higher, so that guessing from
+// one address hits the per-address lock long before the owner is locked out.
+const EMAIL_MAX_FAILS = 20;
 
 /* ---------------------------- passwords ---------------------------- */
 
@@ -63,6 +66,11 @@ function throttleKey(email, ip) {
     .digest('hex').slice(0, 32);
 }
 
+/** The key for an email from any address. '*' is never a real address. */
+function emailThrottleKey(email) {
+  return throttleKey(email, '*');
+}
+
 /** @returns {number} ms remaining on the lock, or 0 if not locked. */
 function lockRemaining(key) {
   const row = db.prepare('SELECT locked_until FROM login_attempts WHERE key = ?').get(key);
@@ -70,10 +78,13 @@ function lockRemaining(key) {
   return Math.max(0, row.locked_until - Date.now());
 }
 
-function recordFailure(key) {
-  const row = db.prepare('SELECT fails FROM login_attempts WHERE key = ?').get(key);
-  const fails = (row ? row.fails : 0) + 1;
-  const lockedUntil = fails >= MAX_FAILS ? Date.now() + LOCK_MS : 0;
+function recordFailure(key, max = MAX_FAILS) {
+  const row = db.prepare('SELECT fails, locked_until FROM login_attempts WHERE key = ?').get(key);
+  // Once a lock has run out the count starts again, so one more wrong guess
+  // does not lock the owner out for another 15 minutes.
+  const expired = row && row.locked_until > 0 && row.locked_until <= Date.now();
+  const fails = (row && !expired ? row.fails : 0) + 1;
+  const lockedUntil = fails >= max ? Date.now() + LOCK_MS : 0;
   db.prepare(`
     INSERT INTO login_attempts (key, fails, locked_until) VALUES (?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET fails = excluded.fails, locked_until = excluded.locked_until
@@ -158,10 +169,10 @@ function csrfOk(session, submitted) {
 }
 
 module.exports = {
-  SESSION_COOKIE, MAX_FAILS, LOCK_MS,
+  SESSION_COOKIE, MAX_FAILS, LOCK_MS, EMAIL_MAX_FAILS,
   hashPassword, verifyPassword,
   createUser, findUserByEmail, countUsers,
-  throttleKey, lockRemaining, recordFailure, clearFailures,
+  throttleKey, emailThrottleKey, lockRemaining, recordFailure, clearFailures,
   createSession, getSession, destroySession, destroyUserSessions,
   parseCookies, sessionCookie, clearCookie, csrfOk,
 };

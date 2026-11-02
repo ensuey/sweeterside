@@ -25,7 +25,7 @@ Last checked against `server/index.js` on 2026-11-01 (after PR #23).
   - Images: `MAX_UPLOAD` 5 MB (`readBody`).
   - Over the limit: **413**.
 - **Validation**: module validators throw `ValidationError`, which becomes **422** with field messages. Other errors give a generic message, and only 5xx details are logged.
-- **Rate limits**: per client IP, sliding windows (`rateLimiter`). See finding **F1**: the IP is not trustworthy yet.
+- **Rate limits**: per client IP, sliding windows (`rateLimiter`). The IP is `Fly-Client-IP` on Fly and the socket address elsewhere, never `X-Forwarded-For` (F1, fixed).
 - **Headers** on every response:
   - CSP: `script-src 'self'`, no inline scripts. Inline style attributes are allowed.
   - `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
@@ -62,7 +62,7 @@ Legend:
 | Route | Auth | CSRF | Limit | Notes |
 |---|---|---|---|---|
 | `GET /admin/login` | — | | | Redirects to `/admin` when signed in. |
-| `POST /api/login` | — | | 6 fails → 15 min lock | Lock keyed on email + IP. See **F1**. scrypt hashes. |
+| `POST /api/login` | — | | 6 fails per email + IP, or 20 per email from anywhere → 15 min lock | scrypt hashes. |
 | `POST /api/logout` | — | | | Clears the session. Cross-site requests cannot carry the `SameSite=Strict` cookie. |
 | `GET /api/session` | S | | | Email and CSRF token for the admin pages. |
 | `GET /admin`, `/admin/{items,vouchers,cakes,blocked,pos,staff,reports}` | S | | | Page shells; redirect to sign-in without a session. `no-store`. |
@@ -140,7 +140,7 @@ Legend:
 
 ## Open findings
 
-### F1 (high): the client IP comes from raw `X-Forwarded-For`
+### F1 (high, fixed): the client IP came from raw `X-Forwarded-For`
 - **Where:** `clientIp()` in `server/index.js` returns the **first** entry of `X-Forwarded-For`. The client controls that entry: Fly's proxy appends the real address at the end.
 - **Effect:** any client can send a new made-up IP on each request. That gets around:
   - **The admin sign-in lock.** It is keyed on email + IP (`auth.throttleKey`), so passwords can be guessed without ever locking. scrypt slows each guess but does not stop it.
@@ -151,7 +151,7 @@ Legend:
   - Read `Fly-Client-IP` only, as `CLAUDE.md` requires, and fall back to the socket address when it is missing (local runs).
   - Add a per-email sign-in lock that does not depend on the IP.
   - Add a test that a forged `X-Forwarded-For` does not reset the limits.
-- **Status:** open, found 2026-11-01 while writing this file.
+- **Status:** fixed 2026-11-02. `clientIp()` reads `Fly-Client-IP` only when running on Fly (`FLY_APP_NAME` set) and the socket address otherwise. `X-Forwarded-For` is ignored. Sign-in also has a per-email lock (20 fails from any address, 15 min), and a lock that has run out starts the count again. Tests: `test/client-ip.test.js`.
 
 ### F2 (medium): EXIF metadata is not stripped from uploads
 - **Where:** `cakes.savePhoto` and `handleUpload` (item photos) write the bytes as received.
@@ -166,4 +166,5 @@ Legend:
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-02: F1 fixed (client IP, per-email sign-in lock).
 - 2026-11-01: file created from `server/index.js` (PRs up to #23). F1 and F2 recorded.
