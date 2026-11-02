@@ -283,3 +283,25 @@ test('the alerts service worker is served with its scope header and never cached
     assert.strictEqual((await manifest.json()).start_url, '/admin');
   });
 });
+
+test('the Settings page holds fake-order protection and order alerts, behind sign-in', async () => {
+  await withAdmin(async ({ call, url }) => {
+    const out = await fetch(`${url}/admin/settings`, { redirect: 'manual' });
+    assert.strictEqual(out.status, 302, 'signed out: sent to sign in');
+    assert.match(out.headers.get('location'), /\/admin\/login$/);
+    assert.strictEqual((await fetch(`${url}/admin/settings.html`)).status, 404, 'not served as a static file');
+
+    const settings = await (await call('/admin/settings')).text();
+    for (const id of ['trust-form', 'confirm-delivery', 'max-open', 'auto-confirm', 'alerts-on', 'alerts-devices']) {
+      assert.ok(settings.includes(`id="${id}"`), `Settings has #${id}`);
+    }
+    assert.ok(settings.includes('/admin/settings.js') && settings.includes('/admin/push.js'));
+    assert.ok(settings.includes('href="/admin/settings" aria-current="page"'));
+
+    const orders = await (await call('/admin')).text();
+    assert.ok(!orders.includes('id="trust-form"') && !orders.includes('id="alerts-on"') && !orders.includes('/admin/push.js'),
+      'moved off the Orders page');
+    assert.ok(orders.includes('id="fee-form"'), 'ordering settings stay on Orders');
+    assert.ok(orders.includes('href="/admin/settings"'), 'Settings is in the nav');
+  });
+});

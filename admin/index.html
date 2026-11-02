@@ -31,6 +31,7 @@
       <a href="/admin/blocked">Blocked</a>
       <a href="/admin/staff">Staff</a>
       <a href="/admin/reports">Reports</a>
+      <a href="/admin/settings">Settings</a>
     </nav>
     <div class="topbar__spacer"></div>
     <a class="shop-pill" id="shop-pill" href="/admin#shop" hidden></a>
@@ -98,62 +99,6 @@
     <ul class="orders__list" id="orders"></ul>
     <p class="empty-note" id="orders-empty" hidden></p>
   </section>
-
-  <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
-  <section class="trust" aria-labelledby="trust-title">
-    <h2 class="admin__title" id="trust-title">Fake-order protection</h2>
-    <p class="admin__sub">Blocked numbers are on the <a href="/admin/blocked">Blocked</a> page.</p>
-    <form class="trust__form" id="trust-form" novalidate>
-      <fieldset class="fee__types">
-        <legend>Call to confirm before preparing</legend>
-        <label class="fee__check"><input type="checkbox" id="confirm-delivery"> Delivery</label>
-        <label class="fee__check"><input type="checkbox" id="confirm-pickup"> Pick-up</label>
-        <label class="fee__check"><input type="checkbox" id="confirm-dinein"> Dine-in</label>
-      </fieldset>
-      <div class="field">
-        <label for="max-open">Orders in progress per number <span class="hint">(more are refused)</span></label>
-        <input id="max-open" type="number" min="1" max="20" step="1" inputmode="numeric" required>
-      </div>
-      <fieldset class="fee__types">
-        <legend>Trusted customers</legend>
-        <label class="fee__check"><input type="checkbox" id="auto-confirm"> Confirm their orders automatically</label>
-      </fieldset>
-      <div class="trust__rule">
-        <div class="field">
-          <label for="trusted-completed">Completed orders, at least</label>
-          <input id="trusted-completed" type="number" min="1" max="50" step="1" inputmode="numeric" required>
-        </div>
-        <div class="field">
-          <label for="trusted-flags">No-shows or fakes, at most</label>
-          <input id="trusted-flags" type="number" min="0" max="10" step="1" inputmode="numeric" required>
-        </div>
-      </div>
-      <button class="btn btn--ghost" type="submit" id="trust-save">Save</button>
-    </form>
-    <p class="field__err" id="trust-err" hidden></p>
-  </section>
-
-  <!-- Notifications on phones for new orders and cake bookings. -->
-  <section class="alerts" aria-labelledby="alerts-title">
-    <h2 class="admin__title" id="alerts-title">Order alerts</h2>
-    <p class="admin__sub">A notification on this phone or tablet for every new online order and cake booking, even when the app is closed. It shows the order number, type and total, never the customer's details.</p>
-    <p class="alerts__state" id="alerts-state" role="status">Checking this device…</p>
-    <div class="alerts__how" id="alerts-ios" hidden>
-      <p><strong>On an iPhone or iPad:</strong> alerts work from the Home Screen app.</p>
-      <ol>
-        <li>Open this page in Safari.</li>
-        <li>Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</li>
-        <li>Open <strong>Sweeter Side</strong> from the Home Screen, come back here and turn alerts on.</li>
-      </ol>
-    </div>
-    <div class="alerts__actions">
-      <button class="btn btn--primary" type="button" id="alerts-on" hidden>Turn on alerts on this device</button>
-      <button class="btn btn--ghost" type="button" id="alerts-test" hidden>Send a test alert</button>
-      <button class="link-quiet" type="button" id="alerts-off" hidden>Turn off on this device</button>
-    </div>
-    <h3 class="alerts__subtitle" id="alerts-devices-title" hidden>Devices with alerts on</h3>
-    <ul class="alerts__devices" id="alerts-devices"></ul>
-  </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -205,6 +150,5 @@
 
 <script src="/admin/common.js" defer></script>
 <script src="/admin/orders.js" defer></script>
-<script src="/admin/push.js" defer></script>
 </body>
 </html>

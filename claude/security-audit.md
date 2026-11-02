@@ -65,7 +65,7 @@ Legend:
 | `POST /api/login` | — | | 6 fails per email + IP, or 20 per email from anywhere → 15 min lock | scrypt hashes. |
 | `POST /api/logout` | — | | | Clears the session. Cross-site requests cannot carry the `SameSite=Strict` cookie. |
 | `GET /api/session` | S | | | Email and CSRF token for the admin pages. |
-| `GET /admin`, `/admin/{items,vouchers,cakes,blocked,pos,staff,reports}` | S | | | Page shells; redirect to sign-in without a session. `no-store`. |
+| `GET /admin`, `/admin/{items,vouchers,cakes,blocked,pos,staff,reports,settings}` | S | | | Page shells; redirect to sign-in without a session. `no-store`. |
 
 ### Admin: menu, vouchers, settings
 

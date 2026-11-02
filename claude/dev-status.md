@@ -193,7 +193,7 @@ All merged and deployed (Fly v15–v23).
     turned alerts on: "New order #31 · Pick-up · ASAP · Php 258". The alert
     has the number, type and total only (cakes: number, date, size), never
     names, phones or addresses. Tapping it opens Orders (or Cakes).
-  - Turned on from **Orders → Order alerts**. On an iPhone this works only
+  - Turned on from **Settings → Order alerts** (moved from Orders in #32). On an iPhone this works only
     from the admin added to the Home Screen, on iOS 16.4 or later. The panel
     has a test alert and a device list with Remove.
   - `server/push.js` uses `node:crypto` only: aes128gcm per device
@@ -269,7 +269,7 @@ After deploying (owner, once):
 - Update links to `https://sweeterside.ph`: the Messenger page button, social
   profiles, Google Business profile, printed QR codes.
 - Turn on order alerts on any other phone or tablet that should get them
-  (Dachel's phone, the counter iPad): Home Screen app → Orders → Order alerts.
+  (Dachel's phone, the counter iPad): Home Screen app → Settings → Order alerts.
 - Delete the photo backup with the metadata still in it:
   `/data/photos-backup-20261102-033855-before-strip.tar.gz` (the owner runs
   the `rm` through `flyctl ssh console`).

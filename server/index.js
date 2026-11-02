@@ -436,12 +436,13 @@ async function route(req, res) {
     return sendHtml(res, 200, html.replace('<!--SETUP-->', banner));
   }
 
-  // The admin pages: orders (with the ordering settings), items, vouchers, cakes and blocked numbers.
+  // The admin pages: orders (with the ordering settings), POS, items, vouchers, cakes,
+  // blocked numbers, staff, reports, and settings (fake-order protection, order alerts).
   const adminPages = {
     '/admin': 'index.html', '/admin/items': 'items.html',
     '/admin/vouchers': 'vouchers.html', '/admin/cakes': 'cakes.html',
     '/admin/blocked': 'blocked.html', '/admin/pos': 'pos.html', '/admin/staff': 'staff.html',
-    '/admin/reports': 'reports.html',
+    '/admin/reports': 'reports.html', '/admin/settings': 'settings.html',
   };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
