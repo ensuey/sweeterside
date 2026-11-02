@@ -14,6 +14,8 @@ const TEST_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'sweeterside-antifake-'))
 process.env.DB_PATH = path.join(TEST_DIR, 'test.db');
 process.env.CAKE_PHOTO_DIR = path.join(TEST_DIR, 'cake-photos');
 delete process.env.CHECKOUT_SECRET;
+// As on Fly: the proxy's Fly-Client-IP header is the client address.
+process.env.FLY_APP_NAME = 'sweeterside-test';
 
 const { db, seedIfEmpty } = require('../server/db');
 const auth = require('../server/auth');
@@ -153,7 +155,7 @@ test('the order endpoint refuses honeypots and bad tokens, and accepts a good or
     let n = 0;
     const place = (body) => fetch(`${url}/api/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': `10.1.0.${++n}` },
+      headers: { 'Content-Type': 'application/json', 'Fly-Client-IP': `10.1.0.${++n}` },
       body: JSON.stringify(body),
     });
 
@@ -262,7 +264,7 @@ test('the blocklist endpoints need sign-in and CSRF, and can block from an order
     assert.strictEqual(cancelled.cancel_reason, 'fake');
 
     const placed = await fetch(`${url}/api/orders`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Forwarded-For': '10.2.0.1' },
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Fly-Client-IP': '10.2.0.1' },
       body: JSON.stringify(orderInput({ phone: '0918 000 0004' })),
     });
     assert.strictEqual(placed.status, 403, 'checkout refuses the blocked number');

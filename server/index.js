@@ -124,9 +124,16 @@ async function readJson(req) {
   }
 }
 
+/* The client's address, for the rate limits and the sign-in lock. On Fly
+   the proxy sets Fly-Client-IP itself. X-Forwarded-For is never trusted:
+   its first entry is whatever the client wrote. Off Fly (local runs) there
+   is no proxy, so Fly-Client-IP could be forged too, and the socket address
+   is used instead. */
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim();
+  if (process.env.FLY_APP_NAME) {
+    const fly = String(req.headers['fly-client-ip'] || '').trim();
+    if (fly) return fly;
+  }
   return req.socket.remoteAddress || 'unknown';
 }
 
@@ -289,8 +296,11 @@ async function handleLogin(req, res) {
   const email = String(body.email ?? '').trim();
   const password = String(body.password ?? '');
   const key = auth.throttleKey(email, clientIp(req));
+  // Also a lock on the email alone, so guesses spread over many addresses
+  // still stop. Its limit is higher, so one address cannot lock the owner out quickly.
+  const emailKey = auth.emailThrottleKey(email);
 
-  const locked = auth.lockRemaining(key);
+  const locked = Math.max(auth.lockRemaining(key), auth.lockRemaining(emailKey));
   if (locked > 0) {
     return sendJson(res, 429, {
       error: `Too many attempts. Try again in ${Math.ceil(locked / 60000)} minute(s).`,
@@ -306,6 +316,7 @@ async function handleLogin(req, res) {
 
   if (!user || !ok) {
     const { fails } = auth.recordFailure(key);
+    auth.recordFailure(emailKey, auth.EMAIL_MAX_FAILS);
     const left = Math.max(0, auth.MAX_FAILS - fails);
     return sendJson(res, 401, {
       error: 'Incorrect email or password.' + (left <= 2 && left > 0 ? ` ${left} attempt(s) left.` : ''),
@@ -313,6 +324,7 @@ async function handleLogin(req, res) {
   }
 
   auth.clearFailures(key);
+  auth.clearFailures(emailKey);
   const { token, csrf } = auth.createSession(user.id);
   return sendJson(res, 200, { ok: true, email: user.email, csrf },
     { 'Set-Cookie': auth.sessionCookie(token, { secure: isSecure(req) }) });
