@@ -126,6 +126,11 @@ off. The top bar of every admin page shows "Shop open" or "Shop closed".
   the customer is shown the closed message instead.
 - **Custom cake bookings are not affected**: `/cakes` takes requests whether
   the shop is open or closed.
+- **Outside the opening hours** (switch on): customers can **pre-order**. The
+  menu says "Closed now · You can pre-order for tomorrow at 10:00 AM", and the
+  cart offers pick-up or delivery for a later time, starting at the next
+  slot. "As soon as possible" and dine-in come back when the shop opens. The
+  Closed switch still stops everything, pre-orders too.
 
 ### The cart
 
@@ -136,13 +141,26 @@ and only that type's fields are shown. Every field shown is required.
 | Type | The customer gives | Pays |
 |---|---|---|
 | **Delivery** | name, phone, area, address, landmark / directions, cash they will pay with (optional: blank, or **Exact amount**, means no change) | cash on arrival, plus the area's delivery fee |
-| **Pick-up** | name, phone, pick-up time today | at the counter, no fee |
+| **Pick-up** | name, phone, pick-up day and time | at the counter, no fee |
 | **Dine-in** | name, table number | at the counter, no fee |
 
-Pick-up times are "As soon as possible" or 15-minute slots, at least 15
-minutes ahead, within the opening hours. Times are always Manila time
-(UTC+8), whatever the customer's phone is set to. Once no slot is left today,
-pick-up is hidden with "Pick-up is closed for today."
+**When** (`server/schedule.js`; the cart offers the same):
+- **Pick-up:** a day (today up to N days ahead, Settings → Opening hours →
+  **Pre-orders up to**, default 3, 0 for today only) and a 15-minute slot
+  within the opening hours, from 15 minutes ahead today. "As soon as
+  possible" while open.
+- **Delivery:** "As soon as possible" while open, or a day and a 30-minute
+  window ("10:30–11:00 AM") that ends by closing, from 30 minutes ahead
+  today.
+- **Dine-in:** now, only while open.
+- Times are always Manila time (UTC+8), whatever the customer's phone says.
+  Past slots, slots too soon, off the grid or beyond N days are refused.
+- **Daily limits count the day an order is for**, so a pre-order for
+  Saturday uses Saturday's "only N left". The cart shows each day's stock.
+- Scheduled orders show **Scheduled — Sat 24 Oct, 10:30 AM** on the Orders
+  page and in the POS, sort by their time, and only start counting as
+  "Waiting" 30 minutes before it. Order alerts say "Scheduled" and the time.
+  The confirmation screen shows it too.
 
 Once the order is placed, the customer sees a confirmation: the order
 number, a summary of the lines, the order type and time, the total, their
