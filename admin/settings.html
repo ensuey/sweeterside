@@ -69,6 +69,31 @@
     <p class="alerts__state" id="hours-now" role="status"></p>
   </section>
 
+  <!-- Where we deliver, the fee and the usual time for each area. -->
+  <section class="hours" aria-labelledby="areas-title">
+    <h2 class="admin__title" id="areas-title">Delivery areas</h2>
+    <p class="admin__sub">Customers pick their area at checkout and pay that area's fee. An area with no fee yet is not offered. "Other area" is always offered: the order comes in marked "Fee to confirm" and you call the customer with the fee.</p>
+    <ul class="areas" id="areas-list" aria-label="Delivery areas"></ul>
+    <form class="hours__form" id="area-add" novalidate>
+      <div class="field">
+        <label for="area-new">New area</label>
+        <input id="area-new" type="text" maxlength="40" placeholder="e.g. Poblacion" required>
+      </div>
+      <button class="btn btn--ghost" type="submit">Add area</button>
+    </form>
+    <p class="field__err" id="areas-err" role="alert" hidden></p>
+
+    <form class="hours__form" id="free-form" novalidate>
+      <div class="field field--wide">
+        <label for="free-min">Free delivery from (₱, after discounts)</label>
+        <input id="free-min" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="Blank: no free delivery">
+      </div>
+      <button class="btn btn--ghost" type="submit" id="free-save">Save</button>
+    </form>
+    <p class="hint">The cart shows "Add ₱X more for free delivery" until the order reaches it. Not for "Other area".</p>
+    <p class="field__err" id="free-err" role="alert" hidden></p>
+  </section>
+
   <!-- What the customer sees right after ordering. -->
   <section class="hours" aria-labelledby="confirm-title">
     <h2 class="admin__title" id="confirm-title">Order confirmation</h2>

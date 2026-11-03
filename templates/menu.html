@@ -30,7 +30,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery-fee="<!--DELIVERY_FEE-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
+<body data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery="<!--DELIVERY_AREAS-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
 <!--SOON_BAR-->
 
 <a class="skip" href="#menu">Skip to menu</a>
@@ -115,6 +115,7 @@
       <div><dt>Subtotal</dt><dd id="cart-subtotal">₱0</dd></div>
       <div id="cart-discount-row" hidden><dt>Voucher <span id="cart-voucher-code"></span></dt><dd id="cart-discount">−₱0</dd></div>
       <div id="cart-fee-row"><dt>Delivery fee</dt><dd id="cart-fee">₱0</dd></div>
+      <p class="cart__free" id="cart-free" role="status" hidden></p>
       <div class="cart__total"><dt>Total</dt><dd id="cart-total">₱0</dd></div>
     </dl>
 
@@ -161,6 +162,15 @@
         <label for="o-pickup">Pick-up time <span class="cfield__hint">today</span></label>
         <select id="o-pickup" name="pickup_at" required></select>
         <p class="cfield__err" data-err="pickup_at" hidden></p>
+      </div>
+
+      <div class="cfield" data-for="delivery">
+        <label for="o-area">Area</label>
+        <select id="o-area" name="delivery_area" required aria-describedby="o-area-eta">
+<!--AREA_OPTIONS-->
+        </select>
+        <p class="cfield__hint cfield__hint--below" id="o-area-eta" aria-live="polite"></p>
+        <p class="cfield__err" data-err="delivery_area" hidden></p>
       </div>
 
       <div class="cfield" data-for="delivery">

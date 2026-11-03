@@ -36,7 +36,7 @@ function blankDiscounts() {
 function blankTicket() {
   return {
     id: null, version: null, status: null, held: true, type: 'dinein', table_no: '', pax: '',
-    customer_name: '', phone: '', address: '', landmark: '', lines: [],
+    customer_name: '', phone: '', address: '', landmark: '', delivery_area: '', lines: [],
     discounts: blankDiscounts(), discountsTouched: false, pendingKey: null, dirty: false,
   };
 }
@@ -52,6 +52,7 @@ function fromOrder(o) {
     id: o.id, version: o.version, status: o.status, held: o.held, type: o.order_type,
     table_no: o.table_no || '', pax: o.pax ?? '', customer_name: o.customer_name || '', phone: o.phone_norm || o.phone || '',
     address: o.address || '', landmark: o.landmark || '',
+    delivery_area: o.delivery_area_id ? String(o.delivery_area_id) : o.fee_to_confirm ? 'other' : '',
     lines: o.lines.filter((l) => l.qty > 0).map((l) => ({
       id: l.id, key: l.key, item_id: l.item_id, name: l.name, qty: l.qty, note: l.note,
       sent: l.sent_qty - l.voided_qty, unit_cents: l.unit_cents,
@@ -93,6 +94,7 @@ function payload() {
   const body = {
     version: t.version, type: t.type, table_no: t.table_no, pax: t.pax === '' ? null : Number(t.pax),
     customer_name: t.customer_name, phone: t.phone, address: t.address, landmark: t.landmark,
+    delivery_area: t.type === 'delivery' ? t.delivery_area : '',
     lines: t.lines.map((l) => ({
       id: l.id || undefined, key: l.key, item_id: l.item_id, qty: l.qty, note: l.note,
       price: l.price, price_reason: l.price_reason,
@@ -105,11 +107,30 @@ function payload() {
 
 /* ---------------------------- menu ---------------------------- */
 
+/** The delivery areas with a fee (from Settings), then "Other area". */
+function renderAreas() {
+  const select = $('d-area');
+  const option = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; return o; };
+  select.replaceChildren(
+    option('', 'Choose the area'),
+    ...(P.settings.delivery_areas || []).map((a) => option(String(a.id), `${a.name} · ${a.fee === 0 ? 'free' : money(a.fee)}`)),
+    option('other', 'Other area (fee to confirm)'),
+  );
+  if (P.t) select.value = P.t.delivery_area || '';
+}
+
+/** The fee the chosen area charges, before free delivery: the placeholder for the fee field. */
+function areaFee(t) {
+  const a = (P.settings.delivery_areas || []).find((x) => String(x.id) === t.delivery_area);
+  return a ? a.fee : t.delivery_area === 'other' ? 0 : '';
+}
+
 async function loadMenu() {
   const data = await staffGate.call('/api/pos/menu');
   P.menu = data.items;
   P.cats = data.categories;
   P.settings = data;
+  renderAreas();
   renderCats();
   renderGrid();
 }
@@ -255,6 +276,7 @@ function renderTicket() {
   set('d-phone', t.phone);
   set('d-address', t.address);
   set('d-landmark', t.landmark);
+  set('d-area', t.delivery_area);
 
   const lines = t.lines;
   $('tempty').hidden = lines.length > 0;
@@ -319,7 +341,7 @@ function renderDiscounts() {
   }
   $('row-fee').hidden = t.type !== 'delivery';
   if (document.activeElement !== $('fee')) $('fee').value = d.delivery_fee ?? '';
-  $('fee').placeholder = String(P.settings.delivery_fee ?? '');
+  $('fee').placeholder = String(areaFee(P.t));
   if (document.activeElement !== $('fee-reason')) $('fee-reason').value = d.fee_reason;
   $('fee').disabled = $('fee-reason').disabled = !staffGate.can('change_delivery_fee');
   const n = [d.voucher_code, d.manual, ...d.claimants, d.service_removed_reason, d.delivery_fee !== null].filter(Boolean).length;
@@ -830,6 +852,11 @@ function bind() {
   bindField('d-phone', 'phone');
   bindField('d-address', 'address');
   bindField('d-landmark', 'landmark');
+  // A new area changes the fee: price the ticket again.
+  $('d-area').addEventListener('change', (e) => {
+    P.t.delivery_area = e.target.value;
+    changed();
+  });
 
   $('tlines').addEventListener('click', (e) => {
     const row = e.target.closest('[data-key]');

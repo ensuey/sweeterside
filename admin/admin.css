@@ -495,6 +495,8 @@ a { color: var(--navy); }
 .flag--good { background: #EEF6F0; color: #1F5A3A; }
 .flag--bad  { background: #FDF3F1; color: var(--danger); }
 .flag--wait { background: var(--danger); color: #fff; }
+.flag--warn { background: #FFF4DB; color: #7A4B00; }
+.order__area strong { color: var(--ink); }
 .order__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .order__actions [data-confirm] { min-width: 7rem; }
 /* Block number: there when needed, but not something to tap by accident. */
@@ -509,6 +511,15 @@ a { color: var(--navy); }
 .hours__form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem 1rem; margin-bottom: .6rem; }
 .hours__form .field { width: 10rem; }
 .hours__form .field--wide { width: min(100%, 24rem); }
+.areas { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: .6rem; }
+.areas__row { border: 1px solid var(--line, #e5ddd3); border-radius: 10px; padding: .6rem .75rem; }
+.areas__form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem .75rem; }
+.areas__field { display: grid; gap: .2rem; font-size: .8125rem; font-weight: 600; }
+.areas__field input { font-size: 16px; min-height: 44px; width: 5.5rem; }
+.areas__field:first-child input { width: 11rem; }
+.areas__on { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
+.areas__on input { width: 20px; height: 20px; }
+.areas__note { margin: .35rem 0 0; }
 .share { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
 .share__preview {
   width: min(100%, 20rem); height: auto; aspect-ratio: 1200 / 630; object-fit: cover;

@@ -38,7 +38,13 @@
       shot: card.querySelector('.shot'), // the card's photo, copied as the cart thumbnail
     };
   });
-  var deliveryFee = Number(document.body.dataset.deliveryFee) || 0;
+  // Delivery areas (fee and usual time) and the free delivery threshold, from
+  // Settings. The server prices the order again; this is so the total shown
+  // is the total charged.
+  var deliveryInfo = { areas: [], free_min: null };
+  try { deliveryInfo = JSON.parse(document.body.dataset.delivery || '{}'); } catch (e) { /* keep the empty default */ }
+  var areas = deliveryInfo.areas || [];
+  var freeMin = deliveryInfo.free_min || null;
   // The order types turned on in the admin, e.g. "delivery pickup dinein".
   var enabledTypes = (document.body.dataset.orderTypes || '').split(' ').filter(Boolean);
   var pickupOpen = toMinutes(document.body.dataset.pickupOpen);
@@ -77,8 +83,26 @@
   function subtotal() {
     return lines.reduce(function (sum, l) { return sum + catalog[l.id].price * l.qty; }, 0);
   }
+  /** The area chosen: { id, name, fee, eta }, { other: true }, or null. */
+  function area() {
+    var v = $('o-area') ? $('o-area').value : '';
+    if (v === 'other') return { other: true };
+    for (var i = 0; i < areas.length; i++) if (String(areas[i].id) === v) return areas[i];
+    return null;
+  }
+  // Free delivery: the items after the voucher come to the threshold or more
+  // (not for "Other area", whose fee is still to be confirmed).
+  function freeDelivery() {
+    var a = area();
+    return !!(freeMin && a && !a.other && a.fee > 0 && subtotal() - discount() >= freeMin);
+  }
   // Only delivery pays the fee; pick-up and dine-in pay at the counter.
-  function fee() { return type === 'delivery' ? deliveryFee : 0; }
+  function fee() {
+    if (type !== 'delivery') return 0;
+    var a = area();
+    if (!a || a.other || freeDelivery()) return 0;
+    return a.fee;
+  }
   // A voucher comes off the items only, never the delivery fee.
   function discount() { return voucher ? Math.min(voucher.discount, subtotal()) : 0; }
   function total() { return subtotal() - discount() + fee(); }
@@ -231,6 +255,7 @@
       body: JSON.stringify({
         code: code,
         type: type || 'delivery',
+        delivery_area: $('o-area') ? $('o-area').value : '',
         items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
       }),
     }).then(function (res) {
@@ -403,7 +428,14 @@
       $('cart-discount').textContent = '−' + money(discount());
     }
     $('cart-fee-row').hidden = type !== 'delivery';
-    $('cart-fee').textContent = deliveryFee === 0 ? 'Free' : money(deliveryFee);
+    var a = area();
+    $('cart-fee').textContent = !a ? 'Choose your area' : a.other ? 'To be confirmed'
+      : freeDelivery() ? 'Free' : a.fee === 0 ? 'Free' : money(a.fee);
+    // "Add ₱X more for free delivery": only for an area with a fee, under the threshold.
+    var short = freeMin && type === 'delivery' && a && !a.other && a.fee > 0 ? freeMin - (subtotal() - discount()) : 0;
+    $('cart-free').hidden = !(short > 0);
+    if (short > 0) $('cart-free').textContent = 'Add ' + money(short) + ' more for free delivery.';
+    $('o-area-eta').textContent = a && a.eta ? a.eta + '.' : a && a.other ? 'We will call you with the fee before we send it.' : '';
     $('cart-total').textContent = money(total());
     submitBtn.textContent = sending ? 'Placing order…' : 'Place order · ' + money(total());
 
@@ -493,8 +525,8 @@
       var line = find(id);
       if (line) line.qty = Math.min(line.qty, catalog[id].max);
     });
-    // Other types are quoted with no fee, which says nothing about delivery's.
-    if (type === 'delivery' && typeof quote.delivery_fee === 'number') deliveryFee = quote.delivery_fee;
+    // Fees changed while the page was open: the page has to be loaded again to
+    // show them, and the server has already priced the order with the new fee.
     // The server's view of the voucher: a new discount, or null when the code
     // stopped working (expired or turned off). The error message says which.
     if ('voucher' in quote && voucher) {
@@ -562,6 +594,7 @@
       var address = form.elements.address.value.trim();
       var landmark = form.elements.landmark.value.trim();
       var cashRaw = form.elements.cash.value.trim();
+      if (!area()) errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
       var cash = Number(cashRaw);
       if (!address) errors.address = 'Enter the delivery address.';
       if (!landmark) errors.landmark = 'Add a landmark or directions, e.g. beside 7-Eleven, green gate.';
@@ -614,8 +647,10 @@
       when = 'Dine-in · table ' + order.table_no;
       next = 'We will bring it to table ' + order.table_no + '.';
     } else {
-      when = 'Delivery · today';
-      next = 'Pay in cash when it arrives.';
+      when = 'Delivery · ' + (order.delivery_area || 'today') + (order.eta ? ' · ' + order.eta.charAt(0).toLowerCase() + order.eta.slice(1) : '');
+      next = order.fee_to_confirm
+        ? 'Delivery fee: to be confirmed. We will call you with it before we send your order. Pay in cash when it arrives.'
+        : 'Pay in cash when it arrives.';
     }
     $('done-when').textContent = when;
     $('done-next').textContent = next;
@@ -650,6 +685,7 @@
       phone: type === 'dinein' ? '' : form.elements.phone.value,
       address: type === 'delivery' ? form.elements.address.value : '',
       landmark: type === 'delivery' ? form.elements.landmark.value : '',
+      delivery_area: type === 'delivery' ? form.elements.delivery_area.value : '',
       cash: type === 'delivery' ? form.elements.cash.value.trim() : '',
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
@@ -804,6 +840,8 @@
   $('cart-open').addEventListener('click', open);
   form.addEventListener('submit', submit);
   $('o-cash').addEventListener('input', renderChange);
+  // A new area changes the fee, the time and the total.
+  $('o-area').addEventListener('change', function () { render(); });
   // Exact amount: the total, so no change is needed (blank means the same).
   $('o-exact').addEventListener('click', function () {
     $('o-cash').value = String(total());
