@@ -17,6 +17,7 @@ const vouchers = require('./vouchers');
 const cakes = require('./cakes');
 const checkout = require('./checkout');
 const push = require('./push');
+const delivery = require('./delivery');
 const seo = require('./seo');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
@@ -582,6 +583,8 @@ async function route(req, res) {
         delivery_fee: order.delivery_fee, total: order.total,
         cash: order.cash, change_due: order.change_due,
         table_no: order.table_no, pickup_at: order.pickup_at,
+        delivery_area: order.delivery_area, fee_to_confirm: order.fee_to_confirm === 1,
+        eta: order.delivery_area_id ? delivery.etaLabel(delivery.get(order.delivery_area_id)) : '',
       },
     });
   }
@@ -601,12 +604,12 @@ async function route(req, res) {
     const body = await readJson(req);
     // Priced exactly as the order will be, so the total shown is the total charged.
     const q = orders.quote(body.items, body.type === undefined ? 'delivery' : String(body.type),
-      new Date(), body.code);
+      new Date(), body.code, body.delivery_area);
     if (q.voucherError) throw new menu.ValidationError({ voucher: q.voucherError });
     if (!q.voucher) throw new menu.ValidationError({ voucher: 'Enter a voucher code.' });
     return sendJson(res, 200, {
       voucher: q.voucher, subtotal: q.subtotal, discount: q.discount,
-      delivery_fee: q.delivery_fee, total: q.total,
+      delivery_fee: q.delivery_fee, total: q.total, delivery_free: q.delivery_free,
     });
   }
 
@@ -744,7 +747,8 @@ async function route(req, res) {
     const s = settings.posSettings();
     return sendJson(res, 200, {
       categories: categories.list(), items: pos.posMenu(),
-      delivery_fee: orders.getDeliveryFee(), service_charge: s.service_charge,
+      // Delivery: the same areas, fees and free delivery threshold as the checkout.
+      delivery_areas: delivery.selectable(), free_delivery_min: delivery.freeOver(), service_charge: s.service_charge,
       vat_registered: s.vat_registered, cashier_discount_limit_bp: s.cashier_discount_limit_bp,
       lock_minutes: s.pos_lock_minutes,
     });
@@ -944,7 +948,7 @@ async function route(req, res) {
   /* ---- POS settings: everyone at the POS reads them, the owner changes them ---- */
   if (pathname === '/api/pos/settings' && method === 'GET') {
     if (!requireStaff(req, res)) return;
-    return sendJson(res, 200, { ...settings.posSettings(), delivery_fee: orders.getDeliveryFee() });
+    return sendJson(res, 200, settings.posSettings());
   }
 
   if (pathname === '/api/pos/settings' && (method === 'PUT' || method === 'PATCH')) {
@@ -1006,6 +1010,34 @@ async function route(req, res) {
   }
 
   /* ---- settings ---- */
+  /* ---- delivery areas (Settings), all authenticated ---- */
+  if (pathname === '/api/delivery-areas' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { areas: delivery.list(), free_delivery_min: delivery.freeOver() });
+  }
+  if (pathname === '/api/delivery-areas' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const area = delivery.create(await readJson(req));
+    return afterMutation(res, 201, { area, areas: delivery.list() });
+  }
+  if (pathname === '/api/delivery-areas/reorder' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const body = await readJson(req);
+    return afterMutation(res, 200, { areas: delivery.reorder(body.ids) });
+  }
+  const areaMatch = pathname.match(/^\/api\/delivery-areas\/(\d+)$/);
+  if (areaMatch && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const area = delivery.update(Number(areaMatch[1]), await readJson(req));
+    if (!area) return sendJson(res, 404, { error: 'That area no longer exists.' });
+    return afterMutation(res, 200, { area, areas: delivery.list() });
+  }
+  if (areaMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!delivery.remove(Number(areaMatch[1]))) return sendJson(res, 404, { error: 'That area no longer exists.' });
+    return afterMutation(res, 200, { areas: delivery.list() });
+  }
+
   /* ---- order alerts (Web Push), all authenticated ---- */
   if (pathname === '/api/push' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;

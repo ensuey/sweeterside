@@ -22,7 +22,8 @@
      2. SC/PWD on the claimants' portions
      3. a voucher OR a manual discount, on what SC/PWD does not cover
      4. service charge
-     5. delivery fee
+     5. delivery fee: the area's fee, or none at the free delivery threshold
+        (items after every discount); a cashier may set it with a reason
      6. total
    Invariant: sum of line nets + service charge + delivery fee = total. */
 
@@ -418,9 +419,17 @@ function price(input) {
   }
 
   /* -- Delivery fee -- */
+  // The area's fee, or nothing when the items come to the free delivery
+  // threshold or more after every discount. A cashier may still set a fee
+  // by hand, with a reason, as before.
   const d = input.delivery || {};
-  const defaultFee = isInt(d.default_cents, 0) ? d.default_cents : 0;
-  const delivery = { default_cents: defaultFee, amount: 0, reason: null };
+  const areaFee = isInt(d.default_cents, 0) ? d.default_cents : 0;
+  const freeOver = isInt(d.free_over_cents, 1) ? d.free_over_cents : null;
+  const free = type === 'delivery' && freeOver !== null && areaFee > 0 && net >= freeOver;
+  const defaultFee = free ? 0 : areaFee;
+  const delivery = {
+    default_cents: defaultFee, area_fee_cents: areaFee, free_over_cents: freeOver, free, amount: 0, reason: null,
+  };
   if (type === 'delivery') {
     delivery.amount = defaultFee;
     if (d.cents !== undefined && d.cents !== null && d.cents !== defaultFee) {

@@ -11,6 +11,7 @@ const pricing = require('./pricing');
 const { getSetting, saveSetting } = require('./settings');
 const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
+const delivery = require('./delivery');
 
 const { ValidationError } = menu;
 
@@ -26,32 +27,11 @@ const ADDRESS_MAX = 400;
 const MAX_LINES = 50;
 const MAX_QTY = 50;
 const MAX_CASH = 1000000;
-const MAX_FEE = 10000;
 
 /* ---------------------------- delivery fee ---------------------------- */
 
-function getDeliveryFee() {
-  const row = db.prepare("SELECT value FROM settings WHERE key = 'delivery_fee'").get();
-  return row ? Number(row.value) : 0;
-}
-
-/** @returns the fee as an integer, or throws ValidationError */
-function parseDeliveryFee(input) {
-  const fee = Number(input);
-  if (input === '' || input === null || input === undefined || !Number.isInteger(fee)) {
-    throw new ValidationError({ delivery_fee: 'Enter the fee as a whole number of pesos.' });
-  }
-  if (fee < 0 || fee > MAX_FEE) {
-    throw new ValidationError({ delivery_fee: `The fee must be between 0 and ${MAX_FEE}.` });
-  }
-  return fee;
-}
-
-function setDeliveryFee(input) {
-  const fee = parseDeliveryFee(input);
-  saveSetting('delivery_fee', fee);
-  return fee;
-}
+// The fee comes from the delivery area the customer picks (server/delivery.js).
+// The single 'delivery_fee' setting from before areas is no longer read.
 
 /* ---------------------------- order types ---------------------------- */
 
@@ -250,6 +230,17 @@ function parseShareImage(input) {
   return img.rel;
 }
 
+/** Free delivery from this much (pesos, after discounts); blank turns it off. */
+function parseFreeMin(input) {
+  const raw = input === null || input === undefined ? '' : String(input).trim();
+  if (raw === '') return '';
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1 || n > 100000) {
+    throw new ValidationError({ free_delivery_min: 'Enter a whole number of pesos, or leave it blank for no free delivery.' });
+  }
+  return String(n);
+}
+
 /** What the menu says while ordering is closed, for the switch or the hours. */
 function closedMessage(now = new Date()) {
   const s = shopState(now);
@@ -351,7 +342,6 @@ function settings() {
   const state = shopState();
   const trust = trustRules();
   return {
-    delivery_fee: getDeliveryFee(),
     delivery_enabled: isEnabled('delivery'),
     pickup_enabled: isEnabled('pickup'),
     dinein_enabled: isEnabled('dinein'),
@@ -366,6 +356,7 @@ function settings() {
     confirm_call_minutes: callMinutes(),
     facebook_url: facebookUrl(),
     share_image: shareImage(),
+    free_delivery_min: delivery.freeOver(),
     require_confirm_delivery: requiresConfirmation('delivery'),
     require_confirm_pickup: requiresConfirmation('pickup'),
     require_confirm_dinein: requiresConfirmation('dinein'),
@@ -379,7 +370,6 @@ function settings() {
 /** Validate every submitted setting first, so a bad value never half-applies. */
 function updateSettings(input) {
   const parsers = {
-    delivery_fee: parseDeliveryFee,
     delivery_enabled: parseSwitch('delivery_enabled'),
     pickup_enabled: parseSwitch('pickup_enabled'),
     dinein_enabled: parseSwitch('dinein_enabled'),
@@ -390,6 +380,7 @@ function updateSettings(input) {
     confirm_call_minutes: parseCount('confirm_call_minutes', 1, 120),
     facebook_url: parseFacebookUrl,
     share_image: parseShareImage,
+    free_delivery_min: parseFreeMin,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
     require_confirm_pickup: parseSwitch('require_confirm_pickup'),
     require_confirm_dinein: parseSwitch('require_confirm_dinein'),
@@ -470,7 +461,7 @@ function cartLines(rawItems) {
  * @returns {{ lines, unavailable, limits, short, subtotal, discount, voucher,
  *             voucherError, delivery_fee, total, priced }}
  */
-function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') {
+function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', areaChoice = null) {
   const lines = [];
   const unavailable = [];
   const short = [];
@@ -501,7 +492,9 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') 
     }
   }
 
-  const fee = type === 'delivery' ? getDeliveryFee() : 0;
+  // Delivery: the fee comes from the area chosen (none yet, or "Other area": 0).
+  const area = type === 'delivery' ? delivery.resolve(areaChoice) : null;
+  const fee = area ? area.fee_cents / 100 : 0;
   const priced = lines.length ? pricing.price({
     type,
     lines: lines.map((l, i) => ({
@@ -509,7 +502,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') 
       unit_cents: l.regular * 100, sale_cents: l.price * 100, sc_eligible: l.sc_eligible,
     })),
     voucher: found,
-    delivery: { default_cents: fee * 100 },
+    delivery: { default_cents: fee * 100, free_over_cents: area ? area.free_over_cents : null },
   }) : null;
   const t = priced ? priced.totals : { subtotal: 0, voucher_discount: 0, delivery_fee: fee * 100, total: fee * 100 };
 
@@ -518,7 +511,8 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '') 
   const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
   return {
     lines, unavailable, limits, short, subtotal: t.subtotal / 100, discount, voucher, voucherError,
-    delivery_fee: t.delivery_fee / 100, total: t.total / 100, priced,
+    delivery_fee: t.delivery_fee / 100, total: t.total / 100, priced, area,
+    delivery_free: !!(priced && priced.delivery && priced.delivery.free),
   };
 }
 
@@ -625,7 +619,10 @@ function create(input, { now = new Date() } = {}) {
   // cannot both take the last one.
   let q = null;
   try {
-    q = quote(input.items, type, now, input.voucher);
+    q = quote(input.items, type, now, input.voucher, input.delivery_area);
+    if (type === 'delivery' && !q.area) {
+      errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
+    }
   } catch (err) {
     if (!(err instanceof ValidationError)) throw err;
     Object.assign(errors, err.errors);
@@ -675,11 +672,13 @@ function create(input, { now = new Date() } = {}) {
     const info = db.prepare(`
       INSERT INTO orders (source, order_type, status, customer_name, phone, phone_norm, address, landmark,
                           table_no, pickup_at, gross_cents, subtotal_cents, voucher_code, discount_cents,
-                          delivery_fee_cents, total_cents, cash_cents, change_due_cents, pricing)
-      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                          delivery_fee_cents, total_cents, cash_cents, change_due_cents, pricing,
+                          delivery_area_id, delivery_area, fee_to_confirm)
+      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       type, status, name, phone, phoneNorm, address, landmark, tableNo, pickupAt,
       t.gross, t.subtotal, q.voucher ? q.voucher.code : '', t.voucher_discount,
-      t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced));
+      t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced),
+      q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0);
     insertLines(info.lastInsertRowid, q.priced.lines);
     return info.lastInsertRowid;
   });
@@ -822,7 +821,7 @@ function setStatus(id, status, { reason } = {}) {
 }
 
 module.exports = {
-  STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
+  STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
   closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage,

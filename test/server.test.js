@@ -26,6 +26,11 @@ const checkout = require('../server/checkout');
 seedIfEmpty();
 // Ordering follows the opening hours. Open all day, so no test depends on the clock.
 require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
+
+// Delivery orders name an area. This one has a fee the tests can change.
+const deliveryAreas = require('../server/delivery');
+const TEST_AREA = deliveryAreas.create({ name: 'Test Area', fee: 0, eta_min: 30, eta_max: 45 });
+const setTestFee = (fee) => deliveryAreas.update(TEST_AREA.id, { name: 'Test Area', fee, eta_min: 30, eta_max: 45 });
 // Most tests place many orders from the same number; the open-orders limit
 // has its own test, which sets it back to the default.
 orders.saveSetting('max_open_orders', 1000);
@@ -322,9 +327,9 @@ function orderInput(over = {}) {
   const sandwich = menuItem('Bacon and Egg Sandwich'); // Php 85
   return {
     name: '  Juan   dela Cruz ', phone: '0917 123-4567', address: '12 Mabini St, Brgy. Uno',
-    landmark: 'beside 7-Eleven, green gate', cash: 500,
+    landmark: 'beside 7-Eleven, green gate', cash: 500, delivery_area: TEST_AREA.id,
     items: [{ id: matcha.id, qty: 2 }, { id: sandwich.id, qty: 1 }],
-    expected_total: 129 * 2 + 85 + orders.getDeliveryFee(),
+    expected_total: 129 * 2 + 85 + deliveryAreas.get(TEST_AREA.id).fee,
     // Issued ten seconds ago, as if the customer took that long at checkout.
     checkout_token: checkout.issue(new Date(Date.now() - 10000)),
     ...over,
@@ -341,18 +346,8 @@ function orderErrors(input) {
   }
 }
 
-test('the delivery fee defaults to zero and only takes whole pesos in range', () => {
-  assert.strictEqual(orders.getDeliveryFee(), 0);
-  for (const bad of ['', null, 'abc', 1.5, -1, 10001]) {
-    assert.throws(() => orders.setDeliveryFee(bad), menu.ValidationError, `should reject ${bad}`);
-  }
-  assert.strictEqual(orders.setDeliveryFee('45'), 45);
-  assert.strictEqual(orders.getDeliveryFee(), 45);
-  assert.match(render.buildHtml(), /data-delivery-fee="45"/, 'the page carries the fee');
-});
-
 test('an order is priced from the database, not from the browser', () => {
-  orders.setDeliveryFee(50);
+  setTestFee(50);
   const order = orders.create(orderInput({
     // Prices sent by the browser are ignored outright.
     items: orderInput().items.map((l) => ({ ...l, price: 1 })),
@@ -370,7 +365,7 @@ test('an order is priced from the database, not from the browser', () => {
 });
 
 test('an order whose total the customer did not see is refused with the new prices', () => {
-  orders.setDeliveryFee(60);
+  setTestFee(60);
   assert.throws(() => orders.create(orderInput({ expected_total: 129 * 2 + 85 + 50 })), (err) => {
     assert.strictEqual(err.status, 409);
     assert.strictEqual(err.body.quote.delivery_fee, 60);
@@ -391,7 +386,7 @@ test('an item removed from the menu is reported, not silently dropped', () => {
 });
 
 test('order details are required and checked', () => {
-  orders.setDeliveryFee(0);
+  setTestFee(0);
   const e = orderErrors(orderInput({ name: ' ', phone: '12', address: '', cash: '' }));
   assert.ok(e.name && e.phone && e.address, 'name, phone and address are required');
   assert.ok(!e.cash, 'cash is optional: blank means the exact amount');
@@ -460,7 +455,7 @@ function pickupErrors(input, now = MANILA_NOON) {
 }
 
 test('pick-up and dine-in pay no delivery fee and keep only their own details', () => {
-  orders.setDeliveryFee(50);
+  setTestFee(50);
 
   const pickup = orders.create(pickupInput(), { now: MANILA_NOON });
   assert.strictEqual(pickup.order_type, 'pickup');
@@ -484,7 +479,7 @@ test('pick-up and dine-in pay no delivery fee and keep only their own details', 
     (err) => err.status === 409 && err.body.quote.delivery_fee === 0);
   assert.strictEqual(orders.create(orderInput({ expected_total: ITEMS_TOTAL + 50 })).delivery_fee, 50,
     'a missing type is still a delivery');
-  orders.setDeliveryFee(0);
+  setTestFee(0);
 });
 
 test('each order type asks only for its own details', () => {
@@ -605,7 +600,7 @@ test('availability and the daily limit are validated', () => {
 });
 
 test('the menu hides items that are not available and greys sold-out ones', () => {
-  orders.setDeliveryFee(0);
+  setTestFee(0);
   const hidden = stockItem('Hidden Frappe', { availability: 'unavailable' });
   const soldOut = stockItem('Gone Frappe', { availability: 'sold_out' });
   const few = stockItem('Few Frappe', { daily_limit: '5' });
@@ -631,7 +626,7 @@ test('the menu hides items that are not available and greys sold-out ones', () =
 });
 
 test('a daily limit stops orders at capacity and frees up when an order is cancelled', () => {
-  orders.setDeliveryFee(0);
+  setTestFee(0);
   const item = stockItem('Limited Cake', { daily_limit: '3' });
 
   const first = orders.create(orderOf(item, 2));
@@ -658,7 +653,7 @@ test('a daily limit stops orders at capacity and frees up when an order is cance
 });
 
 test('only today\'s orders, in Manila time, count against the limit', () => {
-  orders.setDeliveryFee(0);
+  setTestFee(0);
   const item = stockItem('Daily Pie', { daily_limit: '2' });
   const order = orders.create(orderOf(item, 2));
   assert.strictEqual(menu.get(item.id).sold_out, true);
@@ -738,7 +733,7 @@ test('a sale is a percentage or an amount off, and never takes the price to zero
 });
 
 test('best sellers get a badge and sale items show the old price and charge the new one', () => {
-  orders.setDeliveryFee(0);
+  setTestFee(0);
   const star = menu.create({ ...base, name: 'Star Frappe', price: 120, best_seller: true });
   const sale = menu.create({ ...base, name: 'Sale Frappe', price: 129, sale_type: 'percent', sale_value: 20 });
   const plain = menu.create({ ...base, name: 'Plain Frappe', price: 90 });
@@ -821,7 +816,7 @@ test('a voucher code is checked against the day and works out the discount', () 
 });
 
 test('an order with a voucher takes it off the items, not the delivery fee', () => {
-  orders.setDeliveryFee(40);
+  setTestFee(40);
   const v = vouchers.create({ code: 'ORDER50', kind: 'amount', value: 50 });
 
   // Cart: 2 Matcha (258) + 1 sandwich (85) = 343, minus 50, plus the fee of 40.
@@ -847,7 +842,7 @@ test('an order with a voucher takes it off the items, not the delivery fee', () 
   assert.strictEqual(vouchers.get(v.id).uses, 0, 'cancelled orders do not count as uses');
   vouchers.remove(v.id);
   assert.strictEqual(orders.get(order.id).voucher_code, 'ORDER50', 'deleting keeps the code on past orders');
-  orders.setDeliveryFee(0);
+  setTestFee(0);
 });
 
 test('items and orders from before promotions get empty promotion fields', () => {
@@ -1169,7 +1164,7 @@ test('the menu says whether the shop is open, and shows the closed note', () => 
 });
 
 test('no orders while closed, but cake bookings still go through', async () => {
-  orders.setDeliveryFee(0);
+  setTestFee(0);
   clearCakes();
   orders.updateSettings({ shop_open: false, closed_note: 'Back at 10 AM.' });
   try {

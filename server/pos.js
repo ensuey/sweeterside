@@ -27,6 +27,7 @@
 const { db, transaction } = require('./db');
 const menu = require('./menu');
 const orders = require('./orders');
+const delivery = require('./delivery');
 const vouchers = require('./vouchers');
 const pricing = require('./pricing');
 const settings = require('./settings');
@@ -141,6 +142,7 @@ function parseMeta(body, errors) {
   if (!TYPES.includes(type)) errors.type = 'Choose dine-in, takeout or delivery.';
   const meta = {
     type, table_no: '', pax: null, customer_name: '', phone: '', phone_norm: null, address: '', landmark: '',
+    area: null, // delivery: the area chosen (delivery.resolve), with its fee
   };
   meta.customer_name = text(body.customer_name, NAME_MAX);
   if (meta.customer_name.length > NAME_MAX) errors.customer_name = `Keep the name under ${NAME_MAX} characters.`;
@@ -167,6 +169,9 @@ function parseMeta(body, errors) {
     meta.landmark = text(body.landmark, LANDMARK_MAX);
     if (!meta.landmark) errors.landmark = 'Add a landmark or directions for the rider.';
     else if (meta.landmark.length > LANDMARK_MAX) errors.landmark = `Keep it under ${LANDMARK_MAX} characters.`;
+    // The same areas and fees as the online checkout.
+    meta.area = delivery.resolve(body.delivery_area);
+    if (!meta.area) errors.delivery_area = 'Choose the delivery area, or Other area.';
   }
   return meta;
 }
@@ -269,7 +274,7 @@ function manualShareBp(manual) {
  * { key, item_id, name, qty, menu_price_cents, menu_sale_cents,
  *   override_cents, override_reason, sc_eligible } with qty > 0.
  */
-function engineInput(type, lines, d, voucherRow, actor, discountApproved) {
+function engineInput(type, lines, d, voucherRow, actor, discountApproved, area = null) {
   const pos = settings.posSettings();
   return {
     type,
@@ -284,7 +289,12 @@ function engineInput(type, lines, d, voucherRow, actor, discountApproved) {
     voucher: voucherRow,
     manual: d.manual || null,
     service: { ...pos.service_charge, removed_reason: d.service_removed_reason },
-    delivery: { default_cents: orders.getDeliveryFee() * 100, cents: d.delivery_fee_cents, reason: d.fee_reason },
+    // The area's fee ("Other area": none yet), free over the threshold; a
+    // cashier may still change it with a reason.
+    delivery: {
+      default_cents: area ? area.fee_cents : 0, free_over_cents: area ? area.free_over_cents : null,
+      cents: d.delivery_fee_cents, reason: d.fee_reason,
+    },
     // A manual discount the owner approved may stay at the share of the order
     // they approved (approved_bp); anything above that needs them again.
     limits: {
@@ -508,13 +518,13 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
   // as it is now, so taking items off cannot stretch a discount.
   let priced;
   try {
-    priced = pricing.price(engineInput(meta.type, result, discounts, voucherRow, actor, false));
+    priced = pricing.price(engineInput(meta.type, result, discounts, voucherRow, actor, false, meta.area));
   } catch (err) {
     if (!(err instanceof pricing.PricingError) || err.code !== 'override_required' || err.field !== 'manual') {
-      priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, false));
+      priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, false, meta.area));
     }
     needs.add('discount_over_limit');
-    priced = priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, true));
+    priced = priceOrThrow(engineInput(meta.type, result, discounts, voucherRow, actor, true, meta.area));
   }
 
   return { meta, ops, voids, voidReason, priceChanges, discounts, voucherRow, changed, needs, priced, keyMap };
@@ -638,7 +648,7 @@ function save(id, body, actor, now = new Date()) {
     if (d.manual && d.manual.line) d.manual.line = rekey(d.manual.line);
     for (const c of d.claimants) c.lines = Object.fromEntries(Object.entries(c.lines).map(([k, q]) => [rekey(k), q]));
 
-    const priced = priceOrThrow(engineInput(p.meta.type, savedEngineLines(orderId), d, p.voucherRow, actor, true));
+    const priced = priceOrThrow(engineInput(p.meta.type, savedEngineLines(orderId), d, p.voucherRow, actor, true, p.meta.area));
     writePricing(orderId, priced);
     // Keep the share of the order the owner approved (or gave), so later saves
     // can hold it there without asking again, but not stretch it.
@@ -649,11 +659,13 @@ function save(id, body, actor, now = new Date()) {
     const prevVersion = existing ? existing.pos_version : -1;
     db.prepare(`
       UPDATE orders SET order_type = ?, table_no = ?, pax = ?, customer_name = ?, phone = ?, phone_norm = ?,
-        address = ?, landmark = ?, pos_input = ?, last_request_key = ?, pos_version = ?, updated_by = ?,
-        updated_at = datetime('now')
+        address = ?, landmark = ?, delivery_area_id = ?, delivery_area = ?, fee_to_confirm = ?,
+        pos_input = ?, last_request_key = ?, pos_version = ?, updated_by = ?, updated_at = datetime('now')
       WHERE id = ?`).run(
       p.meta.type, p.meta.table_no, p.meta.pax, p.meta.customer_name, p.meta.phone, p.meta.phone_norm,
-      p.meta.address, p.meta.landmark, JSON.stringify(d), String(body.request_key), prevVersion + 1, actor.id, orderId);
+      p.meta.address, p.meta.landmark,
+      p.meta.area ? p.meta.area.id : null, p.meta.area ? p.meta.area.name : '', p.meta.area && p.meta.area.to_confirm ? 1 : 0,
+      JSON.stringify(d), String(body.request_key), prevVersion + 1, actor.id, orderId);
 
     // What goes to the kitchen now: units added since the last send.
     const kitchen = send ? sendToKitchen(orderId) : [];
