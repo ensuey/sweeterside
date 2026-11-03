@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'sweeterside-cart-v1';
+  var STORAGE_KEY = 'sweeterside-cart-v1'; // lines: { id, qty, opts? }
   var TYPE_KEY = 'sweeterside-order-type';
   var VOUCHER_KEY = 'sweeterside-voucher';
   var MAX_QTY = 50;
@@ -36,8 +36,80 @@
       price: Number(card.dataset.price),
       max: remaining === undefined ? MAX_QTY : Math.min(MAX_QTY, Number(remaining)),
       shot: card.querySelector('.shot'), // the card's photo, copied as the cart thumbnail
+      options: readOptions(card), // { price, sale_type, sale_value, groups }, or null
     };
   });
+
+  function readOptions(card) {
+    if (!card.dataset.options) return null;
+    try { return JSON.parse(card.dataset.options); } catch (e) { return null; }
+  }
+
+  /* ---------------------------- options ---------------------------- */
+
+  // A line is one item with one set of options. The same item with other
+  // options is another line.
+  function keyOf(id, opts) { return opts && opts.length ? id + ':' + opts.join('.') : String(id); }
+
+  /** Every option of an item, by id: { id, name, price, available, group }. */
+  function optionMap(item) {
+    var map = {};
+    if (item.options) item.options.groups.forEach(function (g) {
+      g.options.forEach(function (o) { map[o.id] = { id: o.id, name: o.name, price: o.price, available: o.available, group: g }; });
+    });
+    return map;
+  }
+
+  /** Why these options do not fit the item's groups, or '' when they do. */
+  function optionProblem(item, opts) {
+    var map = optionMap(item);
+    for (var i = 0; i < opts.length; i++) {
+      if (!map[opts[i]] || !map[opts[i]].available) return 'gone';
+    }
+    var groups = item.options ? item.options.groups : [];
+    for (var j = 0; j < groups.length; j++) {
+      var g = groups[j];
+      var n = opts.filter(function (id) { return map[id].group.id === g.id; }).length;
+      if (n < g.min) return g.kind === 'single' || g.min === 1 ? 'Choose ' + g.name.toLowerCase() + '.'
+        : 'Choose at least ' + g.min + '.';
+      if (n > g.max) return g.max === 1 ? 'Choose only one.' : 'Choose at most ' + g.max + '.';
+    }
+    return '';
+  }
+
+  /** The same rule as the server: a sale applies to the item and its options. */
+  function salePrice(price, rule) {
+    if (rule.sale_type === 'percent') return Math.round(price * (100 - rule.sale_value) / 100);
+    if (rule.sale_type === 'amount') return Math.max(0, price - rule.sale_value);
+    return price;
+  }
+
+  /** What one unit of a line costs. */
+  function unitPrice(line) {
+    var item = catalog[line.id];
+    if (typeof line.price === 'number') return line.price; // the server's, after a refused order
+    if (!item.options) return item.price;
+    var map = optionMap(item);
+    var full = item.options.price + (line.opts || []).reduce(function (sum, id) { return sum + (map[id] ? map[id].price : 0); }, 0);
+    return salePrice(full, item.options);
+  }
+
+  /** "Large · Extra shot, Oat milk": the options of a line, in menu order. */
+  function optionsText(line) {
+    var item = catalog[line.id];
+    if (!item.options || !line.opts || !line.opts.length) return '';
+    var parts = [];
+    item.options.groups.forEach(function (g) {
+      var names = g.options.filter(function (o) { return line.opts.indexOf(o.id) > -1; }).map(function (o) { return o.name; });
+      if (names.length) parts.push(names.join(', '));
+    });
+    return parts.join(' · ');
+  }
+
+  /** Units of an item over all its lines: today's limit counts the item. */
+  function itemQty(id) {
+    return lines.reduce(function (sum, l) { return sum + (l.id === id ? l.qty : 0); }, 0);
+  }
   // Delivery areas (fee and usual time) and the free delivery threshold, from
   // Settings. The server prices the order again; this is so the total shown
   // is the total charged.
@@ -50,7 +122,7 @@
   var pickupOpen = toMinutes(document.body.dataset.pickupOpen);
   var pickupClose = toMinutes(document.body.dataset.pickupClose);
 
-  var lines = []; // [{ id: '12', qty: 2 }], in the order they were added
+  var lines = []; // [{ id, qty, opts, key }], in the order they were added
   var voucher = null; // { code, label, discount } once the server accepts a code
   var type = null; // 'delivery' | 'pickup' | 'dinein', or null when none is open
   var sending = false;
@@ -81,7 +153,7 @@
     return lines.reduce(function (sum, l) { return sum + l.qty; }, 0);
   }
   function subtotal() {
-    return lines.reduce(function (sum, l) { return sum + catalog[l.id].price * l.qty; }, 0);
+    return lines.reduce(function (sum, l) { return sum + unitPrice(l) * l.qty; }, 0);
   }
   /** The area chosen: { id, name, fee, eta }, { other: true }, or null. */
   function area() {
@@ -212,15 +284,16 @@
     setType(next);
   }
 
-  function find(id) {
-    for (var i = 0; i < lines.length; i++) if (lines[i].id === id) return lines[i];
+  function find(key) {
+    for (var i = 0; i < lines.length; i++) if (lines[i].key === key) return lines[i];
     return null;
   }
 
   /* Storage can be missing or blocked (private mode); the cart then simply
      lasts until the page is closed. */
   function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(lines)); } catch (e) { /* ignore */ }
+    var stored = lines.map(function (l) { return { id: l.id, qty: l.qty, opts: l.opts }; });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); } catch (e) { /* ignore */ }
     // A percentage voucher depends on what is in the cart.
     if (voucher) scheduleVoucherCheck();
   }
@@ -256,7 +329,7 @@
         code: code,
         type: type || 'delivery',
         delivery_area: $('o-area') ? $('o-area').value : '',
-        items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
+        items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [] }; }),
       }),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
@@ -296,8 +369,12 @@
     saved.forEach(function (l) {
       var id = String(l && l.id);
       if (!catalog[id]) { dropped++; return; }
-      var qty = Math.min(catalog[id].max, Math.floor(Number(l && l.qty)));
-      if (qty > 0 && !find(id)) lines.push({ id: id, qty: qty });
+      var opts = Array.isArray(l.opts) ? l.opts.map(Number).sort(function (a, b) { return a - b; }) : [];
+      // The options were changed since (or the item now has some to choose).
+      if (optionProblem(catalog[id], opts)) { dropped++; return; }
+      var key = keyOf(id, opts);
+      var qty = Math.min(catalog[id].max - itemQty(id), Math.floor(Number(l && l.qty)));
+      if (qty > 0 && !find(key)) lines.push({ id: id, qty: qty, opts: opts, key: key });
     });
     if (dropped) {
       notice(plural(dropped, 'item') + ' in your saved cart ' +
@@ -315,10 +392,12 @@
 
   /* ---------------------------- cart actions ---------------------------- */
 
-  function add(id) {
+  function add(id, opts) {
     if (!catalog[id]) return;
-    var line = find(id);
-    if (line && line.qty >= catalog[id].max) {
+    opts = opts || [];
+    var key = keyOf(id, opts);
+    var line = find(key);
+    if (itemQty(id) >= catalog[id].max) {
       live.textContent = '';
       notice(catalog[id].max < MAX_QTY
         ? 'That is all the ' + catalog[id].name + ' we have left today.'
@@ -326,17 +405,17 @@
       return;
     }
     if (line) line.qty += 1;
-    else lines.push({ id: id, qty: 1 });
+    else lines.push({ id: id, qty: 1, opts: opts, key: key });
     save();
     render();
     live.textContent = catalog[id].name + ' added. ' + plural(count(), 'item') + ' in your cart.';
   }
 
-  function setQty(id, qty) {
-    var line = find(id);
+  function setQty(key, qty) {
+    var line = find(key);
     if (!line) return;
     if (qty <= 0) lines.splice(lines.indexOf(line), 1);
-    else line.qty = Math.min(catalog[id].max, qty);
+    else line.qty = Math.min(catalog[line.id].max - itemQty(line.id) + line.qty, qty);
     save();
     render();
   }
@@ -354,6 +433,7 @@
     var item = catalog[line.id];
     var li = el('li', 'cline');
     li.dataset.id = line.id;
+    li.dataset.key = line.key;
 
     // A small square copy of the card's photo. The name is right beside it, so
     // the picture is decorative for screen readers.
@@ -368,7 +448,9 @@
 
     var main = el('div', 'cline__main');
     main.appendChild(el('span', 'cline__name', item.name));
-    main.appendChild(el('span', 'cline__each', money(item.price) + ' each'));
+    var chosen = optionsText(line);
+    if (chosen) main.appendChild(el('span', 'cline__opts', chosen));
+    main.appendChild(el('span', 'cline__each', money(unitPrice(line)) + ' each'));
 
     var stepper = el('div', 'stepper');
     var minus = el('button', 'stepper__btn', line.qty === 1 ? '×' : '−');
@@ -381,7 +463,7 @@
     var plus = el('button', 'stepper__btn', '+');
     plus.type = 'button';
     plus.dataset.step = '1';
-    plus.disabled = line.qty >= item.max;
+    plus.disabled = itemQty(line.id) >= item.max;
     plus.setAttribute('aria-label', 'One more ' + item.name);
     stepper.appendChild(minus);
     stepper.appendChild(qty);
@@ -390,7 +472,7 @@
     li.appendChild(thumb);
     li.appendChild(main);
     li.appendChild(stepper);
-    li.appendChild(el('span', 'cline__total', money(item.price * line.qty)));
+    li.appendChild(el('span', 'cline__total', money(unitPrice(line) * line.qty)));
     return li;
   }
 
@@ -502,13 +584,13 @@
      numbers, update the cart, and let the customer look before resubmitting. */
   function applyQuote(quote) {
     (quote.items || []).forEach(function (i) {
-      var id = String(i.id);
-      if (catalog[id]) catalog[id].price = i.price;
+      var line = find(String(i.key || i.id));
+      if (line) line.price = i.price;
+      else if (catalog[String(i.id)] && !catalog[String(i.id)].options) catalog[String(i.id)].price = i.price;
     });
     (quote.unavailable || []).forEach(function (id) {
       id = String(id);
-      var line = find(id);
-      if (line) lines.splice(lines.indexOf(line), 1);
+      lines = lines.filter(function (l) { return l.id !== id; });
       delete catalog[id];
       // Grey the card (and its copy in Best sellers) as the server would now render it.
       Array.prototype.forEach.call(document.querySelectorAll('.card[data-id="' + id + '"]'), function (card) {
@@ -522,8 +604,12 @@
     Object.keys(quote.limits || {}).forEach(function (id) {
       if (!catalog[id]) return;
       catalog[id].max = Math.min(catalog[id].max, quote.limits[id]);
-      var line = find(id);
-      if (line) line.qty = Math.min(line.qty, catalog[id].max);
+      // Take units off this item's lines, last first, down to what is left.
+      for (var i = lines.length - 1; i >= 0 && itemQty(id) > catalog[id].max; i--) {
+        if (lines[i].id !== id) continue;
+        lines[i].qty -= Math.min(lines[i].qty, itemQty(id) - catalog[id].max);
+        if (lines[i].qty === 0) lines.splice(i, 1);
+      }
     });
     // Fees changed while the page was open: the page has to be loaded again to
     // show them, and the server has already priced the order with the new fee.
@@ -630,7 +716,10 @@
     var lines = $('done-lines');
     lines.textContent = '';
     (order.items || []).forEach(function (l) {
-      var li = el('li', '', l.qty + ' × ' + l.name);
+      var li = el('li');
+      var what = el('span', 'done__what', l.qty + ' × ' + l.name);
+      if (l.options_text) what.appendChild(el('span', 'cline__opts', l.options_text));
+      li.appendChild(what);
       li.appendChild(el('span', 'done__line-total', money(l.price * l.qty)));
       lines.appendChild(li);
     });
@@ -690,7 +779,7 @@
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
       voucher: voucher ? voucher.code : '',
-      items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty }; }),
+      items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [] }; }),
       expected_total: total(),
       website: form.elements.website.value, // the honeypot: empty for people
     };
@@ -782,14 +871,14 @@
 
     var step = e.target.closest('[data-step]');
     if (step) {
-      var id = step.closest('.cline').dataset.id;
-      var line = find(id);
+      var key = step.closest('.cline').dataset.key;
+      var line = find(key);
       if (!line) return;
-      setQty(id, line.qty + Number(step.dataset.step));
+      setQty(key, line.qty + Number(step.dataset.step));
       // Keep keyboard focus on the same control after the list is rebuilt.
-      var again = $('cart-lines').querySelector('.cline[data-id="' + id + '"] [data-step="' + step.dataset.step + '"]');
+      var again = $('cart-lines').querySelector('.cline[data-key="' + key + '"] [data-step="' + step.dataset.step + '"]');
       if (again && !again.disabled) again.focus();
-      else if (!find(id)) (($('cart-lines').querySelector('[data-step]')) || dialog.querySelector('.sheet__close')).focus();
+      else if (!find(key)) (($('cart-lines').querySelector('[data-step]')) || dialog.querySelector('.sheet__close')).focus();
     }
   });
 
@@ -820,6 +909,10 @@
     var btn = card.querySelector('[data-add]');
     if (!btn) return;
     btn.addEventListener('click', function () {
+      if (catalog[card.dataset.id] && catalog[card.dataset.id].options) {
+        card.querySelector('.card__btn').click();
+        return;
+      }
       add(card.dataset.id);
       btn.classList.add('is-added');
       clearTimeout(btn._t);
@@ -831,8 +924,44 @@
   var sheetAdd = document.getElementById('sheet-add');
   if (sheet && sheetAdd) {
     sheetAdd.hidden = false;
+    var sheetPrice = $('sheet-price');
+    var sheetOpts = $('sheet-opts');
+    var chosenIds = function () {
+      return Array.prototype.map.call(sheetOpts.querySelectorAll('input:checked'), function (i) { return i.value; })
+        .filter(Boolean).map(Number).sort(function (a, b) { return a - b; });
+    };
+    var showSheetPrice = function () {
+      var item = catalog[sheet.dataset.id];
+      if (!item || !item.options) { sheetAdd.textContent = 'Add to cart'; return; }
+      var each = unitPrice({ id: sheet.dataset.id, opts: chosenIds() });
+      sheetPrice.textContent = money(each);
+      sheetAdd.textContent = 'Add to cart · ' + money(each);
+    };
+    sheet.addEventListener('sheet:open', showSheetPrice);
+    sheetOpts.addEventListener('change', function (e) {
+      var set = e.target.closest('fieldset');
+      if (set) set.querySelector('.opts__err').hidden = true;
+      showSheetPrice();
+    });
     sheetAdd.addEventListener('click', function () {
-      add(sheet.dataset.id);
+      var item = catalog[sheet.dataset.id];
+      if (!item) return;
+      var opts = item.options ? chosenIds() : [];
+      // Each group's rule, shown on the group, before anything is added.
+      var first = null;
+      if (item.options) item.options.groups.forEach(function (g) {
+        var problem = optionProblem({ options: { groups: [g] } }, opts.filter(function (id) {
+          return g.options.some(function (o) { return o.id === id; });
+        }));
+        var set = sheetOpts.querySelector('fieldset[data-group="' + g.id + '"]');
+        if (!set) return;
+        var err = set.querySelector('.opts__err');
+        err.textContent = problem === 'gone' ? 'That choice is not available.' : problem;
+        err.hidden = !problem;
+        if (problem && !first) first = set.querySelector('input:not(:disabled)');
+      });
+      if (first) { first.focus(); return; }
+      add(sheet.dataset.id, opts);
       sheet.close();
     });
   }

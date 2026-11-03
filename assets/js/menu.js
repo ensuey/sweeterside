@@ -81,6 +81,8 @@
     var nameEl = document.getElementById('sheet-name');
     var priceEl= document.getElementById('sheet-price');
     var tagEl  = document.getElementById('sheet-tag');
+    var descEl = document.getElementById('sheet-desc');
+    var optsEl = document.getElementById('sheet-opts');
     var opener = null;
 
     // Every card opens the popup, best sellers included.
@@ -105,6 +107,18 @@
         img.alt = pic.getAttribute('alt');
 
         nameEl.textContent  = card.dataset.name;
+        if (card.dataset.size) {
+          nameEl.appendChild(document.createTextNode(' '));
+          var size = document.createElement('span');
+          size.className = 'sheet__size';
+          size.textContent = card.dataset.size;
+          nameEl.appendChild(size);
+        }
+        if (descEl) {
+          descEl.textContent = card.dataset.desc || '';
+          descEl.hidden = !card.dataset.desc;
+        }
+        if (optsEl) renderOptions(card);
         // On sale: the full price struck through before the sale price.
         priceEl.textContent = '';
         if (card.dataset.was) {
@@ -125,8 +139,63 @@
 
         opener = btn;
         sheet.showModal();
+        // cart.js prices the choices and adds the item.
+        sheet.dispatchEvent(new CustomEvent('sheet:open', { detail: { id: card.dataset.id } }));
       });
     });
+
+    /* The item's option groups as fieldsets: radios to choose one, boxes to
+       choose several. Built with DOM calls, so names cannot inject markup. */
+    function renderOptions(card) {
+      while (optsEl.firstChild) optsEl.removeChild(optsEl.firstChild);
+      var data = null;
+      try { data = card.dataset.options ? JSON.parse(card.dataset.options) : null; } catch (e) { data = null; }
+      if (!data) return;
+      data.groups.forEach(function (g) {
+        var set = document.createElement('fieldset');
+        set.className = 'opts__group';
+        set.dataset.group = g.id;
+        var legend = document.createElement('legend');
+        legend.textContent = g.name + ' ';
+        var rule = document.createElement('span');
+        rule.className = 'opts__rule';
+        rule.textContent = g.kind === 'single' ? (g.required ? '· choose 1' : '· optional')
+          : g.min > 0 ? '· choose ' + (g.min === g.max ? g.min : g.min + ' to ' + g.max)
+          : '· optional, up to ' + g.max;
+        legend.appendChild(rule);
+        set.appendChild(legend);
+        // An optional "choose one" starts on None, so it can be left out again.
+        var list = g.kind === 'single' && !g.required
+          ? [{ id: '', name: 'None', price: 0, available: true }].concat(g.options) : g.options;
+        list.forEach(function (o, i) {
+          var label = document.createElement('label');
+          label.className = 'opts__opt' + (o.available ? '' : ' opts__opt--off');
+          var input = document.createElement('input');
+          input.type = g.kind === 'single' ? 'radio' : 'checkbox';
+          input.name = 'opt-' + g.id;
+          input.value = String(o.id);
+          input.disabled = !o.available;
+          if (o.id === '' && i === 0) input.checked = true;
+          var name = document.createElement('span');
+          name.textContent = o.name + (o.available ? '' : ' (not available)');
+          var price = document.createElement('span');
+          price.className = 'opts__price';
+          price.textContent = o.price > 0 ? '+₱' + o.price : '';
+          label.appendChild(input);
+          label.appendChild(name);
+          label.appendChild(price);
+          set.appendChild(label);
+        });
+        var err = document.createElement('p');
+        err.className = 'opts__err';
+        err.id = 'opts-err-' + g.id;
+        err.setAttribute('role', 'alert');
+        err.hidden = true;
+        set.setAttribute('aria-describedby', err.id);
+        set.appendChild(err);
+        optsEl.appendChild(set);
+      });
+    }
 
     sheet.querySelector('.sheet__close').addEventListener('click', function () {
       sheet.close();
