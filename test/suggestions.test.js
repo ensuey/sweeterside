@@ -113,3 +113,13 @@ test('the suggestions endpoints need sign-in and CSRF', async () => {
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+// Bug (live after PR D): <body> carries data-suggest, so a handler looking for
+// closest('[data-suggest]') caught every click in the cart and the + and -
+// buttons did nothing. Only the strip's buttons may match.
+test('cart clicks: only the strip buttons count as suggestions, not the page body', () => {
+  assert.match(render.buildHtml(), /<body data-suggest=/);
+  const cart = fs.readFileSync(path.join(__dirname, '..', 'assets', 'js', 'cart.js'), 'utf8');
+  assert.ok(!cart.includes("closest('[data-suggest]')"), 'a bare [data-suggest] would match <body>');
+  assert.ok(cart.includes("closest('button[data-suggest]')"));
+});
