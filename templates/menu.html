@@ -30,7 +30,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-suggest="<!--SUGGEST-->" data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery="<!--DELIVERY_AREAS-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
+<body data-suggest="<!--SUGGEST-->" data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-preorder="<!--PREORDER-->" data-preorder-days="<!--PREORDER_DAYS-->" data-stock="<!--STOCK-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery="<!--DELIVERY_AREAS-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
 <!--SOON_BAR-->
 
 <a class="skip" href="#menu">Skip to menu</a>
@@ -165,9 +165,23 @@
       </div>
 
       <div class="cfield" data-for="pickup">
-        <label for="o-pickup">Pick-up time <span class="cfield__hint">today</span></label>
-        <select id="o-pickup" name="pickup_at" required></select>
+        <div class="when">
+          <div class="when__part"><label for="o-pickup-date">Pick-up day</label>
+            <select id="o-pickup-date" name="pickup_date"></select></div>
+          <div class="when__part"><label for="o-pickup">Time</label>
+            <select id="o-pickup" name="pickup_at" required></select></div>
+        </div>
         <p class="cfield__err" data-err="pickup_at" hidden></p>
+      </div>
+
+      <div class="cfield" data-for="delivery">
+        <div class="when">
+          <div class="when__part"><label for="o-deliver-date">Delivery day</label>
+            <select id="o-deliver-date" name="deliver_date"></select></div>
+          <div class="when__part"><label for="o-deliver">Time</label>
+            <select id="o-deliver" name="deliver_at" required></select></div>
+        </div>
+        <p class="cfield__err" data-err="deliver_at" hidden></p>
       </div>
 
       <div class="cfield" data-for="delivery">

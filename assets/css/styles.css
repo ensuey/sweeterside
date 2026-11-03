@@ -589,6 +589,11 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 }
 .cfield__exact:hover { background: var(--cream); }
 .cfield__hint--below { margin: 0; }
+/* A day and a time side by side (pick-up and delivery). */
+.when { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.when__part { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.when__part[hidden] { display: none; }
+.when:has(.when__part[hidden]) { grid-template-columns: 1fr; }
 .cfield__change { margin: 0; min-height: 1.5em; font-weight: 700; color: #2E7D52; font-size: .9375rem; }
 .cfield__change.is-short { color: var(--coral-ink); }
 .cfield__err { margin: 0; color: var(--coral-ink); font-size: .875rem; font-weight: 600; }
