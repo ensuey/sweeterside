@@ -212,7 +212,7 @@ function parseDiscounts(raw, keyOf, errors, now) {
       manual.cents = pesosToCents(m.value);
       if (!Number.isSafeInteger(manual.cents) || manual.cents < 1) errors.manual = 'Enter how many pesos to take off.';
     } else {
-      errors.manual = 'Choose % off or Php off.';
+      errors.manual = 'Choose % off or ₱ off.';
     }
     if (m.line !== undefined && m.line !== null && m.line !== '') {
       manual.line = keyOf(String(m.line));

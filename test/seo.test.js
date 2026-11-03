@@ -125,7 +125,7 @@ test('robots.txt, sitemap.xml and llms.txt: public pages in, admin and POS out',
 
     const llms = await (await fetch(`${url}/llms.txt`)).text();
     assert.ok(llms.startsWith('# Sweeter Side by Dachel'));
-    for (const fact of ['San Isidro, Davao Oriental 8209', '0932 762 0367', 'Open daily', 'Matcha Frappe: Php 129', '/cakes']) {
+    for (const fact of ['San Isidro, Davao Oriental 8209', '0932 762 0367', 'Open daily', 'Matcha Frappe: ₱129', '/cakes']) {
       assert.ok(llms.includes(fact), fact);
     }
     assert.ok(!llms.includes('/admin'), 'no admin links');
@@ -195,9 +195,9 @@ test('the About us page is indexable, linked, in the sitemap, and says only the 
     assert.ok(html.includes(seo.hours().label));
     for (const area of BUSINESS.deliveryAreas) assert.ok(html.includes(area), area);
     // Today's menu with prices, and the cake sizes and notice.
-    assert.ok(html.includes('Matcha Frappe <span class="about__price">Php 129</span>'));
+    assert.ok(html.includes('Matcha Frappe <span class="about__price">₱129</span>'));
     const s = cakes.settings();
-    assert.ok(html.includes(`${render.esc(s.sizes[0].name)}: from Php ${s.sizes[0].from_price.toLocaleString('en-US')}`),
+    assert.ok(html.includes(`${render.esc(s.sizes[0].name)}: from ₱${s.sizes[0].from_price.toLocaleString('en-US')}`),
       'sizes like 6" are escaped');
     assert.ok(html.includes(`at least ${s.lead_days} days ahead`));
 

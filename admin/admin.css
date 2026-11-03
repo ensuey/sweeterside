@@ -508,7 +508,23 @@ a { color: var(--navy); }
 .hours .admin__sub { margin-bottom: 1rem; }
 .hours__form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem 1rem; margin-bottom: .6rem; }
 .hours__form .field { width: 10rem; }
+.hours__form .field--wide { width: min(100%, 24rem); }
+.share { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
+.share__preview {
+  width: min(100%, 20rem); height: auto; aspect-ratio: 1200 / 630; object-fit: cover;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+}
+.share__actions { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
+.share__actions [hidden] { display: none; }
 .trust { margin-bottom: 3rem; }
+
+/* Menu health on the Items page. */
+.health { margin-bottom: 1.5rem; padding: 1rem 1.2rem; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.health[hidden] { display: none; }
+.health__title { font-size: 1rem; margin: 0 0 .5rem; }
+.health__label { margin: .3rem 0; }
+.health__items { list-style: none; margin: 0 0 .4rem; padding: 0; display: flex; flex-wrap: wrap; gap: .2rem .9rem; }
+.health__edit { margin-left: 0; min-height: 44px; }
 .trust .admin__sub { margin-bottom: 1rem; }
 .trust__form { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; max-width: 40rem; }
 .trust__form .field { width: 100%; max-width: 22rem; }

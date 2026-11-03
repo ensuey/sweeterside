@@ -68,7 +68,7 @@ function rowHtml(item) {
       </div>
       <div class="row-item__main">
         <span class="row-item__name"></span>
-        <span class="row-item__meta">Php ${item.price}</span>
+        <span class="row-item__meta">₱${item.price}</span>
         <span class="row-item__chips">${promoChips(item)}</span>
         <span class="row-item__today${limitReached ? ' is-full' : ''}">${todayText(item)}</span>
       </div>
@@ -150,6 +150,31 @@ function render() {
     ? 'No items on the menu.'
     : `${plural(total, 'item')}${notes.length ? ` · ${notes.join(' · ')}` : ''}. Counts are for today, Manila time.`;
   $('empty').hidden = total > 0;
+  renderHealth();
+}
+
+/* ---------------------------- menu health ---------------------------- */
+
+// Checks for items that would sell better with a little more. More checks
+// (no description, no size label) come with those fields.
+const HEALTH_CHECKS = [
+  {
+    id: 'photo', title: 'No photo of its own',
+    hint: 'These show the logo. A real photo helps people choose.',
+    test: (item, logo) => item.image === logo,
+  },
+];
+
+function renderHealth() {
+  const logo = (state.images.find((i) => i.default) || {}).path;
+  const shown = state.items.filter((i) => i.availability !== 'unavailable');
+  const results = HEALTH_CHECKS.map((c) => ({ ...c, items: shown.filter((i) => c.test(i, logo)) }));
+  $('health').hidden = shown.length === 0;
+  $('health-checks').innerHTML = results.map((r) => `
+    <div class="health__check" data-check="${r.id}">
+      <p class="health__label"><strong>${esc(r.title)}:</strong> ${r.items.length ? plural(r.items.length, 'item') : 'none'} ${r.items.length ? `<span class="hint">${esc(r.hint)}</span>` : '<span class="flag flag--good">All good</span>'}</p>
+      ${r.items.length ? `<ul class="health__items">${r.items.map((i) => `<li><button class="link-quiet health__edit" type="button" data-health-edit="${i.id}">${esc(i.name)}</button></li>`).join('')}</ul>` : ''}
+    </div>`).join('');
 }
 
 function categoryRowHtml(cat, index, count) {
@@ -212,11 +237,11 @@ function updatePreview() {
   const sale = editorSalePrice();
   const kind = $('f-sale-type').value;
   $('f-sale-value').disabled = !kind;
-  $('sale-unit').textContent = kind === 'percent' ? '(%)' : kind === 'amount' ? '(Php)' : '';
-  $('sale-note').textContent = sale === null ? '' : `Sale price: Php ${sale} (was Php ${$('f-price').value})`;
+  $('sale-unit').textContent = kind === 'percent' ? '(%)' : kind === 'amount' ? '(₱)' : '';
+  $('sale-note').textContent = sale === null ? '' : `Sale price: ₱${sale} (was ₱${$('f-price').value})`;
   $('preview-price').textContent = sale === null
-    ? `Php ${$('f-price').value || 0}`
-    : `Php ${sale}  (was ${$('f-price').value})`;
+    ? `₱${$('f-price').value || 0}`
+    : `₱${sale}  (was ₱${$('f-price').value})`;
 
   $('crop-note').textContent = meta
     ? `Photo is ${meta.width}×${meta.height} pixels.`
@@ -460,9 +485,17 @@ async function loadAll() {
 async function loadImages() {
   const { images } = await api('/api/images');
   state.images = images;
+  renderHealth(); // it needs the images to tell the logo apart
 }
 
 /* ---------------------------- events ---------------------------- */
+
+$('health').addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-health-edit]');
+  if (!btn) return;
+  const item = state.items.find((i) => i.id === Number(btn.dataset.healthEdit));
+  if (item) openEditor(item);
+});
 
 $('add').addEventListener('click', () => {
   if (!state.categories.length) {

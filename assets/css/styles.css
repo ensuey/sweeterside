@@ -188,6 +188,19 @@ main { padding-block: var(--sp-7) var(--sp-8); }
 @media (min-width: 640px)  { .grid { gap: var(--sp-5); grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
 @media (min-width: 1024px) { .grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); } }
 
+/* Best sellers: first on the menu, a row that scrolls sideways. Hidden by
+   menu.js while a search or a category filter is on. */
+.best { margin-bottom: var(--sp-8); }
+.best[hidden] { display: none; }
+.best__row {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(150px, 44%); gap: var(--sp-4);
+  margin: 0; padding: 0 0 var(--sp-3); list-style: none;
+  overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain;
+}
+.best__row > .card { scroll-snap-align: start; }
+@media (min-width: 640px)  { .best__row { gap: var(--sp-5); grid-auto-columns: minmax(200px, 30%); } }
+@media (min-width: 1024px) { .best__row { grid-auto-columns: minmax(240px, 23%); } }
+
 /* ---------- Card ---------- */
 .card {
   position: relative; display: flex; flex-direction: column; height: 100%;
@@ -303,7 +316,7 @@ body[data-empty="true"] .section { display: none; }
 .has-cart .card__add {
   position: relative; z-index: 3;   /* above the full-card .card__btn */
   display: inline-flex; align-items: center; justify-content: center;
-  min-height: 40px; min-width: 64px; padding: 0 var(--sp-4); cursor: pointer;
+  min-height: 44px; min-width: 64px; padding: 0 var(--sp-4); cursor: pointer;
   font: 700 .9375rem/1 "Nunito", sans-serif; color: var(--coral-ink);
   background: var(--surface); border: 1.5px solid var(--coral-ink); border-radius: var(--r-full);
   transition: background .2s var(--ease), color .2s var(--ease), transform .12s var(--ease);
@@ -523,13 +536,33 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .cfield [aria-invalid="true"] { border-color: var(--coral-ink); }
 .cfield__money { position: relative; display: flex; align-items: center; }
 .cfield__money span { position: absolute; left: var(--sp-4); color: var(--ink-soft); font-weight: 600; pointer-events: none; }
-.cfield__money input { padding-left: 3.25rem; font-variant-numeric: tabular-nums; }
+.cfield__money input { padding-left: 3.25rem; font-variant-numeric: tabular-nums; flex: 1; min-width: 0; }
+.cfield__money { gap: var(--sp-2); }
+.cfield__exact {
+  flex: none; min-height: 44px; padding: 0 var(--sp-4); cursor: pointer;
+  font: 700 .875rem "Nunito", sans-serif; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-full);
+}
+.cfield__exact:hover { background: var(--cream); }
+.cfield__hint--below { margin: 0; }
 .cfield__change { margin: 0; min-height: 1.5em; font-weight: 700; color: #2E7D52; font-size: .9375rem; }
 .cfield__change.is-short { color: var(--coral-ink); }
 .cfield__err { margin: 0; color: var(--coral-ink); font-size: .875rem; font-weight: 600; }
 .cfield__err[hidden] { display: none; }
 
 .cart__done p { margin: 0; }
+.done__when { font-weight: 700; }
+.done__lines { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.done__lines li { display: flex; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
+.done__line-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.done__call { font-weight: 700; color: #2E7D52; }
+.done__call[hidden] { display: none; }
+.done__links { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.done__link {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--sp-4);
+  border: 1.5px solid var(--line); border-radius: var(--r-full); background: var(--surface);
+  color: var(--navy); font-weight: 700; text-decoration: none;
+}
 .checkout__req { margin: calc(var(--sp-2) * -1) 0 0; font-size: .875rem; color: var(--ink-soft); }
 
 .cart__back {
@@ -637,6 +670,8 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .visit address { font-style: normal; }
 .visit p, .visit address { margin: 0 0 var(--sp-2); }
 .visit a, .faq a { color: var(--navy); }
+/* Phone, map and Facebook links on their own lines: a full-size touch target. */
+.visit__grid a, .foot a { display: inline-block; padding-block: .7rem; }
 .faq__item { max-width: 46rem; padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
 .faq__item:last-child { border-bottom: 0; }
 .faq__item p { margin: 0; color: var(--ink-soft); }

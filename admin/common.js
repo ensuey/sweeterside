@@ -65,11 +65,11 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
-/** Php 1,234 or, with centavos, Php 1,234.50 */
+/** ₱1,234 or, with centavos, ₱1,234.50 */
 function money(n) {
   const v = Number(n);
   const cents = Math.round(v * 100) % 100 !== 0;
-  return `Php ${v.toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 })}`;
+  return `₱${v.toLocaleString('en-US', { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: 2 })}`;
 }
 
 /** The same, from centavos. */

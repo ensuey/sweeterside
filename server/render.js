@@ -10,6 +10,7 @@ const categories = require('./categories');
 const orders = require('./orders');
 const cakes = require('./cakes');
 const seo = require('./seo');
+const { BUSINESS } = require('./business');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const CAKES_TEMPLATE = path.join(ROOT, 'templates', 'cakes.html');
@@ -29,13 +30,41 @@ function encPath(p) {
 
 // Below this many left today, customers are told how many remain.
 const FEW_LEFT = 5;
+// The first few photos are on screen at once; the rest load as you scroll.
+const EAGER_IMAGES = 4;
 
-/** '20% off' or 'Php 30 off' */
-function saleLabel(item) {
-  return item.sale_type === 'percent' ? `${item.sale_value}% off` : `Php ${item.price - item.sale_price} off`;
+/** "1 item" / "3 items" */
+function plural(n, word) {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
 }
 
-function cardHtml(item, category) {
+/** '20% off' or '₱30 off' */
+function saleLabel(item) {
+  return item.sale_type === 'percent' ? `${item.sale_value}% off` : `₱${item.price - item.sale_price} off`;
+}
+
+/** A photo's own width and height, for the img tag (no layout shift).
+    Uploaded files never change in place, so the size is kept once read. */
+const imageSizes = new Map();
+function imageSize(rel) {
+  if (!imageSizes.has(rel)) {
+    const img = menu.resolveImage(rel);
+    imageSizes.set(rel, img ? { width: img.width, height: img.height } : null);
+  }
+  return imageSizes.get(rel);
+}
+
+/** The card photo. The logo stands in for items without a photo of their own:
+    it is decoration then, so alt is empty and screen readers skip it. */
+function photoHtml(item, { eager }) {
+  const size = imageSize(item.image);
+  const dims = size ? ` width="${size.width}" height="${size.height}"` : '';
+  const alt = item.image === menu.DEFAULT_IMAGE ? '' : item.alt || item.name;
+  const load = eager ? '' : ' loading="lazy"';
+  return `<img src="${esc(encPath(item.image))}" alt="${esc(alt)}"${dims}${load} decoding="async">`;
+}
+
+function cardHtml(item, category, { eager = false } = {}) {
   const hasCrop = item.crop_w != null && item.crop_h != null;
   const shotAttrs = hasCrop
     ? ` class="shot" style="--x:${item.crop_x}; --y:${item.crop_y}; --w:${item.crop_w}; --h:${item.crop_h}"`
@@ -61,12 +90,12 @@ function cardHtml(item, category) {
     ? `\n          <p class="card__sale">${saleLabel(item)}</p>`
     : '';
   const price = onSale
-    ? `<span class="price"><s class="price__was"><span class="vh">Was </span>Php ${item.price}</s> <small>Php</small> ${item.sale_price}</span>`
-    : `<span class="price"><small>Php</small> ${item.price}</span>`;
+    ? `<span class="price"><s class="price__was"><span class="vh">Was </span>₱${item.price}</s> <small>₱</small>${item.sale_price}</span>`
+    : `<span class="price"><small>₱</small>${item.price}</span>`;
 
   return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.sale_price}"${promoAttrs}${stockAttr}>${badge}
         <div${shotAttrs}>
-          <img src="${esc(encPath(item.image))}" alt="${esc(item.alt || item.name)}">
+          ${photoHtml(item, { eager })}
         </div>
         <div class="card__body">
           <h3 class="card__name">${esc(item.name)}</h3>${saleTag}${fewLeft}
@@ -79,18 +108,51 @@ function cardHtml(item, category) {
       </li>`;
 }
 
-function sectionHtml(category, items) {
+function sectionHtml(category, items, eagerLeft = 0) {
   const slug = esc(category.slug);
   return `  <section class="section" id="${slug}" data-cat="${slug}">
     <div class="section__head">
       <h2 class="section__title">${esc(category.name)}</h2>
       <span class="section__rule" aria-hidden="true"></span>
-      <span class="section__count"><span data-count>${items.length}</span> items</span>
+      <span class="section__count" data-count>${plural(items.length, 'item')}</span>
     </div>
     <ul class="grid">
-${items.map((item) => cardHtml(item, category)).join('\n\n')}
+${items.map((item, i) => cardHtml(item, category, { eager: i < eagerLeft })).join('\n\n')}
     </ul>
   </section>`;
+}
+
+/** Best sellers, first on the menu: the items with the badge that can be
+    ordered today. A scrolling row; menu.js hides it during a search or filter. */
+function bestSellersHtml(groups) {
+  const best = groups.flatMap((g) => g.items.filter((i) => i.best_seller && !i.sold_out).map((i) => ({ item: i, category: g.category })));
+  if (!best.length) return '';
+  return `  <section class="best" id="best-sellers" aria-labelledby="best-title" data-best-row>
+    <div class="section__head">
+      <h2 class="section__title" id="best-title">Best sellers</h2>
+      <span class="section__rule" aria-hidden="true"></span>
+      <span class="section__count">${plural(best.length, 'item')}</span>
+    </div>
+    <ul class="best__row">
+${best.map(({ item, category }, i) => cardHtml(item, category, { eager: i < EAGER_IMAGES })).join('\n\n')}
+    </ul>
+  </section>`;
+}
+
+/** The share image (Open Graph) set in Settings, or the logo. A wide share
+    image gets the large card on X/Twitter and Messenger. */
+function shareTagsHtml() {
+  const rel = orders.shareImage();
+  if (!rel) {
+    return '<meta property="og:image" content="https://sweeterside.ph/assets/Sweeter%20Side%20-%20PNG.png">\n'
+      + '<meta property="og:image:alt" content="Sweeter Side by Dachel logo">\n'
+      + '<meta name="twitter:card" content="summary">';
+  }
+  const size = imageSize(rel);
+  return `<meta property="og:image" content="https://sweeterside.ph/${esc(encPath(rel))}">\n`
+    + (size ? `<meta property="og:image:width" content="${size.width}">\n<meta property="og:image:height" content="${size.height}">\n` : '')
+    + '<meta property="og:image:alt" content="Sweeter Side by Dachel: café and cake shop in San Isidro, Davao Oriental">\n'
+    + '<meta name="twitter:card" content="summary_large_image">';
 }
 
 function chipsHtml(groups, total) {
@@ -142,7 +204,14 @@ function buildHtml(allItems = menu.list(), cats = categories.list(), now = new D
   const template = fs.readFileSync(TEMPLATE, 'utf8');
   const { items, groups } = menuGroups(allItems, cats);
 
-  const sections = groups.map((g) => sectionHtml(g.category, g.items)).join('\n\n');
+  // The best sellers row comes first, so its photos are the ones loaded at once.
+  const best = bestSellersHtml(groups);
+  let eagerLeft = best ? 0 : EAGER_IMAGES;
+  const sections = groups.map((g) => {
+    const html = sectionHtml(g.category, g.items, eagerLeft);
+    eagerLeft = Math.max(0, eagerLeft - g.items.length);
+    return html;
+  }).join('\n\n');
 
   const empty = items.length === 0
     ? '  <p class="no-items">The menu is being updated. Please check back shortly.</p>'
@@ -161,7 +230,13 @@ function buildHtml(allItems = menu.list(), cats = categories.list(), now = new D
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
-    .replace('<!--SECTIONS-->', sections + empty)
+    .replace('<!--BEST-->', () => best)
+    .replace('<!--SECTIONS-->', () => sections + empty)
+    .replace('<!--SHARE_TAGS-->', () => shareTagsHtml())
+    .replace('<!--CALL_MINUTES-->', String(orders.callMinutes()))
+    .replaceAll('<!--SHOP_TEL-->', () => esc(BUSINESS.phone.tel))
+    .replaceAll('<!--SHOP_PHONE-->', () => esc(BUSINESS.phone.display))
+    .replaceAll('<!--FACEBOOK_URL-->', () => esc(orders.facebookUrl()))
     .replace('<!--LD_JSON-->', () => seo.homeLd(groups))
     .replace('<!--VISIT-->', () => seo.visitHtml())
     .replace('<!--FAQ-->', () => seo.faqHtml())
@@ -189,7 +264,7 @@ function buildCakesHtml(now = new Date()) {
           <input type="radio" name="size" value="${esc(size.name)}"${i === 0 ? ' checked' : ''}>
           <span class="size__body">
             <span class="size__name">${esc(size.name)}</span>
-            <span class="size__price">from <strong>Php ${size.from_price.toLocaleString('en-US')}</strong></span>
+            <span class="size__price">from <strong>₱${size.from_price.toLocaleString('en-US')}</strong></span>
           </span>
         </label>`).join('\n');
 

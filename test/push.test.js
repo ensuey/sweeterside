@@ -228,7 +228,7 @@ test('a new order and a new cake booking alert every device, without customer de
       assert.strictEqual(toPhone.init.headers.TTL, String(4 * 60 * 60));
       assert.match(toPhone.init.headers.Authorization, /^vapid t=.+, k=/);
       const msg = JSON.parse(decrypt(toPhone.init.body, phone).toString());
-      assert.deepStrictEqual(msg, { title: `New order #${order.id}`, body: 'Delivery · Php 129', url: '/admin', tag: `order-${order.id}` });
+      assert.deepStrictEqual(msg, { title: `New order #${order.id}`, body: 'Delivery · ₱129', url: '/admin', tag: `order-${order.id}` });
       const text = JSON.stringify(msg);
       for (const secret of ['Secret-Name', '555', '7777', 'Private St', 'blue gate']) assert.ok(!text.includes(secret), secret);
       assert.ok(!toPhone.init.body.includes(Buffer.from('Delivery')), 'the push service only sees ciphertext');

@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 182 (`npm test`):
+**Tests:** 194 (`npm test`):
 - 60 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -20,6 +20,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 9 in `test/push.test.js`
 - 9 in `test/seo.test.js`
 - 6 in `test/hours.test.js`
+- 12 in `test/cro.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -299,6 +300,46 @@ All merged and deployed (Fly v15–v28).
   - Waiting on the owner's own story: the year opened, Dachel, best sellers,
     photos.
 
+## CRO and usability (six PRs, from the brief of 2026-11-03)
+
+One PR at a time, each from `main` after the last is merged: A quick fixes,
+B delivery areas and fees, C descriptions, sizes and options, D cart
+suggestions, E pre-orders, F cakes page and testimonials.
+
+- **PR A: quick fixes.**
+  - **Photos:** an item showing the logo has `alt=""`. Every photo has its
+    own width and height and `decoding="async"`; all but the first four are
+    `loading="lazy"`. Sizes are read once per path (`render.imageSize`).
+  - **Wording:** "1 item / N items" in the category counts. Prices show
+    **₱** on the customer pages and in the admin.
+  - **Receipts:** **Currency on receipts** (Staff → Receipts, ₱ or PHP,
+    default ₱) drives the printed receipts and readings. Logs and CSV column
+    headers keep "Php".
+  - **Honeypot:** already hidden from sight and from screen readers; a test
+    now pins it.
+  - **Delivery cash is optional:** blank, or the **Exact amount** button,
+    means no change, and the server stores cash = total. The admin card says
+    "Exact / no change needed".
+  - **Phone:** a hint line tied to the field (`aria-describedby`).
+  - **Confirmation screen:** order number, the lines, type and time, total,
+    cash and change, "We'll call you within about N minutes to confirm"
+    (Settings → Order confirmation, default 5), tap to call and "Message us
+    on Facebook". The Facebook link is now a setting (`facebook_url`, https
+    Facebook/Messenger only) and the SEO pages use it too.
+  - **Share image:** Settings upload through the usual pipeline (metadata
+    stripped). It sets `og:image` with width, height and alt, and
+    `twitter:card summary_large_image`; without one, the logo and `summary`.
+  - **Best sellers row:** at the top of the menu; best sellers that can be
+    ordered today; scrolls sideways. menu.js hides it during a search or
+    filter. It is also in the static `index.html`.
+  - **Menu health** on the Items page: items with no photo of their own,
+    each with an edit link. The description and size-label checks come with
+    PR C.
+  - **Phone fixes:** the card Add buttons and the phone, map and footer links
+    are 44 px touch targets. Checked at 360 px: no sideways scroll, 16 px
+    inputs, and a real order placed with blank cash.
+  - **Tests:** `test/cro.test.js` (12).
+
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
    cashiers and waiters.
@@ -365,6 +406,10 @@ After deploying (owner, once):
     opening hours setting is one pair of times for every day).
   - For `/about`: the year the shop opened, a few lines about Dachel, best
     sellers, and shop and cake photos.
+- After PR A (owner): Settings → **Order confirmation** (minutes, Facebook
+  link) and **Share image** (1200 × 630); Staff → Receipts → **Currency on
+  receipts** if the printer shows a box for ₱; add photos for the items listed
+  under **Menu health**.
 - Re-add the Home Screen app on the iPhone for the new icon (#37), then
   turn order alerts on again under Settings → Order alerts.
 - Check the admin layout on the iPhone after #31: no sideways scrolling, the

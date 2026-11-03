@@ -141,6 +141,8 @@ const RECEIPT_DEFAULTS = {
   receipt_address: '',
   receipt_contact: '',
   receipt_width: '80',
+  // Some thermal printer fonts have no ₱ glyph; PHP always prints.
+  receipt_currency: '₱',
   receipt_footer: 'Thank you! See you again soon.',
   bir_mode: '0',
   bir_business_name: '',
@@ -179,6 +181,11 @@ function updateReceiptSettings(input) {
     const w = String(input.receipt_width);
     if (w !== '58' && w !== '80') errors.receipt_width = 'Choose 58 mm or 80 mm paper.';
     else values.receipt_width = w;
+  }
+  if ('receipt_currency' in input) {
+    const c = String(input.receipt_currency);
+    if (c !== '₱' && c !== 'PHP') errors.receipt_currency = 'Choose ₱ or PHP.';
+    else values.receipt_currency = c;
   }
   if ('bir_mode' in input) {
     try { values.bir_mode = onOff('bir_mode')(input.bir_mode); } catch (err) { Object.assign(errors, err.errors); }

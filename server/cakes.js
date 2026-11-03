@@ -82,7 +82,8 @@ function parseSizes(text, errors) {
     if (!line) return;
     const parts = line.split('|');
     const name = parts.slice(0, -1).join('|').trim();
-    const price = Number(String(parts[parts.length - 1]).replace(/[,\s]/g, '').replace(/^php/i, ''));
+    // "1,200", "Php 1,200" and "₱1,200" all read as 1200.
+    const price = Number(String(parts[parts.length - 1]).replace(/[,\s]/g, '').replace(/^(php|₱)/i, ''));
     if (parts.length < 2 || !name) {
       problems.push(`Line ${i + 1}: write it as Name | starting price.`);
     } else if (name.length > SIZE_NAME_MAX) {

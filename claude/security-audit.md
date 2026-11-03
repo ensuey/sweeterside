@@ -79,7 +79,7 @@ Legend:
 | `GET /api/images` | S | | | Image list from `assets/` and uploads. |
 | `POST /api/images` | S | ✓ | | Item photo upload: magic bytes, 5 MB, random name, metadata stripped (F2). Public once used on the menu. |
 | `GET /api/vouchers`, `POST /api/vouchers`, `PUT|PATCH|DELETE /api/vouchers/:id`, `PATCH /api/vouchers/:id/active` | S | ✓ (writes) | | |
-| `GET|PUT|PATCH /api/settings` | S | ✓ (writes) | | Ordering settings, delivery fee, opening hours (`open_at`/`close_at`), the shop Open/Closed switch. The server refuses orders outside the hours. |
+| `GET|PUT|PATCH /api/settings` | S | ✓ (writes) | | Ordering settings, delivery fee, opening hours (`open_at`/`close_at`), the shop Open/Closed switch, `confirm_call_minutes` (1–120), `facebook_url` (https Facebook/Messenger hosts only), `share_image` (must be an uploaded image under `assets/uploads/`, so it went through the metadata-stripping upload). The server refuses orders outside the hours. |
 | `GET|PUT|PATCH /api/cake-settings` | S | ✓ (writes) | | |
 
 ### Admin: orders, blocklist, cakes
@@ -180,6 +180,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-03: Settings gain confirm_call_minutes, facebook_url and share_image (PR A). No new endpoint.
 - 2026-11-03: About us page (`/about`) added.
 - 2026-11-03: robots.txt, sitemap.xml and llms.txt added (local SEO).
 - 2026-11-02: order alerts (Web Push) routes added.

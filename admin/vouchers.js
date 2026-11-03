@@ -84,7 +84,7 @@ function showFieldErrors(fields) {
 /** The cap only applies to a percentage. */
 function updateKind() {
   const percent = $('v-kind').value === 'percent';
-  $('v-unit').textContent = percent ? '(%)' : '(Php)';
+  $('v-unit').textContent = percent ? '(%)' : '(₱)';
   $('v-max-field').hidden = !percent;
 }
 

@@ -60,7 +60,7 @@ function validate(input, id = null) {
   }
 
   const kind = String(input.kind ?? '');
-  if (!KINDS.includes(kind)) errors.kind = 'Choose % off or Php off.';
+  if (!KINDS.includes(kind)) errors.kind = 'Choose % off or ₱ off.';
 
   const value = intOrNull(input.value);
   if (value === null || Number.isNaN(value)) {
@@ -68,7 +68,7 @@ function validate(input, id = null) {
   } else if (kind === 'percent' && (value < 1 || value > 100)) {
     errors.value = 'Take between 1% and 100% off.';
   } else if (kind === 'amount' && (value < 1 || value > MAX_AMOUNT)) {
-    errors.value = `Take between Php 1 and Php ${MAX_AMOUNT} off.`;
+    errors.value = `Take between ₱1 and ₱${MAX_AMOUNT} off.`;
   }
 
   // The cap only makes sense for a percentage.
@@ -90,10 +90,10 @@ function validate(input, id = null) {
 
 /* ---------------------------- describing ---------------------------- */
 
-/** '10% off (up to Php 100)' or 'Php 50 off' */
+/** '10% off (up to ₱100)' or '₱50 off' */
 function label(v) {
-  if (v.kind === 'percent') return `${v.value}% off${v.max_off ? ` (up to Php ${v.max_off})` : ''}`;
-  return `Php ${v.value} off`;
+  if (v.kind === 'percent') return `${v.value}% off${v.max_off ? ` (up to ₱${v.max_off})` : ''}`;
+  return `₱${v.value} off`;
 }
 
 /** 'active' | 'off' | 'scheduled' | 'expired', for today in Manila. */

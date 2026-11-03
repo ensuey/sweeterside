@@ -86,6 +86,7 @@ async function loadSettings() {
   $('r-contact').value = r.receipt_contact;
   $('r-footer').value = r.receipt_footer;
   $('r-width').value = String(r.receipt_width);
+  $('r-currency').value = r.receipt_currency;
   $('r-bir').checked = r.bir_mode;
   $('r-bname').value = r.bir_business_name;
   $('r-baddress').value = r.bir_address;
@@ -202,7 +203,7 @@ function bind() {
         body: {
           receipt_shop_name: $('r-name').value, receipt_address: $('r-address').value,
           receipt_contact: $('r-contact').value, receipt_footer: $('r-footer').value,
-          receipt_width: $('r-width').value, bir_mode: $('r-bir').checked,
+          receipt_width: $('r-width').value, receipt_currency: $('r-currency').value, bir_mode: $('r-bir').checked,
           bir_business_name: $('r-bname').value, bir_address: $('r-baddress').value,
           bir_tin: $('r-tin').value, bir_ptu: $('r-ptu').value, bir_notice: $('r-notice').value,
         },

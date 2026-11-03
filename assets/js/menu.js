@@ -4,7 +4,10 @@
 (function () {
   'use strict';
 
-  var cards    = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  // Cards in the category sections. The best sellers row repeats some of them
+  // and is hidden during a search or filter rather than filtered itself.
+  var cards    = Array.prototype.slice.call(document.querySelectorAll('.section .card'));
+  var best     = document.querySelector('[data-best-row]');
   var sections = Array.prototype.slice.call(document.querySelectorAll('.section'));
   var chips    = Array.prototype.slice.call(document.querySelectorAll('.chip'));
   var input    = document.getElementById('q');
@@ -31,9 +34,10 @@
       var shown = section.querySelectorAll('.card:not([hidden])').length;
       section.hidden = shown === 0;
       var count = section.querySelector('[data-count]');
-      if (count) count.textContent = String(shown);
+      if (count) count.textContent = shown + (shown === 1 ? ' item' : ' items');
     });
 
+    if (best) best.hidden = filter !== 'all' || query !== '';
     document.body.dataset.empty = visible === 0 ? 'true' : 'false';
   }
 
@@ -79,7 +83,8 @@
     var tagEl  = document.getElementById('sheet-tag');
     var opener = null;
 
-    cards.forEach(function (card) {
+    // Every card opens the popup, best sellers included.
+    Array.prototype.forEach.call(document.querySelectorAll('.card'), function (card) {
       var btn = card.querySelector('.card__btn');
       if (!btn) return;
 
@@ -105,11 +110,11 @@
         if (card.dataset.was) {
           var was = document.createElement('s');
           was.className = 'price__was';
-          was.textContent = 'Php ' + card.dataset.was;
+          was.textContent = '₱' + card.dataset.was;
           priceEl.appendChild(was);
           priceEl.appendChild(document.createTextNode(' '));
         }
-        priceEl.appendChild(document.createTextNode('Php ' + card.dataset.price));
+        priceEl.appendChild(document.createTextNode('₱' + card.dataset.price));
 
         var soldOut = card.hasAttribute('data-soldout');
         tagEl.textContent   = soldOut ? 'Sold out'

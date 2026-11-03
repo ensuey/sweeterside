@@ -35,8 +35,18 @@ async function loadShift() {
   return PAY.shift;
 }
 
+/** Money on a printed slip, in the currency chosen on the Staff page: ₱, or
+    PHP for a thermal printer font without the ₱ glyph. */
+function slipMoney(cents, currency) {
+  const cur = currency === 'PHP' ? 'PHP ' : '₱';
+  const frac = Number(cents) % 100 !== 0;
+  return `${cur}${(Number(cents) / 100).toLocaleString('en-US', { minimumFractionDigits: frac ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
 function readingHtml(r, { forPrint = false } = {}) {
-  const amount = (c) => (c < 0 ? `−${moneyC(-c)}` : moneyC(Math.abs(c)));
+  // On paper, the receipt currency; on screen, ₱.
+  const fmt = forPrint ? (c) => slipMoney(c, PAY.receipt && PAY.receipt.receipt_currency) : moneyC;
+  const amount = (c) => (c < 0 ? `−${fmt(-c)}` : fmt(Math.abs(c)));
   const row = (label, cents, cls = '') => `<div class="${cls}"><dt>${esc(label)}</dt><dd>${cents === null ? '—' : amount(cents)}</dd></div>`;
   const d = r.sales.discounts;
   const methods = (o) => Object.entries(o).map(([m, v]) => row(`${(PAY.methods.find((x) => x.id === m) || { label: m }).label} (${v.count})`, v.amount_cents)).join('')
@@ -75,7 +85,7 @@ function readingHtml(r, { forPrint = false } = {}) {
       ${r.cash.counted_cents !== null ? row('Counted', r.cash.counted_cents) : ''}
       ${r.cash.difference_cents !== null ? row(r.cash.difference_cents < 0 ? 'Short' : r.cash.difference_cents > 0 ? 'Over' : 'Difference', r.cash.difference_cents, 'is-strong') : ''}
     </dl>
-    ${r.movements.length ? `<ul class="rd-moves">${r.movements.map((m) => `<li>${m.kind === 'in' ? 'In' : 'Out'} ${moneyC(m.amount_cents)} · ${esc(m.reason)} · ${esc(m.staff)}</li>`).join('')}</ul>` : ''}
+    ${r.movements.length ? `<ul class="rd-moves">${r.movements.map((m) => `<li>${m.kind === 'in' ? 'In' : 'Out'} ${fmt(m.amount_cents)} · ${esc(m.reason)} · ${esc(m.staff)}</li>`).join('')}</ul>` : ''}
     ${r.note ? `<p class="slip__meta">Note: ${esc(r.note)}</p>` : ''}`;
 }
 
@@ -336,6 +346,7 @@ function receiptHtml(r) {
   const s = r.settings;
   const o = r.order;
   const p = o.pricing;
+  const moneyC = (cents) => slipMoney(cents, s.receipt_currency);
   const row = (label, cents, cls = '') => `<div class="${cls}"><span>${label}</span><span>${cents < 0 ? '-' : ''}${moneyC(Math.abs(cents))}</span></div>`;
   const head = s.bir_mode
     ? [s.bir_business_name || s.receipt_shop_name, s.bir_address || s.receipt_address,
