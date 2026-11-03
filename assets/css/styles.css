@@ -597,6 +597,34 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 }
 .foot a { color: var(--navy); }
 
+/* ---------- About us ---------- */
+.crumbs { padding-top: var(--sp-4); font-size: .875rem; color: var(--ink-soft); }
+.crumbs ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.crumbs li + li::before { content: "›"; margin-right: var(--sp-2); }
+.crumbs a { color: var(--navy); }
+.about { padding-bottom: var(--sp-6); }
+.about__section { max-width: 46rem; padding: var(--sp-6) 0 0; }
+.about__section h2 { font-size: 1.5rem; margin-bottom: var(--sp-3); }
+.about__section h3 { font-size: 1.0625rem; margin-bottom: var(--sp-2); }
+.about__section p, .about__section li { line-height: 1.6; }
+.about__section a { color: var(--navy); }
+.about__menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--sp-4); margin-top: var(--sp-4); }
+.about__group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); }
+.about__group ul, .about__sizes { margin: 0; padding-left: 1.1rem; }
+.about__price { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.about__cta {
+  display: inline-block; margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-4); border-radius: var(--r-full);
+  background: var(--coral-ink); color: #fff !important; font-weight: 700; text-decoration: none;
+}
+.about__facts { margin: 0; display: grid; gap: var(--sp-2); }
+.about__facts div {
+  display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: var(--sp-3);
+  padding: var(--sp-2) 0; border-bottom: 1px solid var(--line);
+}
+.about__facts dt { font-weight: 700; }
+.about__facts dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .about__facts div { grid-template-columns: 1fr; gap: 0; } }
+
 /* ---------- Visit us and questions (below the menu) ---------- */
 .visit, .faq { padding: var(--sp-7) 0; border-top: 1px solid var(--line); }
 .visit h2, .faq h2 { font-size: 1.5rem; margin-bottom: var(--sp-3); }

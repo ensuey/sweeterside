@@ -13,6 +13,7 @@ const seo = require('./seo');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const CAKES_TEMPLATE = path.join(ROOT, 'templates', 'cakes.html');
+const ABOUT_TEMPLATE = path.join(ROOT, 'templates', 'about.html');
 const OUTPUT = path.join(ROOT, 'index.html');
 
 function esc(s) {
@@ -206,4 +207,20 @@ function buildCakesHtml(now = new Date()) {
     .replace('<!--LD_JSON-->', () => seo.cakesLd(s.sizes));
 }
 
-module.exports = { buildHtml, buildCakesHtml, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
+/* ---------------------------- about us ---------------------------- */
+
+/** The About us page: the shop's facts, today's menu and the cake sizes,
+    rendered on every request like the menu, so it is always current. */
+function buildAboutHtml() {
+  const s = cakes.settings();
+  return fs.readFileSync(ABOUT_TEMPLATE, 'utf8')
+    .replace('<!--META_HOURS-->', () => esc(seo.hours().label))
+    .replace('<!--LD_JSON-->', () => seo.aboutLd())
+    .replace('<!--ABOUT-->', () => seo.aboutHtml({
+      groups: menuGroups().groups, cakeSizes: s.sizes, leadDays: s.lead_days, orderTypes: orders.enabledTypes(),
+    }))
+    .replace('<!--VISIT-->', () => seo.visitHtml())
+    .replace('<!--FOOT_NAP-->', () => seo.footHtml());
+}
+
+module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
