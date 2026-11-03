@@ -166,6 +166,21 @@
   </form>
 </dialog>
 
+<!-- Options for an item: size, add-ons… -->
+<dialog class="modal modal--sm" id="opt-dialog" aria-labelledby="opt-title">
+  <form method="dialog" class="modal__form" id="opt-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="opt-title">Options</h2></div>
+    <div class="modal__body">
+      <div class="opts" id="opt-groups"></div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="opt-cancel">Cancel</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--primary" type="submit" id="opt-add">Add</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Manual discount -->
 <dialog class="modal modal--sm" id="manual-dialog" aria-labelledby="manual-title">
   <form method="dialog" class="modal__form" id="manual-form" novalidate>

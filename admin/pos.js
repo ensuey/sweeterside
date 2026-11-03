@@ -57,7 +57,7 @@ function fromOrder(o) {
       id: l.id, key: l.key, item_id: l.item_id, name: l.name, qty: l.qty, note: l.note,
       sent: l.sent_qty - l.voided_qty, unit_cents: l.unit_cents,
       price: l.override_cents === null ? null : l.override_cents / 100, price_reason: l.override_reason,
-      sc_eligible: l.sc_eligible,
+      sc_eligible: l.sc_eligible, options: [], options_text: l.options_text || '',
     })),
     discounts: {
       voucher_code: i.voucher_code || '', manual, claimants: i.claimants || [], diners: i.diners ?? null,
@@ -98,6 +98,8 @@ function payload() {
     lines: t.lines.map((l) => ({
       id: l.id || undefined, key: l.key, item_id: l.item_id, qty: l.qty, note: l.note,
       price: l.price, price_reason: l.price_reason,
+      // Options are chosen once, when the line is added; the server checks them.
+      options: l.id ? undefined : l.options || [],
     })),
   };
   // Waiters never send discounts, so a cashier's discounts on a tab stay as they are.
@@ -176,21 +178,121 @@ function renderGrid() {
 
 /* ---------------------------- adding and changing lines ---------------------------- */
 
-function addItem(id) {
+function addItem(id, chosen = null) {
   const item = P.menu.find((i) => i.id === Number(id));
   if (!item || item.sold_out) return;
-  // Another of the same plain item goes on the same line.
-  const same = P.t.lines.find((l) => l.item_id === item.id && !l.note && l.price === null);
+  // An item with options: choose them first.
+  if ((item.option_groups || []).length && !chosen) { openOptions(item); return; }
+  const opts = chosen ? chosen.ids : [];
+  // Another of the same item with the same options goes on the same line.
+  const same = P.t.lines.find((l) => l.item_id === item.id && !l.note && l.price === null && !l.id
+    && (l.options || []).join('.') === opts.join('.'))
+    || (!opts.length ? P.t.lines.find((l) => l.item_id === item.id && !l.note && l.price === null && !l.options_text) : null);
   if (same) same.qty += 1;
   else {
     P.t.lines.push({
       id: null, key: `n${newKey().slice(0, 12)}`, item_id: item.id, name: item.name, qty: 1, note: '',
-      sent: 0, unit_cents: item.sale_price * 100, price: null, price_reason: '', sc_eligible: item.sc_eligible,
+      sent: 0, unit_cents: chosen ? chosen.unit_cents : item.sale_price * 100, price: null, price_reason: '',
+      sc_eligible: item.sc_eligible, options: opts, options_text: chosen ? chosen.text : '',
     });
   }
   changed();
   const row = $('tlines').querySelector(`[data-key="${CSS.escape((same || P.t.lines[P.t.lines.length - 1]).key)}"]`);
   if (row) row.scrollIntoView({ block: 'nearest' });
+}
+
+/* ---------------------------- options ---------------------------- */
+
+let optItem = null;
+
+/** The same rule as the server: a sale applies to the item and its options. */
+function optSale(price, item) {
+  if (item.sale_type === 'percent') return Math.round(price * (100 - item.sale_value) / 100);
+  if (item.sale_type === 'amount') return Math.max(0, price - item.sale_value);
+  return price;
+}
+
+/** The options ticked, their text and the price of one. */
+function optChoice() {
+  const ids = [...$('opt-groups').querySelectorAll('input:checked')].map((i) => Number(i.value)).filter(Boolean)
+    .sort((a, b) => a - b);
+  let extra = 0;
+  const parts = [];
+  for (const g of optItem.option_groups) {
+    const names = [];
+    for (const o of g.options) if (ids.includes(o.id)) { extra += o.price; names.push(o.name); }
+    if (names.length) parts.push(`${g.name}: ${names.join(', ')}`);
+  }
+  return { ids, text: parts.join(' · '), unit_cents: optSale(optItem.price + extra, optItem) * 100 };
+}
+
+function showOptPrice() {
+  $('opt-add').textContent = `Add · ${moneyC(optChoice().unit_cents)}`;
+}
+
+/** The item's groups as radios (choose one) and boxes (choose several). */
+function openOptions(item) {
+  optItem = item;
+  $('opt-title').textContent = item.name;
+  const box = $('opt-groups');
+  box.replaceChildren();
+  for (const g of item.option_groups) {
+    const set = document.createElement('fieldset');
+    set.className = 'opts__group';
+    set.dataset.group = String(g.id);
+    const legend = document.createElement('legend');
+    legend.textContent = `${g.name} `;
+    const rule = document.createElement('span');
+    rule.className = 'hint';
+    rule.textContent = g.kind === 'single' ? (g.required ? '· choose 1' : '· optional')
+      : g.min > 0 ? `· choose ${g.min === g.max ? g.min : `${g.min} to ${g.max}`}` : `· optional, up to ${g.max}`;
+    legend.append(rule);
+    set.append(legend);
+    const list = g.kind === 'single' && !g.required ? [{ id: '', name: 'None', price: 0, available: true }, ...g.options] : g.options;
+    list.forEach((o, i) => {
+      const label = document.createElement('label');
+      label.className = `opts__opt${o.available ? '' : ' opts__opt--off'}`;
+      const input = document.createElement('input');
+      input.type = g.kind === 'single' ? 'radio' : 'checkbox';
+      input.name = `popt-${g.id}`;
+      input.value = String(o.id);
+      input.disabled = !o.available;
+      if (o.id === '' && i === 0) input.checked = true;
+      const name = document.createElement('span');
+      name.textContent = o.available ? o.name : `${o.name} (not available)`;
+      const price = document.createElement('span');
+      price.className = 'opts__price';
+      price.textContent = o.price > 0 ? `+${money(o.price)}` : '';
+      label.append(input, name, price);
+      set.append(label);
+    });
+    const err = document.createElement('p');
+    err.className = 'field__err';
+    err.hidden = true;
+    set.append(err);
+    box.append(set);
+  }
+  showOptPrice();
+  $('opt-dialog').showModal();
+}
+
+function addWithOptions(event) {
+  event.preventDefault();
+  const choice = optChoice();
+  let first = null;
+  for (const g of optItem.option_groups) {
+    const set = $('opt-groups').querySelector(`fieldset[data-group="${g.id}"]`);
+    const n = g.options.filter((o) => choice.ids.includes(o.id)).length;
+    const problem = n < g.min ? (g.min === 1 ? `Choose ${g.name.toLowerCase()}.` : `Choose at least ${g.min}.`)
+      : n > g.max ? `Choose at most ${g.max}.` : '';
+    const err = set.querySelector('.field__err');
+    err.textContent = problem;
+    err.hidden = !problem;
+    if (problem && !first) first = set.querySelector('input:not(:disabled)');
+  }
+  if (first) { first.focus(); return; }
+  $('opt-dialog').close();
+  addItem(optItem.id, choice);
 }
 
 function step(key, by) {
@@ -287,6 +389,7 @@ function renderTicket() {
     return `<li class="tline${l.qty === 0 ? ' tline--off' : ''}" data-key="${esc(l.key)}">
       <button type="button" class="tline__main" data-edit>
         <span class="tline__name">${esc(l.name)}</span>
+        ${l.options_text ? `<span class="tline__opts">${esc(l.options_text)}</span>` : ''}
         <span class="tline__meta">${moneyC(each)} each${l.price !== null ? ' · price changed' : ''}${l.sent ? ` · ${l.sent} sent` : ''}</span>
         ${l.note ? `<span class="tline__note">${esc(l.note)}</span>` : ''}
         ${off ? `<span class="tline__void">${l.sent - l.qty} to void</span>` : ''}
@@ -875,6 +978,13 @@ function bind() {
   });
   $('line-form').addEventListener('submit', (e) => { e.preventDefault(); saveLine(); });
   $('line-cancel').addEventListener('click', () => $('line-dialog').close());
+  $('opt-form').addEventListener('submit', addWithOptions);
+  $('opt-cancel').addEventListener('click', () => $('opt-dialog').close());
+  $('opt-groups').addEventListener('change', (e) => {
+    const err = e.target.closest('fieldset').querySelector('.field__err');
+    err.hidden = true;
+    showOptPrice();
+  });
   $('line-remove').addEventListener('click', () => {
     editing.qty = 0;
     if (!editing.sent) P.t.lines = P.t.lines.filter((x) => x !== editing);

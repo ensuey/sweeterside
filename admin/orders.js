@@ -120,7 +120,7 @@ function orderHtml(o) {
     .map((value) => `<option value="${value}"${value === o.status ? ' selected' : ''}>${statusLabel(value, type)}</option>`)
     .join('');
   const lines = o.items
-    .map((l) => `<li><span>${l.qty} × ${esc(l.name)}${l.note ? ` <em class="order__note">${esc(l.note)}</em>` : ''}</span><span>${money(l.price * l.qty)}</span></li>`)
+    .map((l) => `<li><span>${l.qty} × ${esc(l.name)}${l.options_text ? `<span class="order__opts">${esc(l.options_text)}</span>` : ''}${l.note ? ` <em class="order__note">${esc(l.note)}</em>` : ''}</span><span>${money(l.price * l.qty)}</span></li>`)
     .join('');
 
   // Delivery collects cash at the door; the other types pay at the counter.

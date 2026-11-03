@@ -354,6 +354,7 @@ function receiptHtml(r) {
     : [s.receipt_address, s.receipt_contact];
   const lines = p.lines.map((l) => `
     <div class="slip__line"><span>${l.qty} × ${esc(l.name)}</span><span>${moneyC(l.gross)}</span></div>
+    ${l.options_text ? `<div class="slip__sub"><span>${esc(l.options_text)}</span><span></span></div>` : ''}
     ${l.sale_discount ? `<div class="slip__sub"><span>sale price</span><span>-${moneyC(l.sale_discount)}</span></div>` : ''}
     ${l.price_override ? `<div class="slip__sub"><span>price changed: ${esc(l.price_override.reason)}</span><span></span></div>` : ''}`).join('');
   const claimants = p.claimants.map((c) => `
@@ -402,14 +403,15 @@ async function printReceipt(orderId) {
 /** The kitchen's ticket: items and notes, no prices. `items` are only the new ones when given. */
 async function printKitchen(orderId, items = null) {
   const [{ order }, s] = await Promise.all([staffGate.call(`/api/pos/orders/${orderId}`), receiptSettings()]);
-  const list = items || order.lines.filter((l) => l.qty > 0).map((l) => ({ name: l.name, qty: l.qty, note: l.note }));
+  const list = items || order.lines.filter((l) => l.qty > 0)
+    .map((l) => ({ name: l.name, qty: l.qty, note: l.note, options_text: l.options_text }));
   printSlip(`
     <p class="slip__title">KITCHEN</p>
     <p class="slip__big">${esc(order.order_type === 'dinein' ? `TABLE ${order.table_no}` : TYPE_LINE(order).toUpperCase())}</p>
     <p class="slip__meta">Order #${order.id} · ${esc(manilaTime(new Date().toISOString().slice(0, 19).replace('T', ' ')))}<br>
       ${items ? 'ADDED ITEMS · ' : ''}${esc(staffGate.staff.name)}</p>
     <div class="slip__rule"></div>
-    ${list.map((k) => `<p class="slip__kline"><strong>${k.qty} ×</strong> ${esc(k.name)}${k.note ? `<br><em>${esc(k.note)}</em>` : ''}</p>`).join('')}`,
+    ${list.map((k) => `<p class="slip__kline"><strong>${k.qty} ×</strong> ${esc(k.name)}${k.options_text ? `<br>${esc(k.options_text)}` : ''}${k.note ? `<br><em>${esc(k.note)}</em>` : ''}</p>`).join('')}`,
   s.receipt_width);
 }
 

@@ -230,7 +230,7 @@ function renderOnline() {
   const status = o.status === 'delivering' ? HANDOVER[o.order_type] || 'Handed over' : ONLINE_STATUS[o.status];
   $('od-title').textContent = `Online order #${o.id} · ${onlineType(o)}`;
   const lines = o.items.map((l) => `
-    <div><dt>${l.qty} × ${esc(l.name)}${l.note ? ` <em class="order__note">${esc(l.note)}</em>` : ''}</dt><dd>${money(l.price * l.qty)}</dd></div>`).join('');
+    <div><dt>${l.qty} × ${esc(l.name)}${l.options_text ? `<span class="order__opts">${esc(l.options_text)}</span>` : ''}${l.note ? ` <em class="order__note">${esc(l.note)}</em>` : ''}</dt><dd>${money(l.price * l.qty)}</dd></div>`).join('');
   const sum = [
     ['Subtotal', o.subtotal],
     o.sc_pwd_discount > 0 && ['SC/PWD 20%', -o.sc_pwd_discount],
