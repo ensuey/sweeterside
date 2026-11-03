@@ -297,7 +297,7 @@ After deploying (owner, once):
 ## Still to do
 
 - Dachel to replace the placeholder cake sizes, prices and flavours.
-- Dachel to set the real pick-up hours (still 10:00–20:00).
+- Dachel to set the real opening hours on Settings (still 10:00–20:00).
 - Owner notifications (Messenger / WhatsApp) were discussed and put on hold.
 - POS order #12 (a takeout saved at the counter, never sent) is still open on
   the live site: send it, take payment, or void it.

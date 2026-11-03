@@ -79,7 +79,7 @@ Legend:
 | `GET /api/images` | S | | | Image list from `assets/` and uploads. |
 | `POST /api/images` | S | ✓ | | Item photo upload: magic bytes, 5 MB, random name, metadata stripped (F2). Public once used on the menu. |
 | `GET /api/vouchers`, `POST /api/vouchers`, `PUT|PATCH|DELETE /api/vouchers/:id`, `PATCH /api/vouchers/:id/active` | S | ✓ (writes) | | |
-| `GET|PUT|PATCH /api/settings` | S | ✓ (writes) | | Ordering settings, delivery fee, shop open/closed. |
+| `GET|PUT|PATCH /api/settings` | S | ✓ (writes) | | Ordering settings, delivery fee, opening hours (`open_at`/`close_at`), the shop Open/Closed switch. The server refuses orders outside the hours. |
 | `GET|PUT|PATCH /api/cake-settings` | S | ✓ (writes) | | |
 
 ### Admin: orders, blocklist, cakes

@@ -504,6 +504,10 @@ a { color: var(--navy); }
 }
 .link-quiet:hover, .link-quiet:focus-visible { color: var(--danger); }
 
+.hours { margin-bottom: 3rem; max-width: 40rem; }
+.hours .admin__sub { margin-bottom: 1rem; }
+.hours__form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .6rem 1rem; margin-bottom: .6rem; }
+.hours__form .field { width: 10rem; }
 .trust { margin-bottom: 3rem; }
 .trust .admin__sub { margin-bottom: 1rem; }
 .trust__form { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; max-width: 40rem; }

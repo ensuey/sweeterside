@@ -299,8 +299,6 @@ async function submitBlock(event) {
 
 function showSettings(s) {
   $('fee').value = s.delivery_fee;
-  $('pickup-open').value = s.pickup_open;
-  $('pickup-close').value = s.pickup_close;
   ORDER_TYPES.forEach((t) => { $(`on-${t}`).checked = s[`${t}_enabled`]; });
   showShop(s);
 }
@@ -312,12 +310,16 @@ function showShop(s) {
   document.querySelectorAll('[data-shop]').forEach((btn) => {
     btn.setAttribute('aria-pressed', String((btn.dataset.shop === 'open') === s.shop_open));
   });
-  $('shop-state').textContent = s.shop_open
-    ? 'Customers can order from the menu.'
-    : 'Customers can browse the menu but not order. Cake bookings still work.';
+  // Open follows the opening hours (Settings); Closed is the override.
+  const hours = `${clock(s.open_at)}–${s.close_at === '24:00' ? 'midnight' : clock(s.close_at)}`;
+  $('shop-state').textContent = !s.shop_open
+    ? 'Closed by hand: customers can browse the menu but not order. Cake bookings still work. Tap Open to follow your opening hours again.'
+    : s.closing_soon ? `Closing soon: customers can order until ${clock(s.close_at)}. The menu says so.`
+    : s.open_now ? `Open: customers can order until ${clock(s.close_at)}. Opening hours ${hours}.`
+    : `Outside opening hours (${hours}): customers can browse but not order. Ordering opens by itself at ${clock(s.open_at)}.`;
   // Do not overwrite a note being typed.
   if (document.activeElement !== $('closed-note')) $('closed-note').value = s.closed_note;
-  showShopPill(s.shop_open);
+  showShopPill(s);
 }
 
 async function setShopOpen(open) {
@@ -360,8 +362,6 @@ async function saveSettings(event) {
   try {
     const body = {
       delivery_fee: $('fee').value,
-      pickup_open: $('pickup-open').value,
-      pickup_close: $('pickup-close').value,
     };
     ORDER_TYPES.forEach((t) => { body[`${t}_enabled`] = $(`on-${t}`).checked; });
     const s = await api('/api/settings', { method: 'PUT', body });

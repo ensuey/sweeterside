@@ -96,6 +96,18 @@ img { max-width: 100%; }
 .status__pill::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: currentColor; }
 .status--open .status__pill { color: #1F5A3A; background: #DDF0E3; }
 .status--closed .status__pill { color: #fff; background: #6B5330; }
+.status--soon .status__pill { color: #6B3E00; background: #FFE3A8; }
+
+/* The last 30 minutes before closing: a bar at the top of the menu. */
+.soonbar {
+  margin: 0;
+  padding: calc(var(--sp-2) + env(safe-area-inset-top, 0px)) var(--sp-4) var(--sp-2);
+  text-align: center; font-weight: 700; font-size: .9375rem;
+  color: #6B3E00; background: #FFE3A8; border-bottom: 1px solid #F2C46B;
+}
+.soonbar[hidden] { display: none; }
+/* Closing time came while the page was open: no more adding to the cart. */
+.shop-closed .card__add { display: none !important; }
 
 /* The link to the custom cake page. */
 .hero__cta {
