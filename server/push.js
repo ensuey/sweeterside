@@ -247,12 +247,15 @@ async function notifyAll(message) {
 
 const TYPE = { delivery: 'Delivery', pickup: 'Pick-up', dinein: 'Dine-in' };
 
-/** What an order alert says. Number, type and total only. */
+/** What an order alert says. Number, type, how many items and the total only:
+    no names, numbers, addresses or what was chosen. */
 function orderMessage(order) {
   const where = order.order_type === 'pickup'
     ? `Pick-up · ${order.pickup_at === 'asap' || !order.pickup_at ? 'ASAP' : order.pickup_at}`
     : order.order_type === 'dinein' ? `Dine-in · Table ${order.table_no}` : TYPE[order.order_type] || 'Order';
-  return { title: `New order #${order.id}`, body: `${where} · ₱${order.total}`, url: '/admin', tag: `order-${order.id}` };
+  const n = (order.items || []).reduce((sum, l) => sum + l.qty, 0);
+  const count = n ? ` · ${n} ${n === 1 ? 'item' : 'items'}` : '';
+  return { title: `New order #${order.id}`, body: `${where}${count} · ₱${order.total}`, url: '/admin', tag: `order-${order.id}` };
 }
 
 /** What a cake booking alert says. Number, date and size only. */

@@ -12,6 +12,21 @@ const cakes = require('./cakes');
 const seo = require('./seo');
 const { BUSINESS } = require('./business');
 const delivery = require('./delivery');
+const itemOptions = require('./options');
+
+// The options of the items on the page being built: { item_id: { price, sale_type, sale_value, groups } }.
+let pageOptions = {};
+
+/** The least an item with options can cost: the cheapest choice in each
+    group that must be chosen, at the item's sale. */
+function fromPrice(item, opts) {
+  let extra = 0;
+  for (const g of opts.groups) {
+    const prices = g.options.filter((o) => o.available).map((o) => o.price).sort((a, b) => a - b);
+    extra += prices.slice(0, g.min).reduce((sum, p) => sum + p, 0);
+  }
+  return menu.salePrice({ price: item.price + extra, sale_type: item.sale_type, sale_value: item.sale_value });
+}
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const CAKES_TEMPLATE = path.join(ROOT, 'templates', 'cakes.html');
@@ -85,21 +100,32 @@ function cardHtml(item, category, { eager = false } = {}) {
   // data-price is what the cart charges, so on sale it is the sale price;
   // data-was keeps the full price for the detail popup.
   const onSale = item.sale_price < item.price;
+  // Items with options: Add opens the popup to choose. Prices that change
+  // with the choice say "from".
+  const opts = pageOptions[item.id];
+  const varies = !!opts && opts.groups.some((g) => g.options.some((o) => o.price > 0));
+  const from = varies ? '<span class="price__from">from </span>' : '';
+  const shown = opts ? fromPrice(item, opts) : item.sale_price;
+  const optsAttr = opts ? ` data-options="${esc(JSON.stringify(opts))}"` : '';
+  const detailAttrs = (item.description ? ` data-desc="${esc(item.description)}"` : '')
+    + (item.size_label ? ` data-size="${esc(item.size_label)}"` : '');
+  const desc = item.description ? `\n          <p class="card__desc">${esc(item.description)}</p>` : '';
+  const size = item.size_label ? ` <span class="card__size">${esc(item.size_label)}</span>` : '';
   const promoAttrs = (item.best_seller ? ' data-best' : '') + (onSale ? ` data-was="${item.price}"` : '');
   const badge = item.best_seller ? '\n        <span class="card__badge">★ Best seller</span>' : '';
   const saleTag = onSale
     ? `\n          <p class="card__sale">${saleLabel(item)}</p>`
     : '';
   const price = onSale
-    ? `<span class="price"><s class="price__was"><span class="vh">Was </span>₱${item.price}</s> <small>₱</small>${item.sale_price}</span>`
-    : `<span class="price"><small>₱</small>${item.price}</span>`;
+    ? `<span class="price">${from}<s class="price__was"><span class="vh">Was </span>₱${opts ? fromPrice({ ...item, sale_type: '' }, opts) : item.price}</s> <small>₱</small>${shown}</span>`
+    : `<span class="price">${from}<small>₱</small>${shown}</span>`;
 
-  return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.sale_price}"${promoAttrs}${stockAttr}>${badge}
+  return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.sale_price}"${promoAttrs}${stockAttr}${detailAttrs}${optsAttr}>${badge}
         <div${shotAttrs}>
           ${photoHtml(item, { eager })}
         </div>
         <div class="card__body">
-          <h3 class="card__name">${esc(item.name)}</h3>${saleTag}${fewLeft}
+          <h3 class="card__name">${esc(item.name)}${size}</h3>${desc}${saleTag}${fewLeft}
           <div class="card__foot">
             ${price}
             ${action}
@@ -225,6 +251,7 @@ function menuGroups(allItems = menu.list(), cats = categories.list()) {
 function buildHtml(allItems = menu.list(), cats = categories.list(), now = new Date()) {
   const template = fs.readFileSync(TEMPLATE, 'utf8');
   const { items, groups } = menuGroups(allItems, cats);
+  pageOptions = itemOptions.menuOptions(items);
 
   // The best sellers row comes first, so its photos are the ones loaded at once.
   const best = bestSellersHtml(groups);

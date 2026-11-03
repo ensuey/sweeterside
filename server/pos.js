@@ -28,6 +28,7 @@ const { db, transaction } = require('./db');
 const menu = require('./menu');
 const orders = require('./orders');
 const delivery = require('./delivery');
+const itemOptions = require('./options');
 const vouchers = require('./vouchers');
 const pricing = require('./pricing');
 const settings = require('./settings');
@@ -102,6 +103,7 @@ function view(id, actor) {
     menu_price_cents: l.menu_price_cents ?? l.regular_price_cents,
     override_cents: l.override_cents, override_reason: l.override_reason,
     net_cents: l.net_cents, sc_eligible: l.sc_eligible === 1,
+    options: orders.parseOptions(l.options), options_text: itemOptions.optionsText(orders.parseOptions(l.options)),
   }));
   const people = db.prepare('SELECT id, name FROM staff WHERE id IN (?, ?)').all(row.staff_id, row.updated_by);
   const nameOf = (sid) => (people.find((p) => p.id === sid) || {}).name || '';
@@ -127,11 +129,16 @@ function open() {
 
 /** The menu for the item grid: everything not hidden, with today's stock. */
 function posMenu() {
-  return menu.list().filter((i) => i.availability !== 'unavailable').map((i) => ({
+  const items = menu.list().filter((i) => i.availability !== 'unavailable');
+  // Items with options open a picker on the tablet; the server checks the choice.
+  const opts = itemOptions.menuOptions(items);
+  return items.map((i) => ({
     id: i.id, name: i.name, category_id: i.category_id, image: i.image, alt: i.alt,
     crop_x: i.crop_x, crop_y: i.crop_y, crop_w: i.crop_w, crop_h: i.crop_h,
     price: i.price, sale_price: i.sale_price, sold_out: i.sold_out, remaining: i.remaining,
-    sc_eligible: i.sc_eligible, best_seller: i.best_seller,
+    sc_eligible: i.sc_eligible, best_seller: i.best_seller, size_label: i.size_label,
+    sale_type: i.sale_type, sale_value: i.sale_value,
+    option_groups: opts[i.id] ? opts[i.id].groups : [],
   }));
 }
 
@@ -280,7 +287,7 @@ function engineInput(type, lines, d, voucherRow, actor, discountApproved, area =
     type,
     tax: { vat_registered: pos.vat_registered },
     lines: lines.map((l) => ({
-      key: l.key, item_id: l.item_id, name: l.name, qty: l.qty,
+      key: l.key, item_id: l.item_id, name: l.name, qty: l.qty, options_text: l.options_text || '',
       unit_cents: l.menu_price_cents, sale_cents: l.menu_sale_cents, sc_eligible: l.sc_eligible,
       override_cents: l.override_cents, override_reason: l.override_reason,
     })),
@@ -408,7 +415,7 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
           menu_price_cents: o.menu_price_cents ?? o.regular_price_cents,
           menu_sale_cents: o.menu_sale_cents ?? o.price_cents,
           override_cents: override, override_reason: override === o.override_cents ? o.override_reason : overrideReason,
-          sc_eligible: o.sc_eligible === 1,
+          sc_eligible: o.sc_eligible === 1, options_text: itemOptions.optionsText(orders.parseOptions(o.options)),
         });
       }
     } else {
@@ -423,6 +430,16 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
         errors.lines = 'An item on the ticket is no longer on the menu.';
         continue;
       }
+      // The options must be on this item, available, and fit each group.
+      let chosen;
+      try {
+        chosen = itemOptions.choose(item, l.options);
+      } catch (err) {
+        if (!(err instanceof ValidationError)) throw err;
+        errors.lines = err.errors.items;
+        continue;
+      }
+      const prices = itemOptions.linePrices(item, chosen.options_cents);
       const engineKey = `new-${key}`;
       keyMap.set(key, engineKey);
       increase.set(item.id, (increase.get(item.id) || 0) + qty);
@@ -433,7 +450,8 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
       }
       const line = {
         key: engineKey, item_id: item.id, name: item.name, qty,
-        menu_price_cents: item.price * 100, menu_sale_cents: item.sale_price * 100,
+        menu_price_cents: prices.unit_cents, menu_sale_cents: prices.sale_cents,
+        options: chosen.snapshot, options_cents: chosen.options_cents, options_text: itemOptions.optionsText(chosen.snapshot),
         override_cents: override, override_reason: override === null ? '' : overrideReason,
         sc_eligible: item.sc_eligible, note,
       };
@@ -559,10 +577,12 @@ function checkRequestKey(key) {
 function insertLine(orderId, l) {
   return db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty, note,
-                             menu_price_cents, menu_sale_cents, override_cents, override_reason, sc_eligible)
-    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)`).run(
+                             menu_price_cents, menu_sale_cents, override_cents, override_reason, sc_eligible,
+                             options, options_cents)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     orderId, l.item_id, l.name, l.menu_sale_cents, l.menu_price_cents, l.qty, l.note,
     l.menu_price_cents, l.menu_sale_cents, l.override_cents, l.override_reason, l.sc_eligible ? 1 : 0,
+    l.options && l.options.length ? JSON.stringify(l.options) : '', l.options_cents || 0,
   ).lastInsertRowid;
 }
 
@@ -573,6 +593,7 @@ function savedEngineLines(orderId) {
     menu_price_cents: l.menu_price_cents ?? l.regular_price_cents,
     menu_sale_cents: l.menu_sale_cents ?? l.price_cents,
     override_cents: l.override_cents, override_reason: l.override_reason, sc_eligible: l.sc_eligible === 1,
+    options_text: itemOptions.optionsText(orders.parseOptions(l.options)),
   }));
 }
 
@@ -708,7 +729,10 @@ function save(id, body, actor, now = new Date()) {
  */
 function sendToKitchen(orderId) {
   const kitchen = lineRows(orderId).filter((l) => l.qty > l.sent_qty)
-    .map((l) => ({ name: l.name, qty: l.qty - l.sent_qty, note: l.note }));
+    .map((l) => ({
+      name: l.name, qty: l.qty - l.sent_qty, note: l.note,
+      ...(l.options ? { options_text: itemOptions.optionsText(orders.parseOptions(l.options)) } : {}),
+    }));
   db.prepare('UPDATE order_items SET sent_qty = qty WHERE order_id = ?').run(orderId);
   db.prepare(`UPDATE orders SET kitchen_sent_at = COALESCE(kitchen_sent_at, datetime('now')),
                 status = CASE WHEN status = 'new' THEN 'confirmed' ELSE status END WHERE id = ?`).run(orderId);

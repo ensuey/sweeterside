@@ -46,6 +46,7 @@ const NAME_MAX = 80;
 const ID_MAX = 40;
 const REASON_MAX = 200;
 const MAX_QTY = 999;
+const OPTIONS_TEXT_MAX = 300;
 const MAX_DINERS = 100;
 
 class PricingError extends Error {
@@ -183,6 +184,8 @@ function normaliseLines(raw, override) {
     return {
       key, item_id: l.item_id ?? null, name: String(l.name ?? ''), qty: l.qty,
       unit, sale, sc_eligible: l.sc_eligible !== false, price_override: priceOverride,
+      // The options chosen, as text for the receipt. Their prices are already in unit.
+      options_text: String(l.options_text ?? '').slice(0, OPTIONS_TEXT_MAX),
     };
   });
 }
@@ -391,7 +394,7 @@ function price(input) {
     const saleDiscount = gross - scReg[i] - pool[i];
     const net = gross - saleDiscount - vatExempt[i] - scDiscount[i] - voucherLines[i] - manualLines[i];
     return {
-      key: l.key, item_id: l.item_id, name: l.name, qty: l.qty,
+      key: l.key, item_id: l.item_id, name: l.name, qty: l.qty, ...(l.options_text ? { options_text: l.options_text } : {}),
       unit_cents: l.unit, sale_unit_cents: l.sale, sc_eligible: l.sc_eligible,
       price_override: l.price_override,
       gross, sale_discount: saleDiscount, vat_exempt: vatExempt[i], sc_pwd_discount: scDiscount[i],

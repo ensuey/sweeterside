@@ -569,6 +569,53 @@ CREATE TABLE IF NOT EXISTS blocked_phones (
   created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 )`);
 
+/* ---------- Descriptions, sizes and options ---------- */
+
+/* A short description and a size label ("16 oz", "10 pcs") for the card.
+   Existing items keep blank ones until the owner fills them in. */
+addMissingColumns('items', {
+  description: "TEXT NOT NULL DEFAULT ''",
+  size_label: "TEXT NOT NULL DEFAULT ''",
+});
+
+/* Option groups ("Size", "Add-ons", "Sugar level") are made once and
+   attached to as many items as need them. single: choose one. multiple:
+   choose min_select to max_select. An option's price is added to the item's
+   price, in centavos (the owner types whole pesos). */
+db.exec(`
+CREATE TABLE IF NOT EXISTS option_groups (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT    NOT NULL,
+  kind       TEXT    NOT NULL DEFAULT 'single' CHECK (kind IN ('single', 'multiple')),
+  required   INTEGER NOT NULL DEFAULT 0,
+  min_select INTEGER NOT NULL DEFAULT 0,
+  max_select INTEGER NOT NULL DEFAULT 1,
+  position   INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS options (
+  id          INTEGER PRIMARY KEY,
+  group_id    INTEGER NOT NULL REFERENCES option_groups(id) ON DELETE CASCADE,
+  name        TEXT    NOT NULL,
+  price_cents INTEGER NOT NULL DEFAULT 0 CHECK (price_cents >= 0),
+  available   INTEGER NOT NULL DEFAULT 1,
+  position    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_options_group ON options(group_id);
+CREATE TABLE IF NOT EXISTS item_option_groups (
+  item_id  INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  group_id INTEGER NOT NULL REFERENCES option_groups(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (item_id, group_id)
+);`);
+
+/* A line remembers the options chosen, as they were (group, name, price),
+   so editing or removing an option later does not change old orders.
+   options_cents is their total per unit, already inside price_cents. */
+addMissingColumns('order_items', {
+  options: "TEXT NOT NULL DEFAULT ''",
+  options_cents: 'INTEGER NOT NULL DEFAULT 0',
+});
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';
