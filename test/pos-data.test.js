@@ -24,6 +24,8 @@ const vouchers = require('../server/vouchers');
 const menu = require('../server/menu');
 
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 orders.saveSetting('max_open_orders', 1000);
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');

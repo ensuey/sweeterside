@@ -21,8 +21,7 @@ const BUSINESS = {
     country: 'PH',
   },
   geo: { latitude: 6.8340817, longitude: 126.0873542 },
-  // Open every day, the same hours.
-  hours: { opens: '10:00', closes: '20:00', label: 'Open daily, 10:00 AM to 8:00 PM' },
+  // Opening hours are set on the Settings page (see seo.hours()).
   map: 'https://www.google.com/maps?cid=6144996303293417236',
   facebook: 'https://www.facebook.com/SweeterSideByDachel',
   // Farther than these is possible for a higher delivery fee.

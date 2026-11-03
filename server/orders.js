@@ -75,12 +75,17 @@ function parseSwitch(key) {
   };
 }
 
-/* ---------------------------- pick-up hours ---------------------------- */
+/* ---------------------------- opening hours ---------------------------- */
 
-// Pick-up is same day only, in 15-minute steps, in the shop's time zone.
+// One set of hours, the same every day, in Manila time. Online ordering is
+// open between them and pick-up times are offered within them; 30 minutes
+// before closing the menu says it is closing soon. They are kept under the
+// old pick-up keys, so the hours set before this change carry over.
+// Pick-up is same day only, in 15-minute steps.
 const SLOT_MINUTES = 15;
 const DEFAULT_PICKUP_OPEN = '10:00';
 const DEFAULT_PICKUP_CLOSE = '20:00';
+const CLOSING_SOON_MINUTES = 30;
 
 /** 'HH:MM' -> minutes since midnight, or null if it is not a valid time. */
 function toMinutes(hhmm) {
@@ -88,9 +93,14 @@ function toMinutes(hhmm) {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
-function parseHour(key) {
+/** A closing time in minutes: like toMinutes, and '24:00' (open until midnight) is 1440. */
+function closeMinutes(hhmm) {
+  return String(hhmm ?? '').trim() === '24:00' ? 24 * 60 : toMinutes(hhmm);
+}
+
+function parseHour(key, { closing = false } = {}) {
   return (input) => {
-    const mins = toMinutes(input);
+    const mins = closing ? closeMinutes(input) : toMinutes(input);
     if (mins === null || mins % SLOT_MINUTES !== 0) {
       throw new ValidationError({ [key]: 'Enter a time on the quarter hour, like 10:00 or 17:30.' });
     }
@@ -98,18 +108,28 @@ function parseHour(key) {
   };
 }
 
-function pickupHours() {
+/** The opening hours, { open, close } as 'HH:MM'. Pick-up uses the same. */
+function openingHours() {
   return {
     open: getSetting('pickup_open', DEFAULT_PICKUP_OPEN),
     close: getSetting('pickup_close', DEFAULT_PICKUP_CLOSE),
   };
+}
+const pickupHours = openingHours;
+
+/** '20:00' -> '8:00 PM' */
+function clock12(hhmm) {
+  const mins = toMinutes(hhmm);
+  if (mins === null) return String(hhmm);
+  const h = Math.floor(mins / 60);
+  return `${h % 12 || 12}:${String(mins % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 /** @returns 'asap' or 'HH:MM', or throws ValidationError */
 function parsePickupTime(input, now) {
   const { open, close } = pickupHours();
   const openMins = toMinutes(open);
-  const closeMins = toMinutes(close);
+  const closeMins = closeMinutes(close);
   const nowMins = manilaMinutes(now);
   const value = String(input ?? '').trim();
 
@@ -134,12 +154,39 @@ function parsePickupTime(input, now) {
 
 /* ---------------------------- open / closed ---------------------------- */
 
-// Dachel switches the shop open or closed by hand. While closed, customers can
-// browse the menu but not order; cake bookings are not affected.
+// Ordering opens and closes with the opening hours. The Open/Closed switch is
+// an override: Closed (a holiday, closing early) closes ordering even within
+// the hours. While closed, customers can browse the menu but not order; cake
+// bookings are not affected.
 const CLOSED_NOTE_MAX = 120;
 
-function isShopOpen() {
-  return getSetting('shop_open', '1') === '1';
+/**
+ * Where the shop stands right now.
+ * @returns {{ open, switch_open, in_hours, before_opening, closing_soon,
+ *             minutes_left, opens_at, closes_at }}
+ */
+function shopState(now = new Date()) {
+  const { open, close } = openingHours();
+  const switchOpen = getSetting('shop_open', '1') === '1';
+  const mins = manilaMinutes(now);
+  const openMins = toMinutes(open);
+  const closeMins = closeMinutes(close);
+  const inHours = mins >= openMins && mins < closeMins;
+  const isOpen = switchOpen && inHours;
+  return {
+    open: isOpen,
+    switch_open: switchOpen,
+    in_hours: inHours,
+    before_opening: mins < openMins,
+    closing_soon: isOpen && closeMins - mins <= CLOSING_SOON_MINUTES,
+    minutes_left: isOpen ? closeMins - mins : 0,
+    opens_at: open,
+    closes_at: close,
+  };
+}
+
+function isShopOpen(now = new Date()) {
+  return shopState(now).open;
 }
 
 function closedNote() {
@@ -154,10 +201,21 @@ function parseClosedNote(input) {
   return note;
 }
 
+/** What the menu says while ordering is closed, for the switch or the hours. */
+function closedMessage(now = new Date()) {
+  const s = shopState(now);
+  if (!s.switch_open) {
+    const note = closedNote();
+    return `Sorry, we're closed right now, so we can't take orders.${note ? ` ${note}` : ''}`;
+  }
+  return s.before_opening
+    ? `Sorry, we're not open yet. We take orders from ${clock12(s.opens_at)} today.`
+    : `Sorry, we're closed for today. We take orders again from ${clock12(s.opens_at)} tomorrow.`;
+}
+
 /** The error an order (or a voucher check) gets while the shop is closed. */
-function shopClosedError() {
-  const note = closedNote();
-  const message = `Sorry, we're closed right now, so we can't take orders.${note ? ` ${note}` : ''}`;
+function shopClosedError(now = new Date()) {
+  const message = closedMessage(now);
   return Object.assign(new Error(message), { status: 409, body: { error: message, closed: true } });
 }
 
@@ -241,16 +299,20 @@ function rejection(status, code, message) {
 /* ---------------------------- all settings ---------------------------- */
 
 function settings() {
-  const { open, close } = pickupHours();
+  const state = shopState();
   const trust = trustRules();
   return {
     delivery_fee: getDeliveryFee(),
     delivery_enabled: isEnabled('delivery'),
     pickup_enabled: isEnabled('pickup'),
     dinein_enabled: isEnabled('dinein'),
-    pickup_open: open,
-    pickup_close: close,
-    shop_open: isShopOpen(),
+    open_at: state.opens_at,
+    close_at: state.closes_at,
+    // shop_open is the Open/Closed switch; open_now is the switch and the hours together.
+    shop_open: state.switch_open,
+    open_now: state.open,
+    in_hours: state.in_hours,
+    closing_soon: state.closing_soon,
     closed_note: closedNote(),
     require_confirm_delivery: requiresConfirmation('delivery'),
     require_confirm_pickup: requiresConfirmation('pickup'),
@@ -269,8 +331,8 @@ function updateSettings(input) {
     delivery_enabled: parseSwitch('delivery_enabled'),
     pickup_enabled: parseSwitch('pickup_enabled'),
     dinein_enabled: parseSwitch('dinein_enabled'),
-    pickup_open: parseHour('pickup_open'),
-    pickup_close: parseHour('pickup_close'),
+    open_at: parseHour('open_at'),
+    close_at: parseHour('close_at', { closing: true }),
     shop_open: parseSwitch('shop_open'),
     closed_note: parseClosedNote,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
@@ -292,14 +354,16 @@ function updateSettings(input) {
       Object.assign(errors, err.errors);
     }
   }
-  if (!errors.pickup_open && !errors.pickup_close) {
-    const hours = pickupHours();
-    const open = values.pickup_open ?? hours.open;
-    const close = values.pickup_close ?? hours.close;
-    if (toMinutes(open) >= toMinutes(close)) errors.pickup_close = 'Closing must be after opening.';
+  if (!errors.open_at && !errors.close_at) {
+    const hours = openingHours();
+    const open = values.open_at ?? hours.open;
+    const close = values.close_at ?? hours.close;
+    if (toMinutes(open) >= closeMinutes(close)) errors.close_at = 'Closing must be after opening.';
   }
   if (Object.keys(errors).length) throw new ValidationError(errors);
-  transaction(() => Object.entries(values).forEach(([key, v]) => saveSetting(key, v)));
+  // The hours keep their original keys (see opening hours above).
+  const STORED_AS = { open_at: 'pickup_open', close_at: 'pickup_close' };
+  transaction(() => Object.entries(values).forEach(([key, v]) => saveSetting(STORED_AS[key] || key, v)));
   return settings();
 }
 
@@ -437,7 +501,7 @@ function staleCart(message, q) {
  * options.now is the current time, for tests.
  */
 function create(input, { now = new Date() } = {}) {
-  if (!isShopOpen()) throw shopClosedError();
+  if (!isShopOpen(now)) throw shopClosedError(now);
 
   const type = input.type === undefined ? 'delivery' : String(input.type);
   if (!ORDER_TYPES.includes(type) || !isEnabled(type)) {
@@ -703,6 +767,7 @@ function setStatus(id, status, { reason } = {}) {
 module.exports = {
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
-  isShopOpen, closedNote, shopClosedError, requiresConfirmation, historyFor,
+  isShopOpen, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
+  closedNote, shopClosedError, requiresConfirmation, historyFor,
   quote, create, insertLines, get, list, counts, setStatus,
 };

@@ -17,6 +17,8 @@ delete process.env.FLY_APP_NAME;
 const { db, seedIfEmpty } = require('../server/db');
 const auth = require('../server/auth');
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 const { server } = require('../server/index');
 
 const PASSWORD = 'a-long-enough-password';

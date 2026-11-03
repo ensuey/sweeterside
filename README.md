@@ -140,7 +140,7 @@ and only that type's fields are shown. Every field shown is required.
 | **Dine-in** | name, table number | at the counter, no fee |
 
 Pick-up times are "As soon as possible" or 15-minute slots, at least 15
-minutes ahead, within the pick-up hours. Times are always Manila time
+minutes ahead, within the opening hours. Times are always Manila time
 (UTC+8), whatever the customer's phone is set to. Once no slot is left today,
 pick-up is hidden with "Pick-up is closed for today."
 
@@ -160,7 +160,13 @@ Next to the orders list the admin sets:
   that is off disappears from checkout, and the server refuses it. With all
   three off the cart says online ordering is closed.
 - **Delivery fee**: charged on delivery orders only.
-- **Pick-up from / until**: the pick-up hours, on the quarter hour.
+- **Opening hours** (Settings page): the same every day, on the quarter hour.
+  Online ordering opens and closes with them and pick-up times are offered
+  within them. In the last 30 minutes the menu shows "Closing soon" (a bar at
+  the top and the status line), and at closing the open page stops ordering by
+  itself; the server refuses orders outside the hours either way. The shop
+  Open/Closed switch on Orders is an override: Closed closes ordering even
+  within the hours (a holiday, closing early).
 
 All apply to the menu straight away. Orders placed before order types existed
 are kept as delivery orders.

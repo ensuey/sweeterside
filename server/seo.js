@@ -6,6 +6,13 @@
 
 const { BUSINESS, addressLine } = require('./business');
 const { manilaDate } = require('./clock');
+const orders = require('./orders');
+
+/** The opening hours from Settings, the same every day. */
+function hours() {
+  const { open, close } = orders.openingHours();
+  return { opens: open, closes: close, label: `Open daily, ${orders.clock12(open)} to ${close === '24:00' ? 'midnight' : orders.clock12(close)}` };
+}
 
 const esc = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -49,7 +56,7 @@ function businessNode() {
     },
     geo: { '@type': 'GeoCoordinates', latitude: b.geo.latitude, longitude: b.geo.longitude },
     openingHoursSpecification: [{
-      '@type': 'OpeningHoursSpecification', dayOfWeek: DAYS, opens: b.hours.opens, closes: b.hours.closes,
+      '@type': 'OpeningHoursSpecification', dayOfWeek: DAYS, opens: hours().opens, closes: hours().closes,
     }],
     hasMap: b.map,
     sameAs: [b.facebook, b.map],
@@ -65,7 +72,7 @@ function faqs() {
   return [
     ['Where is Sweeter Side by Dachel?',
       `We are at ${addressLine()}, Philippines, inside the San Isidro Public Market.`],
-    ['What are your opening hours?', `${b.hours.label}.`],
+    ['What are your opening hours?', `${hours().label}.`],
     ['Do you sell cakes and pastries?',
       'Yes. We have slices of cake, whole cakes and brownies at the café, and we bake custom cakes to order for birthdays and celebrations. Book a custom cake on our cakes page.'],
     ['Do you serve coffee?', 'Yes. We serve coffee and frappe-based drinks, along with pasta and sandwiches.'],
@@ -149,7 +156,7 @@ function visitHtml() {
         </div>
         <div>
           <h3>Opening hours</h3>
-          <p>${esc(b.hours.label)}</p>
+          <p>${esc(hours().label)}</p>
         </div>
         <div>
           <h3>Call or text</h3>
@@ -168,7 +175,7 @@ function visitHtml() {
 /** Name, address and phone in the footer, the same everywhere they appear. */
 function footHtml() {
   const b = BUSINESS;
-  return `    <p>${esc(addressLine())} · <a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a> · ${esc(b.hours.label)}</p>`;
+  return `    <p>${esc(addressLine())} · <a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a> · ${esc(hours().label)}</p>`;
 }
 
 function faqHtml() {
@@ -206,7 +213,7 @@ function llmsTxt(groups) {
 
 - Address: ${addressLine()}, Philippines
 - Map: ${b.map}
-- Hours: ${b.hours.label}
+- Hours: ${hours().label}
 - Phone: ${b.phone.display}
 - Facebook: ${b.facebook}
 - Delivery: ${b.deliveryAreas.join(', ')}; farther for a higher fee. Delivery is cash on delivery.
@@ -223,4 +230,4 @@ ${faqs().map(([q, a]) => `**${q}** ${a}`).join('\n\n')}
 `;
 }
 
-module.exports = { jsonLd, homeLd, cakesLd, visitHtml, faqHtml, footHtml, faqs, robotsTxt, sitemapXml, llmsTxt };
+module.exports = { hours, jsonLd, homeLd, cakesLd, visitHtml, faqHtml, footHtml, faqs, robotsTxt, sitemapXml, llmsTxt };

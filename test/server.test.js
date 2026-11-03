@@ -24,6 +24,8 @@ const imagesize = require('../server/imagesize');
 const checkout = require('../server/checkout');
 
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 // Most tests place many orders from the same number; the open-orders limit
 // has its own test, which sets it back to the default.
 orders.saveSetting('max_open_orders', 1000);
@@ -495,7 +497,7 @@ test('each order type asks only for its own details', () => {
 });
 
 test('pick-up times must be today, within hours, on the quarter hour and not too soon', () => {
-  orders.updateSettings({ pickup_open: '10:00', pickup_close: '20:00' });
+  orders.updateSettings({ open_at: '10:00', close_at: '20:00' });
 
   for (const bad of ['9:45', '09:45', '20:15', '13:10', '12:00', '12:05', 'noon', '25:00']) {
     assert.ok(pickupErrors(pickupInput({ pickup_at: bad })), `should reject ${bad} at noon`);
@@ -504,12 +506,14 @@ test('pick-up times must be today, within hours, on the quarter hour and not too
     assert.strictEqual(pickupErrors(pickupInput({ pickup_at: ok })), null, `should accept ${ok} at noon`);
   }
 
-  // Before opening and after closing there is no "as soon as possible".
+  // Before opening and after closing the shop is closed, so no order at all.
   const early = new Date(Date.UTC(2026, 9, 23, 0, 30)); // 08:30 in Manila
   const late = new Date(Date.UTC(2026, 9, 23, 12, 30)); // 20:30 in Manila
-  assert.ok(pickupErrors(pickupInput({ pickup_at: 'asap' }), early).pickup_at);
-  assert.strictEqual(pickupErrors(pickupInput({ pickup_at: '10:00' }), early), null, 'opening time is fine');
-  assert.ok(pickupErrors(pickupInput({ pickup_at: 'asap' }), late).pickup_at);
+  for (const now of [early, late]) {
+    const err = (() => { try { orders.create(pickupInput({ pickup_at: '10:00' }), { now }); } catch (e) { return e; } return null; })();
+    assert.deepStrictEqual([err && err.status, err && err.body.closed], [409, true], `closed at ${now.toISOString()}`);
+  }
+  orders.updateSettings({ open_at: '00:00', close_at: '24:00' }); // back to all day for the tests after
 });
 
 test('order types can be turned off and the page only offers the ones on', () => {
@@ -525,16 +529,16 @@ test('order types can be turned off and the page only offers the ones on', () =>
 
 test('ordering settings are validated together, so a bad value never half-applies', () => {
   const before = orders.settings();
-  assert.throws(() => orders.updateSettings({ delivery_enabled: false, pickup_open: '10:07' }),
-    (err) => err instanceof menu.ValidationError && Boolean(err.errors.pickup_open));
-  assert.throws(() => orders.updateSettings({ pickup_open: '18:00', pickup_close: '09:00' }),
-    (err) => err instanceof menu.ValidationError && Boolean(err.errors.pickup_close));
+  assert.throws(() => orders.updateSettings({ delivery_enabled: false, open_at: '10:07' }),
+    (err) => err instanceof menu.ValidationError && Boolean(err.errors.open_at));
+  assert.throws(() => orders.updateSettings({ open_at: '18:00', close_at: '09:00' }),
+    (err) => err instanceof menu.ValidationError && Boolean(err.errors.close_at));
   assert.throws(() => orders.updateSettings({ dinein_enabled: 'maybe' }), menu.ValidationError);
   assert.deepStrictEqual(orders.settings(), before, 'nothing was saved');
 
   const html = render.buildHtml();
-  assert.match(html, /data-pickup-open="10:00"/);
-  assert.match(html, /data-pickup-close="20:00"/);
+  assert.ok(html.includes(`data-pickup-open="${before.open_at}"`) && html.includes(`data-pickup-close="${before.close_at}"`),
+    'the page offers pick-up within the opening hours');
 });
 
 test('orders from before order types are kept as delivery orders', () => {
