@@ -169,6 +169,13 @@ Next to the orders list the admin sets:
   fee, marked **Fee to confirm**, and the shop calls with the fee. Removing an
   area keeps its name on past orders. The POS uses the same areas, and a
   cashier can still change one order's fee with a reason.
+- **Cart suggestions** (Settings page): up to three "Goes well with" items for
+  each category, and three for any order. The cart shows up to three, from
+  the categories in the cart first, then the any-order list, leaving out what
+  is already in the cart or sold out. One tap adds; an item with options opens
+  its choices. The lists ship with the menu page, so nothing extra is fetched.
+  Lines added this way are marked on the order, and Reports shows **Added from
+  suggestions** (items and what they came to).
 - **Free delivery from** (Settings page, optional): an order whose items come
   to that much after discounts pays no fee (not for Other area). The cart
   says "Add ₱X more for free delivery" until then.

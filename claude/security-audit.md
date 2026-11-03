@@ -50,7 +50,7 @@ Legend:
 | `GET /healthz` | — | | | `{ ok, items }` only. |
 | `GET /robots.txt`, `GET /sitemap.xml`, `GET /llms.txt` | — | | | For search engines and AI assistants. Public facts only (`server/business.js` and the live menu with prices); robots.txt keeps crawlers out of `/admin` and `/api/`. |
 | `GET /api/checkout-token` | — | | | Signed token; an order must arrive 3 s – 2 h after it was issued. |
-| `POST /api/orders` | — | | 5 / 10 min | Prices and totals recomputed on the server; stale total refused. Options checked per line (on that item, available, each group's least/most) and priced on the server. Delivery fee from the chosen area (`delivery.resolve`), never from the browser; an area turned off or without a fee is refused. Honeypot field, PH mobile check, blocklist, max 3 open orders per number. Refusals logged by reason code only. |
+| `POST /api/orders` | — | | 5 / 10 min | Prices and totals recomputed on the server; stale total refused. Options checked per line (on that item, available, each group's least/most) and priced on the server. A line's `source` is only ever '' or 'suggested'. Delivery fee from the chosen area (`delivery.resolve`), never from the browser; an area turned off or without a fee is refused. Honeypot field, PH mobile check, blocklist, max 3 open orders per number. Refusals logged by reason code only. |
 | `POST /api/vouchers/check` | — | | 20 / 10 min | Every check counts, to stop code guessing. |
 | `GET /api/cakes/availability` | — | | | Dates and slots only. |
 | `POST /api/cakes/photo` | — | | 5 / 10 min | Magic bytes checked (JPEG/PNG/WebP), 5 MB, random file name, private folder, metadata stripped (F2). Unattached photos removed after a day. |
@@ -75,6 +75,7 @@ Legend:
 | `GET /api/items`, `GET /api/categories` | S | | | |
 | `POST /api/items`, `PUT|PATCH|DELETE /api/items/:id` | S | ✓ | | `menu.validate`: whole-peso prices, image must resolve inside `assets/`, crop inside the image, description ≤120, size ≤20, option groups must exist (≤10). Rewrites `index.html` (escaped). |
 | `POST /api/items/reorder`, `PATCH /api/items/:id/stock` | S | ✓ | | |
+| `GET|PUT|PATCH /api/suggestions` | S | ✓ (writes) | | Up to 3 item ids per list; items and categories must exist. Rewrites `index.html`; the lists go out as an escaped `data-suggest` attribute (ids only). |
 | `GET|POST /api/option-groups`, `PUT|PATCH|DELETE /api/option-groups/:id` | S | ✓ (writes) | | Name 1–40; pick one/several; least/most 1–30; 1–30 options, names unique, price whole pesos 0–10000 (no negatives); an option id from another group is refused. Prepared statements only. Rewrites `index.html`; option names go out escaped in a `data-options` attribute. |
 | `POST /api/categories`, `PUT|PATCH|DELETE /api/categories/:id`, `POST /api/categories/reorder` | S | ✓ | | A category with items cannot be deleted (FK `RESTRICT`). |
 | `GET /api/images` | S | | | Image list from `assets/` and uploads. |
