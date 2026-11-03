@@ -112,8 +112,23 @@
   }
   form.addEventListener('change', function (e) {
     if (e.target.name === 'handover') showAddress();
+    if (e.target.name === 'size' || e.target.name === 'flavour') showEstimate();
   });
   showAddress();
+
+  /* An estimate as the customer chooses: the size's starting price plus the
+     flavour's extra. The server works out the same and saves it; Dachel
+     confirms the final price. */
+  function showEstimate() {
+    var size = form.querySelector('input[name="size"]:checked');
+    var flavour = $('k-flavour').selectedOptions[0];
+    var out = $('k-estimate');
+    if (!size) { out.hidden = true; return; }
+    var total = Number(size.dataset.price) + (flavour ? Number(flavour.dataset.extra) || 0 : 0);
+    out.textContent = 'Estimated from ₱' + total.toLocaleString('en-US') + '. Dachel will confirm the final price.';
+    out.hidden = false;
+  }
+  showEstimate();
 
   /* ---------------------------- photo ---------------------------- */
 
