@@ -620,6 +620,11 @@ addMissingColumns('order_items', {
    cart's "Goes well with" strip), for the Reports page. */
 addMissingColumns('order_items', { source: "TEXT NOT NULL DEFAULT ''" });
 
+/* Scheduled orders (pre-orders): when the customer wants it, as UTC like
+   datetime('now') writes, and the Manila day it counts against daily limits.
+   NULL for as soon as possible. */
+addMissingColumns('orders', { scheduled_for: 'TEXT', scheduled_date: 'TEXT' });
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

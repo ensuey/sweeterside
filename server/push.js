@@ -250,9 +250,12 @@ const TYPE = { delivery: 'Delivery', pickup: 'Pick-up', dinein: 'Dine-in' };
 /** What an order alert says. Number, type, how many items and the total only:
     no names, numbers, addresses or what was chosen. */
 function orderMessage(order) {
-  const where = order.order_type === 'pickup'
-    ? `Pick-up · ${order.pickup_at === 'asap' || !order.pickup_at ? 'ASAP' : order.pickup_at}`
-    : order.order_type === 'dinein' ? `Dine-in · Table ${order.table_no}` : TYPE[order.order_type] || 'Order';
+  // A scheduled order (pre-order) says so, with its time.
+  const where = order.scheduled_label
+    ? `${TYPE[order.order_type] || 'Order'} · Scheduled ${order.scheduled_label}`
+    : order.order_type === 'pickup'
+      ? `Pick-up · ${order.pickup_at === 'asap' || !order.pickup_at ? 'ASAP' : order.pickup_at}`
+      : order.order_type === 'dinein' ? `Dine-in · Table ${order.table_no}` : TYPE[order.order_type] || 'Order';
   const n = (order.items || []).reduce((sum, l) => sum + l.qty, 0);
   const count = n ? ` · ${n} ${n === 1 ? 'item' : 'items'}` : '';
   return { title: `New order #${order.id}`, body: `${where}${count} · ₱${order.total}`, url: '/admin', tag: `order-${order.id}` };

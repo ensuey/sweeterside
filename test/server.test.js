@@ -503,13 +503,17 @@ test('pick-up times must be today, within hours, on the quarter hour and not too
     assert.strictEqual(pickupErrors(pickupInput({ pickup_at: ok })), null, `should accept ${ok} at noon`);
   }
 
-  // Before opening and after closing the shop is closed, so no order at all.
+  // Before opening and after closing: a pre-order for a later time, but not
+  // "as soon as possible", and no dine-in (test/preorders.test.js has the rest).
   const early = new Date(Date.UTC(2026, 9, 23, 0, 30)); // 08:30 in Manila
   const late = new Date(Date.UTC(2026, 9, 23, 12, 30)); // 20:30 in Manila
-  for (const now of [early, late]) {
-    const err = (() => { try { orders.create(pickupInput({ pickup_at: '10:00' }), { now }); } catch (e) { return e; } return null; })();
-    assert.deepStrictEqual([err && err.status, err && err.body.closed], [409, true], `closed at ${now.toISOString()}`);
-  }
+  const errs = (input, now) => { try { orders.create(input, { now }); return null; } catch (e) { return e; } };
+  assert.ok(errs(pickupInput({ pickup_at: 'asap' }), early).errors.pickup_at);
+  assert.strictEqual(errs(pickupInput({ pickup_at: '10:00', phone: '0917 555 1001' }), early), null, 'later today');
+  assert.ok(errs(pickupInput({ pickup_at: '10:00', phone: '0917 555 1002' }), late).errors.pickup_at, 'today has passed');
+  assert.strictEqual(errs(pickupInput({ pickup_at: '10:00', pickup_date: '2026-10-24', phone: '0917 555 1003' }), late), null, 'tomorrow');
+  const dine = errs(dineinInput(), late);
+  assert.deepStrictEqual([dine && dine.status, dine && dine.body.closed], [409, true], 'no dine-in while closed');
   orders.updateSettings({ open_at: '00:00', close_at: '24:00' }); // back to all day for the tests after
 });
 

@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const { db, LOGO_IMAGE, transaction } = require('./db');
 const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
-const { manilaDayStartSql } = require('./clock');
+const { manilaDate } = require('./clock');
 
 const MAX_PRICE = 100000;
 const NAME_MAX = 80;
@@ -184,12 +184,15 @@ const LIMIT_MAX = 9999;
  * quantity again. A held POS tab counts: it is food someone has ordered.
  * @returns Map(item_id -> qty)
  */
-function soldToday(now = new Date()) {
+// An order counts on the day it is for: its scheduled day, or the Manila day
+// it was placed (Manila is UTC+8, no daylight saving).
+function soldToday(now = new Date(), date = manilaDate(now)) {
   const rows = db.prepare(`
     SELECT oi.item_id, SUM(oi.qty - oi.voided_qty) AS qty
     FROM order_items oi JOIN orders o ON o.id = oi.order_id
-    WHERE o.status <> 'cancelled' AND o.created_at >= ? AND oi.item_id IS NOT NULL
-    GROUP BY oi.item_id`).all(manilaDayStartSql(now));
+    WHERE o.status <> 'cancelled' AND oi.item_id IS NOT NULL
+      AND COALESCE(o.scheduled_date, date(o.created_at, '+8 hours')) = ?
+    GROUP BY oi.item_id`).all(date);
   return new Map(rows.map((r) => [r.item_id, r.qty]));
 }
 
@@ -240,15 +243,16 @@ const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
                 FROM items i`;
 
 /** Items in menu order: by category position, then item position. */
-function list({ now } = {}) {
-  const sold = soldToday(now);
+/** date: the Manila day to count stock for (default today). */
+function list({ now, date } = {}) {
+  const sold = soldToday(now, date);
   return db.prepare(`${SELECT} JOIN categories c ON c.id = i.category_id
     ORDER BY c.position, c.id, i.position, i.id`).all().map((item) => withStock(item, sold));
 }
 
-function get(id, { now } = {}) {
+function get(id, { now, date } = {}) {
   const item = db.prepare(`${SELECT} WHERE i.id = ?`).get(Number(id));
-  return item ? withStock(item, soldToday(now)) : null;
+  return item ? withStock(item, soldToday(now, date)) : null;
 }
 
 function create(input) {
