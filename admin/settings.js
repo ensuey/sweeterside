@@ -348,6 +348,116 @@ async function saveSuggestions(event) {
   }
 }
 
+/* ---------------------------- testimonials ---------------------------- */
+
+const T_SOURCES = ['', 'Facebook', 'Google', 'In person', 'Other'];
+
+function testimonialRow(t) {
+  const li = document.createElement('li');
+  li.className = 'areas__row';
+  const form = document.createElement('form');
+  form.className = 't-row';
+  form.noValidate = true;
+  const quote = document.createElement('textarea');
+  quote.rows = 2;
+  quote.maxLength = 300;
+  quote.value = t.quote;
+  quote.setAttribute('aria-label', 'What they said');
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.maxLength = 40;
+  name.value = t.name;
+  name.setAttribute('aria-label', 'Name or initials');
+  const source = document.createElement('select');
+  source.setAttribute('aria-label', 'From');
+  for (const s of T_SOURCES) {
+    const o = document.createElement('option');
+    o.value = s;
+    o.textContent = s || '—';
+    source.append(o);
+  }
+  source.value = t.source;
+  const on = document.createElement('label');
+  on.className = 'areas__on';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = t.active;
+  on.append(box, ' Show');
+  const save = document.createElement('button');
+  save.className = 'btn btn--ghost';
+  save.type = 'submit';
+  save.textContent = 'Save';
+  const remove = document.createElement('button');
+  remove.className = 'link-quiet';
+  remove.type = 'button';
+  remove.textContent = 'Delete';
+  const row = document.createElement('div');
+  row.className = 'hours__form';
+  row.append(name, source, on, save, remove);
+  form.append(quote, row);
+  li.append(form);
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    showErr('t-err', '');
+    try {
+      showTestimonials((await api(`/api/testimonials/${t.id}`, {
+        method: 'PATCH', body: { quote: quote.value, name: name.value, source: source.value, active: box.checked },
+      })).testimonials);
+      toast('Testimonial saved.');
+    } catch (e) {
+      showErr('t-err', errorText(e));
+    }
+  });
+  remove.addEventListener('click', async () => {
+    showErr('t-err', '');
+    try {
+      showTestimonials((await api(`/api/testimonials/${t.id}`, { method: 'DELETE' })).testimonials);
+      toast('Testimonial deleted.');
+    } catch (e) {
+      showErr('t-err', errorText(e));
+    }
+  });
+  return li;
+}
+
+function showErr(id, message) {
+  $(id).textContent = message || '';
+  $(id).hidden = !message;
+}
+
+function showTestimonials(list) {
+  $('t-list').replaceChildren(...list.map(testimonialRow));
+}
+
+async function addTestimonial(event) {
+  event.preventDefault();
+  showErr('t-err', '');
+  try {
+    showTestimonials((await api('/api/testimonials', {
+      method: 'POST', body: { quote: $('t-quote').value, name: $('t-name').value, source: $('t-source').value },
+    })).testimonials);
+    $('t-form').reset();
+    toast('Testimonial added. It shows on the menu and the cake page.');
+  } catch (e) {
+    showErr('t-err', errorText(e));
+  }
+}
+
+async function saveRating(event) {
+  event.preventDefault();
+  showErr('rating-err', '');
+  try {
+    const r = await api('/api/testimonials/rating', { method: 'PUT', body: { rating_line: $('rating-line').value } });
+    $('rating-line').value = r.rating_line;
+    toast(r.rating_line ? 'Rating line saved.' : 'Rating line removed.');
+  } catch (e) {
+    showErr('rating-err', errorText(e));
+  }
+}
+
+$('t-form').addEventListener('submit', addTestimonial);
+$('rating-form').addEventListener('submit', saveRating);
 $('suggest-form').addEventListener('submit', saveSuggestions);
 $('area-add').addEventListener('submit', addArea);
 $('free-form').addEventListener('submit', saveFree);
@@ -366,4 +476,7 @@ adminBoot(async () => {
   $('free-min').value = s.free_delivery_min ?? '';
   showAreas((await api('/api/delivery-areas')).areas);
   await loadSuggestions();
+  const t = await api('/api/testimonials');
+  showTestimonials(t.testimonials);
+  $('rating-line').value = t.rating_line;
 });
