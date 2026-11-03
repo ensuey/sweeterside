@@ -241,7 +241,7 @@ function normaliseClaimants(raw, lines, diners, tax) {
 function normaliseManual(raw, lines) {
   if (!raw) return null;
   const kind = String(raw.kind ?? '');
-  if (!MANUAL_KINDS.includes(kind)) throw new PricingError('manual', 'Choose % off or Php off.');
+  if (!MANUAL_KINDS.includes(kind)) throw new PricingError('manual', 'Choose % off or ₱ off.');
   const manual = { kind, bp: null, cents: null, line: null };
   if (kind === 'percent') {
     if (!isInt(raw.bp, 1, 10000)) throw new PricingError('manual', 'Take between 0.01% and 100% off.');

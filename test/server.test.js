@@ -393,7 +393,9 @@ test('an item removed from the menu is reported, not silently dropped', () => {
 test('order details are required and checked', () => {
   orders.setDeliveryFee(0);
   const e = orderErrors(orderInput({ name: ' ', phone: '12', address: '', cash: '' }));
-  assert.ok(e.name && e.phone && e.address && e.cash);
+  assert.ok(e.name && e.phone && e.address, 'name, phone and address are required');
+  assert.ok(!e.cash, 'cash is optional: blank means the exact amount');
+  assert.ok(orderErrors(orderInput({ cash: -5 })).cash, 'no negative cash');
 
   assert.ok(orderErrors(orderInput({ items: [] })).items, 'empty cart');
   assert.ok(orderErrors(orderInput({ items: 'lots' })).items, 'not an array');
@@ -402,7 +404,7 @@ test('order details are required and checked', () => {
   assert.ok(orderErrors(orderInput({ cash: 12.5 })).cash, 'cash must be whole pesos');
 
   const short = orderErrors(orderInput({ cash: 100 }));
-  assert.match(short.cash, /Php 343/, 'the error names the total');
+  assert.match(short.cash, /₱343/, 'the error names the total');
 });
 
 test('order status moves through the queue', () => {
@@ -749,7 +751,7 @@ test('best sellers get a badge and sale items show the old price and charge the 
   assert.match(card('Star Frappe'), /Best seller/);
   assert.match(card('Sale Frappe'), /data-price="103"/, 'the cart charges the sale price');
   assert.match(card('Sale Frappe'), /data-was="129"/);
-  assert.match(card('Sale Frappe'), /<s class="price__was">.*Php 129<\/s>/);
+  assert.match(card('Sale Frappe'), /<s class="price__was">.*₱129<\/s>/);
   assert.match(card('Sale Frappe'), /20% off/);
   for (const marker of ['data-best', 'data-was', 'price__was', 'card__sale']) {
     assert.ok(!card('Plain Frappe').includes(marker), `a plain item has no ${marker}`);
@@ -799,7 +801,7 @@ test('a voucher code is checked against the day and works out the discount', () 
     code: 'NOV', kind: 'amount', value: 10, valid_from: '2026-11-01', valid_until: '2026-11-30',
   });
 
-  assert.deepStrictEqual(vouchers.check(' tenoff ', 150), { code: 'TENOFF', label: '10% off (up to Php 20)', discount: 15 });
+  assert.deepStrictEqual(vouchers.check(' tenoff ', 150), { code: 'TENOFF', label: '10% off (up to ₱20)', discount: 15 });
   assert.strictEqual(vouchers.check('TENOFF', 400).discount, 20, 'capped');
   assert.strictEqual(vouchers.check('FIFTY', 30).discount, 30, 'never more than the items');
   assert.throws(() => vouchers.check('NOPE', 100), (e) => /don't know/.test(e.errors.voucher));
@@ -1083,7 +1085,7 @@ test('the cake page and endpoints: public booking, private photos, admin-only ma
   const html = render.buildCakesHtml(CAKE_NOW);
   const size = cakes.settings().sizes[0];
   assert.ok(html.includes(`value="${render.esc(size.name)}"`));
-  assert.match(html, new RegExp(`from <strong>Php ${size.from_price.toLocaleString('en-US')}</strong>`));
+  assert.match(html, new RegExp(`from <strong>₱${size.from_price.toLocaleString('en-US')}</strong>`));
   assert.match(html, /data-earliest="2026-10-26"/);
   assert.ok(!/<!--[A-Z_]+-->/.test(html), 'every placeholder is filled');
 

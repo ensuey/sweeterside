@@ -130,7 +130,7 @@ function validate(input) {
   const saleType = String(input.sale_type ?? '');
   let saleValue = null;
   if (!['', 'percent', 'amount'].includes(saleType)) {
-    errors.sale = 'Choose no sale, % off or Php off.';
+    errors.sale = 'Choose no sale, % off or ₱ off.';
   } else if (saleType) {
     saleValue = intOrNull(input.sale_value);
     if (saleValue === null || Number.isNaN(saleValue)) {
@@ -138,7 +138,7 @@ function validate(input) {
     } else if (saleType === 'percent' && (saleValue < 1 || saleValue > SALE_PERCENT_MAX)) {
       errors.sale = `Take between 1% and ${SALE_PERCENT_MAX}% off.`;
     } else if (saleType === 'amount' && price !== null && (saleValue < 1 || saleValue >= price)) {
-      errors.sale = 'Take at least Php 1 off, and less than the full price.';
+      errors.sale = 'Take at least ₱1 off, and less than the full price.';
     }
   }
 

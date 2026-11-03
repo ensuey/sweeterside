@@ -53,6 +53,12 @@
 
   <p class="alert" id="page-error" role="alert" hidden></p>
 
+  <!-- Menu health: items that would look better with a little more. -->
+  <section class="health" id="health" aria-labelledby="health-title" hidden>
+    <h3 class="health__title" id="health-title">Menu health</h3>
+    <div class="health__checks" id="health-checks"></div>
+  </section>
+
   <div id="groups"></div>
 
   <p class="empty-note" id="empty" hidden>
@@ -97,7 +103,7 @@
 
       <div class="row">
         <div class="field">
-          <label for="f-price">Price (Php)</label>
+          <label for="f-price">Price (₱)</label>
           <input id="f-price" name="price" type="number" min="0" max="100000" step="1" required>
           <p class="field__err" data-err="price" hidden></p>
         </div>
@@ -161,7 +167,7 @@
             <select id="f-sale-type" name="sale_type">
               <option value="">No sale</option>
               <option value="percent">% off</option>
-              <option value="amount">Php off</option>
+              <option value="amount">₱ off</option>
             </select>
           </div>
           <div class="field">
@@ -181,7 +187,7 @@
           <div class="shot" id="preview-shot"><img id="preview-img" src="" alt=""></div>
           <div class="preview__body">
             <span class="preview__name" id="preview-name">Item name</span>
-            <span class="preview__price" id="preview-price">Php 0</span>
+            <span class="preview__price" id="preview-price">₱0</span>
           </div>
         </div>
       </div>

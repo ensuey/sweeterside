@@ -252,7 +252,7 @@ function orderMessage(order) {
   const where = order.order_type === 'pickup'
     ? `Pick-up · ${order.pickup_at === 'asap' || !order.pickup_at ? 'ASAP' : order.pickup_at}`
     : order.order_type === 'dinein' ? `Dine-in · Table ${order.table_no}` : TYPE[order.order_type] || 'Order';
-  return { title: `New order #${order.id}`, body: `${where} · Php ${order.total}`, url: '/admin', tag: `order-${order.id}` };
+  return { title: `New order #${order.id}`, body: `${where} · ₱${order.total}`, url: '/admin', tag: `order-${order.id}` };
 }
 
 /** What a cake booking alert says. Number, date and size only. */

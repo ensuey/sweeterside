@@ -73,11 +73,82 @@ async function saveHours(event) {
   }
 }
 
+/* ---------------------------- order confirmation ---------------------------- */
+
+function showConfirm(s) {
+  $('call-minutes').value = s.confirm_call_minutes;
+  $('facebook-url').value = s.facebook_url;
+}
+
+async function saveConfirm(event) {
+  event.preventDefault();
+  const err = $('confirm-err');
+  err.hidden = true;
+  $('confirm-save').disabled = true;
+  try {
+    showConfirm(await api('/api/settings', {
+      method: 'PUT', body: { confirm_call_minutes: $('call-minutes').value, facebook_url: $('facebook-url').value },
+    }));
+    toast('Saved.');
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+  } finally {
+    $('confirm-save').disabled = false;
+  }
+}
+
+/* ---------------------------- share image ---------------------------- */
+
+const LOGO_SRC = '/assets/Sweeter%20Side%20-%20PNG.png';
+
+function showShare(s) {
+  $('share-preview').src = s.share_image ? `/${s.share_image.split('/').map(encodeURIComponent).join('/')}` : LOGO_SRC;
+  $('share-remove').hidden = !s.share_image;
+  $('share-status').textContent = s.share_image ? '' : 'Using the logo.';
+}
+
+/** Upload through the same pipeline as menu photos (type checked, metadata
+    stripped), then make it the share image. */
+async function uploadShare() {
+  const file = $('share-file').files[0];
+  if (!file) return;
+  $('share-status').textContent = 'Uploading…';
+  try {
+    const res = await fetch('/api/images', { method: 'POST', headers: { 'X-CSRF-Token': state.csrf }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Upload failed.');
+    const s = await api('/api/settings', { method: 'PUT', body: { share_image: data.path } });
+    showShare(s);
+    $('share-status').textContent = data.width / data.height < 1.6 || data.width < 1000
+      ? `Saved (${data.width} × ${data.height}). A wide picture, about 1200 × 630, shows best.`
+      : `Saved (${data.width} × ${data.height}).`;
+  } catch (e) {
+    $('share-status').textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+  } finally {
+    $('share-file').value = '';
+  }
+}
+
+async function removeShare() {
+  try {
+    showShare(await api('/api/settings', { method: 'PUT', body: { share_image: '' } }));
+    toast('The logo is used when the site is shared.');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
 $('trust-form').addEventListener('submit', saveTrust);
 $('hours-form').addEventListener('submit', saveHours);
+$('confirm-form').addEventListener('submit', saveConfirm);
+$('share-file').addEventListener('change', uploadShare);
+$('share-remove').addEventListener('click', removeShare);
 
 adminBoot(async () => {
   const s = await api('/api/settings');
   showHours(s);
   showTrust(s);
+  showConfirm(s);
+  showShare(s);
 });

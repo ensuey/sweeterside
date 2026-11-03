@@ -18,9 +18,7 @@
 <meta property="og:url" content="https://sweeterside.ph/">
 <meta property="og:title" content="Sweeter Side by Dachel — Café &amp; Cake Shop in San Isidro, Davao Oriental">
 <meta property="og:description" content="Coffee, frappes, cake slices, whole cakes, brownies and custom cakes at the San Isidro Public Market. Dine in, pick up or delivery.">
-<meta property="og:image" content="https://sweeterside.ph/assets/Sweeter%20Side%20-%20PNG.png">
-<meta property="og:image:alt" content="Sweeter Side by Dachel logo">
-<meta name="twitter:card" content="summary">
+<!--SHARE_TAGS-->
 <!--LD_JSON-->
 
 <link rel="icon" href="favicon.ico" sizes="48x48">
@@ -32,7 +30,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery-fee="<!--DELIVERY_FEE-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->">
+<body data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery-fee="<!--DELIVERY_FEE-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
 <!--SOON_BAR-->
 
 <a class="skip" href="#menu">Skip to menu</a>
@@ -64,6 +62,8 @@
 
 <main id="menu" class="wrap">
 
+<!--BEST-->
+
 <!--SECTIONS-->
 
   <div class="empty" role="status">
@@ -93,7 +93,7 @@
   <button class="cartbar__btn" type="button" id="cart-open">
     <span class="cartbar__n" id="cartbar-n">0 items</span>
     <span class="cartbar__label">View cart</span>
-    <span class="cartbar__total" id="cartbar-total">Php 0</span>
+    <span class="cartbar__total" id="cartbar-total">₱0</span>
   </button>
 </div>
 
@@ -112,10 +112,10 @@
     <ul class="cart__lines" id="cart-lines"></ul>
 
     <dl class="cart__sum" id="cart-sum">
-      <div><dt>Subtotal</dt><dd id="cart-subtotal">Php 0</dd></div>
-      <div id="cart-discount-row" hidden><dt>Voucher <span id="cart-voucher-code"></span></dt><dd id="cart-discount">−Php 0</dd></div>
-      <div id="cart-fee-row"><dt>Delivery fee</dt><dd id="cart-fee">Php 0</dd></div>
-      <div class="cart__total"><dt>Total</dt><dd id="cart-total">Php 0</dd></div>
+      <div><dt>Subtotal</dt><dd id="cart-subtotal">₱0</dd></div>
+      <div id="cart-discount-row" hidden><dt>Voucher <span id="cart-voucher-code"></span></dt><dd id="cart-discount">−₱0</dd></div>
+      <div id="cart-fee-row"><dt>Delivery fee</dt><dd id="cart-fee">₱0</dd></div>
+      <div class="cart__total"><dt>Total</dt><dd id="cart-total">₱0</dd></div>
     </dl>
 
     <p class="cart__closed" id="cart-closed" hidden>Online ordering is closed right now. Please call us or drop by the shop.</p>
@@ -135,7 +135,7 @@
       </fieldset>
 
       <h3 class="checkout__title">Your details</h3>
-      <p class="checkout__req">All fields are required.</p>
+      <p class="checkout__req">All fields are required unless marked optional.</p>
       <p class="cart__alert" id="cart-error" role="alert" hidden></p>
 
       <div class="cfield">
@@ -146,7 +146,8 @@
 
       <div class="cfield" data-for="delivery pickup">
         <label for="o-phone">Phone number</label>
-        <input id="o-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="0917 123 4567" required>
+        <input id="o-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="0917 123 4567" aria-describedby="o-phone-hint" required>
+        <p class="cfield__hint cfield__hint--below" id="o-phone-hint">A PH mobile number. We call or text it to confirm your order.</p>
         <p class="cfield__err" data-err="phone" hidden></p>
       </div>
 
@@ -175,10 +176,11 @@
       </div>
 
       <div class="cfield" data-for="delivery">
-        <label for="o-cash">Cash you will pay with <span class="cfield__hint">so we can bring your change</span></label>
+        <label for="o-cash">Cash you will pay with <span class="cfield__hint">optional, so we can bring your change</span></label>
         <div class="cfield__money">
-          <span aria-hidden="true">Php</span>
-          <input id="o-cash" name="cash" type="number" inputmode="numeric" min="0" step="1" required aria-describedby="o-change">
+          <span aria-hidden="true">₱</span>
+          <input id="o-cash" name="cash" type="number" inputmode="numeric" min="0" step="1" placeholder="Exact amount" aria-describedby="o-change">
+          <button class="cfield__exact" type="button" id="o-exact">Exact amount</button>
         </div>
         <p class="cfield__change" id="o-change" aria-live="polite"></p>
         <p class="cfield__err" data-err="cash" hidden></p>
@@ -220,6 +222,8 @@
   <div class="cart__done" id="cart-done" hidden>
     <h2 class="cart__title" id="done-title" tabindex="-1">Order received!</h2>
     <p>Your order number is <strong id="done-id"></strong>.</p>
+    <p class="done__when" id="done-when"></p>
+    <ul class="done__lines" id="done-lines"></ul>
     <dl class="cart__sum">
       <div id="done-discount-row" hidden><dt>Voucher <span id="done-voucher-code"></span></dt><dd id="done-discount"></dd></div>
       <div class="cart__total"><dt id="done-total-label">Total to pay</dt><dd id="done-total"></dd></div>
@@ -228,6 +232,11 @@
     </dl>
 
     <p id="done-next"></p>
+    <p class="done__call" id="done-call"></p>
+    <p class="done__links">
+      <a class="done__link" id="done-tel" href="tel:<!--SHOP_TEL-->">Call <!--SHOP_PHONE--></a>
+      <a class="done__link" id="done-fb" href="<!--FACEBOOK_URL-->" target="_blank" rel="noopener">Message us on Facebook</a>
+    </p>
 
     <button class="cart__back" type="button" data-close>Back to the menu</button>
   </div>

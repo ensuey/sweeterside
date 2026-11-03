@@ -201,6 +201,55 @@ function parseClosedNote(input) {
   return note;
 }
 
+/* ---------------------------- customer page settings ---------------------------- */
+
+// After an order: "We'll call you within about N minutes to confirm".
+const DEFAULT_CALL_MINUTES = 5;
+const FACEBOOK_HOSTS = ['facebook.com', 'www.facebook.com', 'm.facebook.com', 'fb.com', 'fb.me', 'm.me'];
+const FACEBOOK_DEFAULT = require('./business').BUSINESS.facebook;
+const URL_MAX = 200;
+
+function callMinutes() {
+  const n = Number(getSetting('confirm_call_minutes', String(DEFAULT_CALL_MINUTES)));
+  return Number.isInteger(n) && n > 0 ? n : DEFAULT_CALL_MINUTES;
+}
+
+/** The shop's Facebook (or Messenger) link, for "Message us on Facebook". */
+function facebookUrl() {
+  return getSetting('facebook_url', FACEBOOK_DEFAULT) || FACEBOOK_DEFAULT;
+}
+
+/** Only an https link to Facebook or Messenger; blank goes back to the default. */
+function parseFacebookUrl(input) {
+  const raw = String(input ?? '').trim();
+  if (!raw) return FACEBOOK_DEFAULT;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new ValidationError({ facebook_url: 'Paste the full link, starting with https://' });
+  }
+  if (url.protocol !== 'https:' || !FACEBOOK_HOSTS.includes(url.hostname.toLowerCase()) || raw.length > URL_MAX) {
+    throw new ValidationError({ facebook_url: 'Use your Facebook page or Messenger link, e.g. https://www.facebook.com/YourPage' });
+  }
+  return url.toString();
+}
+
+/** The image shown when the site is shared (Open Graph), or '' for the logo.
+    Must be a photo uploaded through the admin (metadata already stripped). */
+function shareImage() {
+  const rel = getSetting('share_image', '');
+  return rel && menu.resolveImage(rel) ? rel : '';
+}
+
+function parseShareImage(input) {
+  const rel = String(input ?? '').trim();
+  if (!rel) return '';
+  const img = rel.startsWith('assets/uploads/') ? menu.resolveImage(rel) : null;
+  if (!img) throw new ValidationError({ share_image: 'Upload the share image first, then save.' });
+  return img.rel;
+}
+
 /** What the menu says while ordering is closed, for the switch or the hours. */
 function closedMessage(now = new Date()) {
   const s = shopState(now);
@@ -314,6 +363,9 @@ function settings() {
     in_hours: state.in_hours,
     closing_soon: state.closing_soon,
     closed_note: closedNote(),
+    confirm_call_minutes: callMinutes(),
+    facebook_url: facebookUrl(),
+    share_image: shareImage(),
     require_confirm_delivery: requiresConfirmation('delivery'),
     require_confirm_pickup: requiresConfirmation('pickup'),
     require_confirm_dinein: requiresConfirmation('dinein'),
@@ -335,6 +387,9 @@ function updateSettings(input) {
     close_at: parseHour('close_at', { closing: true }),
     shop_open: parseSwitch('shop_open'),
     closed_note: parseClosedNote,
+    confirm_call_minutes: parseCount('confirm_call_minutes', 1, 120),
+    facebook_url: parseFacebookUrl,
+    share_image: parseShareImage,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
     require_confirm_pickup: parseSwitch('require_confirm_pickup'),
     require_confirm_dinein: parseSwitch('require_confirm_dinein'),
@@ -538,11 +593,12 @@ function create(input, { now = new Date() } = {}) {
     else if (landmark.length < LANDMARK_MIN) errors.landmark = 'Tell us a little more so the rider can find you.';
     else if (landmark.length > LANDMARK_MAX) errors.landmark = `Keep it under ${LANDMARK_MAX} characters.`;
 
-    const cashRaw = input.cash;
-    cash = Number(cashRaw);
+    // Optional: left blank, the customer pays the exact amount (set below,
+    // once the total is known) and no change is needed.
+    const cashRaw = typeof input.cash === 'string' ? input.cash.trim() : input.cash;
     const cashGiven = !(cashRaw === '' || cashRaw === null || cashRaw === undefined);
-    if (!cashGiven) errors.cash = 'Enter how much cash you will pay with.';
-    else if (!Number.isInteger(cash) || cash < 0 || cash > MAX_CASH) {
+    cash = cashGiven ? Number(cashRaw) : null;
+    if (cashGiven && (!Number.isInteger(cash) || cash < 0 || cash > MAX_CASH)) {
       errors.cash = 'Enter the cash as a whole number of pesos.';
     }
   }
@@ -607,8 +663,9 @@ function create(input, { now = new Date() } = {}) {
   if (Number(input.expected_total) !== q.total) {
     throw staleCart('Prices have changed since you opened the menu. Check the new total and place your order again.', q);
   }
+  if (type === 'delivery' && cash === null) cash = q.total; // blank: exact amount
   if (type === 'delivery' && cash < q.total) {
-    throw new ValidationError({ cash: `The total is Php ${q.total}, so the cash must be at least that.` });
+    throw new ValidationError({ cash: `The total is ₱${q.total}, so the cash must be at least that.` });
   }
   // Counter orders store no cash: they pay the total in person.
   const changeDue = type === 'delivery' ? cash - q.total : 0;
@@ -768,6 +825,6 @@ module.exports = {
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, getDeliveryFee, setDeliveryFee, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
-  closedNote, shopClosedError, requiresConfirmation, historyFor,
+  closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage,
   quote, create, insertLines, get, list, counts, setStatus,
 };

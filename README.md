@@ -135,7 +135,7 @@ and only that type's fields are shown. Every field shown is required.
 
 | Type | The customer gives | Pays |
 |---|---|---|
-| **Delivery** | name, phone, address, landmark / directions, cash they will pay with | cash on arrival, plus the delivery fee |
+| **Delivery** | name, phone, address, landmark / directions, cash they will pay with (optional: blank, or **Exact amount**, means no change) | cash on arrival, plus the delivery fee |
 | **Pick-up** | name, phone, pick-up time today | at the counter, no fee |
 | **Dine-in** | name, table number | at the counter, no fee |
 
@@ -144,9 +144,12 @@ minutes ahead, within the opening hours. Times are always Manila time
 (UTC+8), whatever the customer's phone is set to. Once no slot is left today,
 pick-up is hidden with "Pick-up is closed for today."
 
-Once the order is placed, the customer sees the order number and total, plus
-their cash and change for delivery, the pick-up time, or the table it will
-be brought to.
+Once the order is placed, the customer sees a confirmation: the order
+number, a summary of the lines, the order type and time, the total, their
+cash and change for delivery, and for delivery and pick-up "We'll call you
+within about N minutes to confirm" with a tap-to-call button and a "Message
+us on Facebook" link. N and the Facebook link are set on **Settings → Order
+confirmation** (default 5 minutes).
 
 Orders appear at the top of the admin, oldest first, with a badge for the
 type (and pick-up time or table). The page checks for new ones every 20
@@ -167,6 +170,10 @@ Next to the orders list the admin sets:
   itself; the server refuses orders outside the hours either way. The shop
   Open/Closed switch on Orders is an override: Closed closes ordering even
   within the hours (a holiday, closing early).
+- **Share image** (Settings page): the picture shown when the site is shared on
+  Facebook, Messenger or X (Open Graph), uploaded through the usual photo
+  pipeline (type checked, metadata stripped). Best at 1200 × 630. With one set,
+  X and Messenger show the large card; without one, the logo is used.
 
 All apply to the menu straight away. Orders placed before order types existed
 are kept as delivery orders.
@@ -310,7 +317,8 @@ receipts, and reports with the audit log at `/admin/reports`.
   the staff), delivery fees, voids, refunds, payments by method, and cash
   expected against cash counted.
 - **Receipts** print with the browser's print dialog on a slip laid out for
-  58 mm or 80 mm thermal paper (set on Staff). **Receipts** lists paid orders
+  58 mm or 80 mm thermal paper (set on Staff). **Currency on receipts** (Staff
+  → Receipts) prints ₱, or PHP for a printer font without the ₱ glyph. **Receipts** lists paid orders
   to reprint the receipt or the kitchen ticket. After Send to kitchen, **Print
   kitchen ticket** prints just the new items (no prices). A receipt shows:
   - the shop details, date, order number, cashier, and order type or table;
@@ -466,14 +474,20 @@ go past what is left, and the server checks again when the order is placed,
 so two customers cannot both take the last one: the second is told how many
 are left and their cart is cut down to that.
 
+**Menu health** (top of the Items page) lists the items on the menu that show
+the logo because they have no photo of their own, each with a link to edit it.
+Prices on the menu and in the admin show the peso sign (₱).
+
 ## Promotions: best sellers, sale prices and vouchers
 
 **Best seller and sale price** are set in the item editor on the Items page,
 under *Promotion*:
 
 - **Best seller** puts a "★ Best seller" badge on the menu card and in the
-  item popup.
-- **Sale** is a % off (1 to 90) or a Php amount off (less than the full
+  item popup, and the item in the **Best sellers** row at the top of the menu
+  (a sideways-scrolling row of the best sellers that can be ordered today;
+  hidden during a search or a category filter, and in the static index.html).
+- **Sale** is a % off (1 to 90) or a ₱ amount off (less than the full
   price). The menu shows the full price struck through next to the sale
   price, and the cart and the order charge the sale price. The full price is
   kept, so ending the sale is just choosing *No sale*.

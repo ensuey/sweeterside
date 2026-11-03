@@ -69,6 +69,39 @@
     <p class="alerts__state" id="hours-now" role="status"></p>
   </section>
 
+  <!-- What the customer sees right after ordering. -->
+  <section class="hours" aria-labelledby="confirm-title">
+    <h2 class="admin__title" id="confirm-title">Order confirmation</h2>
+    <p class="admin__sub">After a delivery or pick-up order the customer reads "We'll call you within about N minutes to confirm", with a tap-to-call button and a link to message you on Facebook.</p>
+    <form class="hours__form" id="confirm-form" novalidate>
+      <div class="field">
+        <label for="call-minutes">Call within (minutes)</label>
+        <input id="call-minutes" type="number" min="1" max="120" step="1" inputmode="numeric" required>
+      </div>
+      <div class="field field--wide">
+        <label for="facebook-url">Facebook or Messenger link</label>
+        <input id="facebook-url" type="url" maxlength="200" placeholder="https://www.facebook.com/YourPage">
+      </div>
+      <button class="btn btn--ghost" type="submit" id="confirm-save">Save</button>
+    </form>
+    <p class="field__err" id="confirm-err" hidden></p>
+  </section>
+
+  <!-- The picture shown when the site is shared on Facebook, Messenger or X. -->
+  <section class="hours" aria-labelledby="share-title">
+    <h2 class="admin__title" id="share-title">Share image</h2>
+    <p class="admin__sub">The picture shown when someone shares sweeterside.ph on Facebook, Messenger or X. Best at 1200 × 630 pixels (wide), JPEG or PNG. Without one, the logo is used.</p>
+    <div class="share">
+      <img class="share__preview" id="share-preview" alt="The current share image" width="1200" height="630">
+      <div class="share__actions">
+        <label class="btn btn--ghost" for="share-file">Upload a share image</label>
+        <input id="share-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        <button class="link-quiet" type="button" id="share-remove" hidden>Use the logo instead</button>
+        <p class="hint" id="share-status" role="status"></p>
+      </div>
+    </div>
+  </section>
+
   <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
   <section class="trust" aria-labelledby="trust-title">
     <h2 class="admin__title" id="trust-title">Fake-order protection</h2>

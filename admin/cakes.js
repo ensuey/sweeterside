@@ -85,7 +85,7 @@ function bookingHtml(b) {
             <select name="status">${options}</select>
           </label>
           <label class="stock__field">
-            <span>Price quoted (Php)</span>
+            <span>Price quoted (₱)</span>
             <input name="quoted_price" type="number" min="0" step="1" inputmode="numeric" value="${b.quoted_price ?? ''}">
           </label>
           <label class="stock__field cake__deposit">

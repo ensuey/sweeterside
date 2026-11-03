@@ -59,7 +59,7 @@ function businessNode() {
       '@type': 'OpeningHoursSpecification', dayOfWeek: DAYS, opens: hours().opens, closes: hours().closes,
     }],
     hasMap: b.map,
-    sameAs: [b.facebook, b.map],
+    sameAs: [orders.facebookUrl(), b.map],
     areaServed: b.deliveryAreas.map((name) => ({ '@type': 'Place', name: `${name}, ${b.address.locality}, ${b.address.region}` })),
   };
 }
@@ -161,7 +161,7 @@ function visitHtml() {
         <div>
           <h3>Call or text</h3>
           <p><a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a></p>
-          <p><a href="${esc(b.facebook)}" target="_blank" rel="noopener">Message us on Facebook</a></p>
+          <p><a href="${esc(orders.facebookUrl())}" target="_blank" rel="noopener">Message us on Facebook</a></p>
         </div>
         <div>
           <h3>Delivery</h3>
@@ -221,12 +221,12 @@ function aboutHtml({ groups, cakeSizes, leadDays, orderTypes }) {
   const h = hours();
   const types = orderTypes.map((t) => PAGE_TYPES[t]).filter(Boolean);
   const menuList = groups.map((g) => {
-    const items = g.items.slice(0, 8).map((i) => `<li>${esc(i.name)} <span class="about__price">Php ${esc(i.sale_price ?? i.price)}</span></li>`).join('');
+    const items = g.items.slice(0, 8).map((i) => `<li>${esc(i.name)} <span class="about__price">₱${esc(i.sale_price ?? i.price)}</span></li>`).join('');
     const more = g.items.length > 8 ? `<li><a href="/#menu">and ${g.items.length - 8} more on the menu</a></li>` : '';
     return `        <div class="about__group">\n          <h3>${esc(g.category.name)}</h3>\n          <ul>${items}${more}</ul>\n        </div>`;
   }).join('\n');
   const sizes = cakeSizes.filter((s) => s.from_price > 0)
-    .map((s) => `<li>${esc(s.name)}: from Php ${esc(s.from_price.toLocaleString('en-US'))}</li>`).join('');
+    .map((s) => `<li>${esc(s.name)}: from ₱${esc(s.from_price.toLocaleString('en-US'))}</li>`).join('');
   const facts = [
     ['Name', esc(b.name)],
     ['What we are', 'Café, coffee shop and cake shop'],
@@ -238,7 +238,7 @@ function aboutHtml({ groups, cakeSizes, leadDays, orderTypes }) {
     ['Delivery areas', `${esc(listOf(b.deliveryAreas))}; farther for a higher fee`],
     ['Custom cakes', `<a href="/cakes">Book online</a>, at least ${esc(leadDays)} days ahead`],
     ['Map', `<a href="${esc(b.map)}" target="_blank" rel="noopener">Google Maps</a>`],
-    ['Facebook', `<a href="${esc(b.facebook)}" target="_blank" rel="noopener">Sweeter Side by Dachel</a>`],
+    ['Facebook', `<a href="${esc(orders.facebookUrl())}" target="_blank" rel="noopener">Sweeter Side by Dachel</a>`],
   ].map(([k, v]) => `          <div><dt>${k}</dt><dd>${v}</dd></div>`).join('\n');
 
   return `  <section class="about__section" aria-labelledby="who-title">
@@ -267,7 +267,7 @@ ${menuList || '        <p>The menu is being updated.</p>'}
     <ul>
       <li><strong>Online:</strong> ${types.length ? `order on <a href="/">our menu</a> for ${esc(listOf(types))}.` : 'online ordering is closed right now.'} Online ordering is open ${esc(h.label.replace(/^Open daily, /, 'every day, '))}.</li>
       <li><strong>Delivery:</strong> to ${esc(listOf(b.deliveryAreas))}, and farther for a higher delivery fee. Delivery orders are paid in cash when they arrive.</li>
-      <li><strong>By phone:</strong> call or text <a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a>, or message us on <a href="${esc(b.facebook)}" target="_blank" rel="noopener">Facebook</a>.</li>
+      <li><strong>By phone:</strong> call or text <a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a>, or message us on <a href="${esc(orders.facebookUrl())}" target="_blank" rel="noopener">Facebook</a>.</li>
     </ul>
   </section>
 
@@ -315,7 +315,7 @@ function aboutLd() {
 function llmsTxt(groups) {
   const b = BUSINESS;
   const menuLines = groups.map((g) => `### ${g.category.name}\n${g.items
-    .map((i) => `- ${i.name}: Php ${i.sale_price ?? i.price}${i.sold_out ? ' (sold out today)' : ''}`).join('\n')}`).join('\n\n');
+    .map((i) => `- ${i.name}: ₱${i.sale_price ?? i.price}${i.sold_out ? ' (sold out today)' : ''}`).join('\n')}`).join('\n\n');
   return `# ${b.name}
 
 > ${b.description}
@@ -324,13 +324,13 @@ function llmsTxt(groups) {
 - Map: ${b.map}
 - Hours: ${hours().label}
 - Phone: ${b.phone.display}
-- Facebook: ${b.facebook}
+- Facebook: ${orders.facebookUrl()}
 - Delivery: ${b.deliveryAreas.join(', ')}; farther for a higher fee. Delivery is cash on delivery.
 - Order online: ${b.url}/ (delivery, pick-up or dine-in)
 - Custom cakes: ${b.url}/cakes
 - About us: ${b.url}/about
 
-## Menu (prices in Philippine pesos)
+## Menu (prices in Philippine pesos, ₱)
 
 ${menuLines || 'The menu is being updated.'}
 

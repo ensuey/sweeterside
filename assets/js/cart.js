@@ -68,7 +68,7 @@
 
   /* ---------------------------- helpers ---------------------------- */
 
-  function money(n) { return 'Php ' + Number(n).toLocaleString('en-US'); }
+  function money(n) { return '₱' + Number(n).toLocaleString('en-US'); }
   function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
   function count() {
@@ -414,7 +414,9 @@
     var out = $('o-change');
     var raw = $('o-cash').value.trim();
     out.classList.remove('is-short');
-    if (raw === '' || !count()) { out.textContent = ''; return; }
+    if (!count()) { out.textContent = ''; return; }
+    // Left blank: the customer pays the exact amount.
+    if (raw === '') { out.textContent = 'Blank means the exact amount: no change needed.'; return; }
 
     var cash = Number(raw);
     var due = total();
@@ -476,14 +478,13 @@
       var line = find(id);
       if (line) lines.splice(lines.indexOf(line), 1);
       delete catalog[id];
-      // Grey the card as the server would now render it.
-      var card = document.querySelector('.card[data-id="' + id + '"]');
-      if (card) {
+      // Grey the card (and its copy in Best sellers) as the server would now render it.
+      Array.prototype.forEach.call(document.querySelectorAll('.card[data-id="' + id + '"]'), function (card) {
         card.classList.add('card--soldout');
         card.setAttribute('data-soldout', '');
         var btn = card.querySelector('[data-add]');
         if (btn) btn.hidden = true;
-      }
+      });
     });
     // Fewer left today than the cart held: take what is left.
     Object.keys(quote.limits || {}).forEach(function (id) {
@@ -565,9 +566,9 @@
       if (!address) errors.address = 'Enter the delivery address.';
       if (!landmark) errors.landmark = 'Add a landmark or directions, e.g. beside 7-Eleven, green gate.';
       else if (landmark.length < 5) errors.landmark = 'Tell us a little more so the rider can find you.';
-      if (!cashRaw) errors.cash = 'Enter how much cash you will pay with.';
-      else if (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash) errors.cash = 'Enter the cash as a whole number of pesos.';
-      else if (cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
+      // Cash is optional: blank is the exact amount.
+      if (cashRaw && (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash)) errors.cash = 'Enter the cash as a whole number of pesos.';
+      else if (cashRaw && cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
     }
 
     if (type === 'pickup' && !form.elements.pickup_at.value) {
@@ -589,20 +590,40 @@
     $('done-total-label').textContent = counter ? 'Total to pay at the counter' : 'Total to pay';
     $('done-cash-row').hidden = counter;
     $('done-change-row').hidden = counter;
-    $('done-cash').textContent = money(order.cash);
+    $('done-cash').textContent = order.change_due === 0 ? 'Exact amount' : money(order.cash);
     $('done-change').textContent = order.change_due === 0 ? 'None (exact amount)' : money(order.change_due);
 
+    // What was ordered, as a short summary.
+    var lines = $('done-lines');
+    lines.textContent = '';
+    (order.items || []).forEach(function (l) {
+      var li = el('li', '', l.qty + ' × ' + l.name);
+      li.appendChild(el('span', 'done__line-total', money(l.price * l.qty)));
+      lines.appendChild(li);
+    });
+
+    // The type of order and when.
+    var when;
     var next;
     if (order.order_type === 'pickup') {
+      when = order.pickup_at === 'asap' ? 'Pick-up · as soon as it is ready' : 'Pick-up · ' + clockLabel(toMinutes(order.pickup_at)) + ' today';
       next = order.pickup_at === 'asap'
         ? 'Pick it up as soon as it is ready. Dachel will call you when it is.'
         : 'Pick it up at ' + clockLabel(toMinutes(order.pickup_at)) + ' today.';
     } else if (order.order_type === 'dinein') {
+      when = 'Dine-in · table ' + order.table_no;
       next = 'We will bring it to table ' + order.table_no + '.';
     } else {
-      next = 'Dachel will call you to confirm.';
+      when = 'Delivery · today';
+      next = 'Pay in cash when it arrives.';
     }
+    $('done-when').textContent = when;
     $('done-next').textContent = next;
+    // Dine-in customers are in the shop; the others get a call to confirm.
+    var minutes = Number(document.body.dataset.callMinutes) || 5;
+    $('done-call').textContent = order.order_type === 'dinein' ? ''
+      : "We'll call you within about " + minutes + ' minute' + (minutes === 1 ? '' : 's') + ' to confirm.';
+    $('done-call').hidden = order.order_type === 'dinein';
 
     view.hidden = true;
     done.hidden = false;
@@ -783,6 +804,11 @@
   $('cart-open').addEventListener('click', open);
   form.addEventListener('submit', submit);
   $('o-cash').addEventListener('input', renderChange);
+  // Exact amount: the total, so no change is needed (blank means the same).
+  $('o-exact').addEventListener('click', function () {
+    $('o-cash').value = String(total());
+    renderChange();
+  });
   form.addEventListener('change', function (e) {
     if (e.target.name === 'type') setType(e.target.value);
   });

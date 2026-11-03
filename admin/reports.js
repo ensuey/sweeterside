@@ -2,7 +2,7 @@
 /* Reports page (owner only): sales by day, item, category, order type,
    source and staff; payments by method; discounts; the SC/PWD report;
    vouchers and manual discounts; the audit log; and the year's gross sales
-   against the Php 3M limit. Loaded after common.js and staff-gate.js. */
+   against the ₱3M limit. Loaded after common.js and staff-gate.js. */
 
 const R = { view: 'sales', from: '', to: '', audit: null };
 

@@ -131,7 +131,7 @@ function orderHtml(o) {
     : type === 'delivery'
     ? `<dt>Customer pays with</dt><dd>${money(o.cash)}</dd>
         <dd class="order__change">${o.change_due === 0
-          ? 'Exact amount, no change needed'
+          ? 'Exact / no change needed'
           : `Bring ${money(o.change_due)} change`}</dd>`
     : '<dd class="order__change">Pays at the counter</dd>';
 
