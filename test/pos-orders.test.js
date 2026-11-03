@@ -26,6 +26,11 @@ const vouchers = require('../server/vouchers');
 
 seedIfEmpty();
 
+// Delivery orders name an area. This one has a fee the tests can change.
+const deliveryAreas = require('../server/delivery');
+const TEST_AREA = deliveryAreas.create({ name: 'Test Area', fee: 0, eta_min: 30, eta_max: 45 });
+const setTestFee = (fee) => deliveryAreas.update(TEST_AREA.id, { name: 'Test Area', fee, eta_min: 30, eta_max: 45 });
+
 const owner = staff.create({ name: 'Dachel', role: 'owner', pin: '2580' }, null);
 const cashier = staff.create({ name: 'Ana', role: 'cashier', pin: '3691' }, owner);
 const waiter = staff.create({ name: 'Ben', role: 'waiter', pin: '4702' }, owner);
@@ -250,9 +255,9 @@ test('SC/PWD, vouchers, service charge and the delivery fee through the POS', ()
   assert.deepStrictEqual([v.voucher_code, v.discount, v.total], ['POS20', 20, 109]);
   assert.strictEqual(vouchers.list().find((x) => x.code === 'POS20').uses, 0, 'not used until paid');
 
-  orders.setDeliveryFee(50);
+  setTestFee(50);
   const d = {
-    request_key: key(), type: 'delivery', customer_name: 'Carlo', phone: '+63 917 555 0101', address: '2 Rizal St',
+    request_key: key(), type: 'delivery', delivery_area: TEST_AREA.id, customer_name: 'Carlo', phone: '+63 917 555 0101', address: '2 Rizal St',
     landmark: 'Blue gate by the chapel', lines: [newLine(MATCHA())],
   };
   const del = pos.save(null, d, cashier).order;
@@ -261,7 +266,7 @@ test('SC/PWD, vouchers, service charge and the delivery fee through the POS', ()
   const far = pos.save(null, { ...d, request_key: key(), discounts: { delivery_fee: 80, fee_reason: 'Next town' } }, cashier).order;
   assert.strictEqual(far.total, 209);
   assert.strictEqual(audit.list({ action: 'delivery_fee_changed' })[0].reason, 'Next town');
-  orders.setDeliveryFee(0);
+  setTestFee(0);
 });
 
 test('SC/PWD is refused until the tax status is set', () => {

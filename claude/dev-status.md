@@ -5,8 +5,8 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 194 (`npm test`):
-- 60 in `test/server.test.js`
+**Tests:** 202 (`npm test`):
+- 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
@@ -21,6 +21,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 9 in `test/seo.test.js`
 - 6 in `test/hours.test.js`
 - 12 in `test/cro.test.js`
+- 9 in `test/delivery.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -339,6 +340,28 @@ suggestions, E pre-orders, F cakes page and testimonials.
     are 44 px touch targets. Checked at 360 px: no sideways scroll, 16 px
     inputs, and a real order placed with blank cash.
   - **Tests:** `test/cro.test.js` (12).
+- **PR B: delivery areas.**
+  - **Areas** (`server/delivery.js`, table `delivery_areas`): name, fee
+    (blank = not set, so not offered), usual time from–to in minutes, on/off,
+    order. Seeded once with Batobato, Manikling, Baon and Bitaogan, no fees.
+    Managed under Settings → **Delivery areas** (`/api/delivery-areas`).
+  - **Pricing:** the fee comes from the area on the server
+    (`delivery.resolve`); the browser's fee is never used. The pricing engine
+    takes `delivery.free_over_cents`: items after every discount at or over
+    the threshold pay no fee. The checkout and the POS share it.
+  - **Other area:** ₱0 at order time, `fee_to_confirm = 1`, a "Fee to
+    confirm" flag on the Orders card and in the POS; the customer reads
+    "Delivery fee: to be confirmed".
+  - **Orders** gain `delivery_area_id`, `delivery_area` (name snapshot) and
+    `fee_to_confirm` (additive columns). The single `delivery_fee` setting
+    and the Orders-page fee field are gone (the old row stays, unread).
+  - **Cart:** area dropdown with fee and time, the time under it, "Add ₱X
+    more for free delivery", and the area and time on the confirmation.
+  - **Site text:** Delivery section, FAQ, About, `llms.txt` and `areaServed`
+    come from the areas that are on (`BUSINESS.deliveryAreas` removed).
+  - Checked in the browser: fees, times, Other area, free delivery at the
+    threshold, a placed order, the Settings section and the POS dropdown.
+  - **Tests:** `test/delivery.test.js` (9).
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -406,6 +429,9 @@ After deploying (owner, once):
     opening hours setting is one pair of times for every day).
   - For `/about`: the year the shop opened, a few lines about Dachel, best
     sellers, and shop and cake photos.
+- After PR B (owner): Settings → **Delivery areas**: enter each area's fee
+  and usual time. Until then delivery customers can only pick "Other area".
+  Optionally set **Free delivery from**.
 - After PR A (owner): Settings → **Order confirmation** (minutes, Facebook
   link) and **Share image** (1200 × 630); Staff → Receipts → **Currency on
   receipts** if the printer shows a box for ₱; add photos for the items listed

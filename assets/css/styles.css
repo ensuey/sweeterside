@@ -551,6 +551,8 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .cfield__err[hidden] { display: none; }
 
 .cart__done p { margin: 0; }
+.cart__free { margin: 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-sm); background: #EEF6F0; color: #1F5A3A; font-weight: 700; font-size: .9375rem; }
+.cart__free[hidden] { display: none; }
 .done__when { font-weight: 700; }
 .done__lines { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .done__lines li { display: flex; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
@@ -668,6 +670,7 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4);
 }
 .visit address { font-style: normal; }
+.visit__areas { margin: 0 0 var(--sp-2); padding-left: 1.1rem; }
 .visit p, .visit address { margin: 0 0 var(--sp-2); }
 .visit a, .faq a { color: var(--navy); }
 /* Phone, map and Facebook links on their own lines: a full-size touch target. */

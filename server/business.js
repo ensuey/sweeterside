@@ -24,8 +24,7 @@ const BUSINESS = {
   // Opening hours are set on the Settings page (see seo.hours()).
   map: 'https://www.google.com/maps?cid=6144996303293417236',
   facebook: 'https://www.facebook.com/SweeterSideByDachel',
-  // Farther than these is possible for a higher delivery fee.
-  deliveryAreas: ['Batobato', 'Manikling', 'Baon', 'Bitaogan'],
+  // Delivery areas, fees and times are set on the Settings page (server/delivery.js).
   serves: ['Coffee', 'Frappes', 'Cakes', 'Cake slices', 'Brownies', 'Pastries', 'Desserts', 'Pasta', 'Sandwiches'],
   priceRange: '₱',
 };

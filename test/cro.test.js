@@ -25,12 +25,16 @@ seedIfEmpty();
 // Ordering follows the opening hours. Open all day, so no test depends on the clock.
 orders.updateSettings({ open_at: '00:00', close_at: '24:00' });
 
+// Delivery orders name an area.
+const deliveryAreas = require('../server/delivery');
+const TEST_AREA = deliveryAreas.create({ name: 'Test Area', fee: 0, eta_min: 30, eta_max: 45 });
+
 const ROOT = path.join(__dirname, '..');
 const item = (name) => menu.list().find((i) => i.name === name);
 const cardOf = (html, name) => html.split('<li class="card').find((c) => c.includes(`data-name="${name}"`));
 const errorsOf = (fn) => { try { fn(); return null; } catch (e) { return e.errors || e; } };
 const deliveryInput = (over = {}) => ({
-  type: 'delivery', name: 'Ana Reyes', phone: '0917 123 4567', address: '12 Mabini St', landmark: 'green gate beside the store',
+  type: 'delivery', delivery_area: TEST_AREA.id, name: 'Ana Reyes', phone: '0917 123 4567', address: '12 Mabini St', landmark: 'green gate beside the store',
   items: [{ id: item('Matcha Frappe').id, qty: 1 }], expected_total: 129,
   checkout_token: checkout.issue(new Date(Date.now() - 10000)), ...over,
 });

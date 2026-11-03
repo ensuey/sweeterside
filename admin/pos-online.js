@@ -250,6 +250,7 @@ function renderOnline() {
     <div class="od__who">
       <span class="od__name">${esc(o.customer_name)}</span>
       ${o.phone ? `<a href="tel:${esc(o.phone_norm || o.phone)}">${esc(o.phone)}</a>` : ''}
+      ${o.order_type === 'delivery' && o.delivery_area ? `<span class="order__area"><strong>Area:</strong> ${esc(o.delivery_area)}${o.fee_to_confirm ? ' <span class="flag flag--warn">Fee to confirm</span>' : ''}</span>` : ''}
       ${o.order_type === 'delivery' ? `<span>${esc(o.address)}</span>` : ''}
       ${o.order_type === 'delivery' && o.landmark ? `<span><strong>Landmark:</strong> ${esc(o.landmark)}</span>` : ''}
       ${flags ? `<span class="order__flags">${flags}</span>` : ''}

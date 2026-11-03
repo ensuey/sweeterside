@@ -46,7 +46,7 @@ test('the homepage names the place and the keywords, and shows the facts as text
   assert.ok(html.includes(BUSINESS.address.street) && html.includes(BUSINESS.address.postalCode));
   assert.ok(html.includes(`href="tel:${BUSINESS.phone.tel}"`) && html.includes(BUSINESS.phone.display));
   assert.ok(html.includes(require('../server/seo').hours().label), 'the opening hours from Settings');
-  for (const area of BUSINESS.deliveryAreas) assert.ok(html.includes(area), area);
+  for (const area of require('../server/delivery').list().map((a) => a.name)) assert.ok(html.includes(area), area);
   assert.ok(html.includes('id="visit"') && html.includes('id="faq"'));
   assert.ok(!/<!--[A-Z_]+-->/.test(html), 'every placeholder is filled');
 });
@@ -193,7 +193,7 @@ test('the About us page is indexable, linked, in the sitemap, and says only the 
     // The facts, the same as everywhere else.
     assert.ok(html.includes(BUSINESS.address.street) && html.includes(BUSINESS.phone.display));
     assert.ok(html.includes(seo.hours().label));
-    for (const area of BUSINESS.deliveryAreas) assert.ok(html.includes(area), area);
+    for (const area of require('../server/delivery').list().map((a) => a.name)) assert.ok(html.includes(area), area);
     // Today's menu with prices, and the cake sizes and notice.
     assert.ok(html.includes('Matcha Frappe <span class="about__price">₱129</span>'));
     const s = cakes.settings();

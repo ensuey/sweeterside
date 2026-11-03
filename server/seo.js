@@ -7,6 +7,36 @@
 const { BUSINESS, addressLine } = require('./business');
 const { manilaDate } = require('./clock');
 const orders = require('./orders');
+const delivery = require('./delivery');
+
+/* The delivery areas that are on, from Settings: the site's delivery text,
+   the FAQ, the About page, llms.txt and the structured data all come from
+   them, so they never go stale. */
+function deliveryAreas() {
+  return delivery.list().filter((a) => a.active);
+}
+
+/** "Batobato (₱50, usually 30–45 min)"; an area without a fee yet says so. */
+function areaText(a) {
+  const parts = [a.fee === null ? 'fee to confirm' : a.fee === 0 ? 'free' : `₱${a.fee}`];
+  const eta = delivery.etaLabel(a);
+  if (eta) parts.push(eta.replace(/^Usually /, 'usually '));
+  return `${a.name} (${parts.join(', ')})`;
+}
+
+/** ' Free delivery on orders of ₱500 or more.' when the threshold is on. */
+function freeLine() {
+  const free = delivery.freeOver();
+  return free ? ` Free delivery on orders of ₱${free} or more.` : '';
+}
+
+/** The whole delivery answer, used by the FAQ, the About page and llms.txt. */
+function deliveryAnswer() {
+  const list = deliveryAreas();
+  const where = list.length ? `We deliver to ${listOf(list.map(areaText))}.` : 'We deliver around San Isidro.';
+  return `${where}${freeLine()} Other places are possible: choose "Other area" and we call you with the fee. `
+    + 'Delivery orders are paid in cash when they arrive.';
+}
 
 /** The opening hours from Settings, the same every day. */
 function hours() {
@@ -60,7 +90,7 @@ function businessNode() {
     }],
     hasMap: b.map,
     sameAs: [orders.facebookUrl(), b.map],
-    areaServed: b.deliveryAreas.map((name) => ({ '@type': 'Place', name: `${name}, ${b.address.locality}, ${b.address.region}` })),
+    areaServed: deliveryAreas().map((a) => ({ '@type': 'Place', name: `${a.name}, ${b.address.locality}, ${b.address.region}` })),
   };
 }
 
@@ -68,7 +98,6 @@ function businessNode() {
     The same list is shown on the page and sent as FAQPage data. */
 function faqs() {
   const b = BUSINESS;
-  const areas = b.deliveryAreas.slice(0, -1).join(', ') + ' and ' + b.deliveryAreas.at(-1);
   return [
     ['Where is Sweeter Side by Dachel?',
       `We are at ${addressLine()}, Philippines, inside the San Isidro Public Market.`],
@@ -76,8 +105,7 @@ function faqs() {
     ['Do you sell cakes and pastries?',
       'Yes. We have slices of cake, whole cakes and brownies at the café, and we bake custom cakes to order for birthdays and celebrations. Book a custom cake on our cakes page.'],
     ['Do you serve coffee?', 'Yes. We serve coffee and frappe-based drinks, along with pasta and sandwiches.'],
-    ['Do you deliver?',
-      `Yes. We deliver to ${areas}. Farther places are possible for a higher delivery fee. Delivery orders are paid in cash when they arrive.`],
+    ['Do you deliver?', `Yes. ${deliveryAnswer()}`],
     ['How do I order?',
       `Order on this page for delivery, pick-up or dine-in, call or text ${b.phone.display}, or message us on Facebook.`],
   ];
@@ -165,7 +193,8 @@ function visitHtml() {
         </div>
         <div>
           <h3>Delivery</h3>
-          <p>We deliver to ${esc(b.deliveryAreas.join(', '))}. Farther is possible for a higher delivery fee.</p>
+          ${deliveryAreas().length ? `<ul class="visit__areas">${deliveryAreas().map((a) => `<li>${esc(areaText(a))}</li>`).join('')}</ul>` : ''}
+          <p>${esc(freeLine().trim())}${freeLine() ? ' ' : ''}Somewhere else? Choose "Other area" and we call you with the fee.</p>
         </div>
       </div>
     </div>
@@ -235,7 +264,7 @@ function aboutHtml({ groups, cakeSizes, leadDays, orderTypes }) {
     ['Phone', `<a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a>`],
     ['We serve', esc(listOf(b.serves.map((s) => s.toLowerCase())))],
     ['Order', esc(types.length ? `Online for ${listOf(types)}` : 'Call or message us')],
-    ['Delivery areas', `${esc(listOf(b.deliveryAreas))}; farther for a higher fee`],
+    ['Delivery areas', `${esc(listOf(deliveryAreas().map((a) => a.name)) || 'around San Isidro')}; other places: we call you with the fee`],
     ['Custom cakes', `<a href="/cakes">Book online</a>, at least ${esc(leadDays)} days ahead`],
     ['Map', `<a href="${esc(b.map)}" target="_blank" rel="noopener">Google Maps</a>`],
     ['Facebook', `<a href="${esc(orders.facebookUrl())}" target="_blank" rel="noopener">Sweeter Side by Dachel</a>`],
@@ -266,7 +295,7 @@ ${menuList || '        <p>The menu is being updated.</p>'}
     <h2 id="order-title">How to order</h2>
     <ul>
       <li><strong>Online:</strong> ${types.length ? `order on <a href="/">our menu</a> for ${esc(listOf(types))}.` : 'online ordering is closed right now.'} Online ordering is open ${esc(h.label.replace(/^Open daily, /, 'every day, '))}.</li>
-      <li><strong>Delivery:</strong> to ${esc(listOf(b.deliveryAreas))}, and farther for a higher delivery fee. Delivery orders are paid in cash when they arrive.</li>
+      <li><strong>Delivery:</strong> ${esc(deliveryAnswer())}</li>
       <li><strong>By phone:</strong> call or text <a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a>, or message us on <a href="${esc(orders.facebookUrl())}" target="_blank" rel="noopener">Facebook</a>.</li>
     </ul>
   </section>
@@ -325,7 +354,7 @@ function llmsTxt(groups) {
 - Hours: ${hours().label}
 - Phone: ${b.phone.display}
 - Facebook: ${orders.facebookUrl()}
-- Delivery: ${b.deliveryAreas.join(', ')}; farther for a higher fee. Delivery is cash on delivery.
+- Delivery: ${deliveryAnswer()}
 - Order online: ${b.url}/ (delivery, pick-up or dine-in)
 - Custom cakes: ${b.url}/cakes
 - About us: ${b.url}/about

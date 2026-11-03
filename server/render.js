@@ -11,6 +11,7 @@ const orders = require('./orders');
 const cakes = require('./cakes');
 const seo = require('./seo');
 const { BUSINESS } = require('./business');
+const delivery = require('./delivery');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const CAKES_TEMPLATE = path.join(ROOT, 'templates', 'cakes.html');
@@ -139,6 +140,27 @@ ${best.map(({ item, category }, i) => cardHtml(item, category, { eager: i < EAGE
   </section>`;
 }
 
+/** What the cart needs to price delivery: the areas a customer can pick (fee
+    and usual time), and the free delivery threshold. The server prices the
+    order again; this is only so the cart shows the right total. */
+function deliveryData() {
+  return {
+    areas: delivery.selectable().map((a) => ({ id: a.id, name: a.name, fee: a.fee, eta: delivery.etaLabel(a) })),
+    free_min: delivery.freeOver(),
+  };
+}
+
+/** The area dropdown at checkout: the areas with a fee, then "Other area". */
+function areaOptionsHtml() {
+  const opts = delivery.selectable().map((a) => {
+    const eta = delivery.etaLabel(a);
+    const label = `${a.name} · ${a.fee === 0 ? 'free delivery' : `₱${a.fee}`}${eta ? ` · ${eta.charAt(0).toLowerCase()}${eta.slice(1)}` : ''}`;
+    return `          <option value="${a.id}">${esc(label)}</option>`;
+  });
+  return ['          <option value="">Choose your area</option>', ...opts,
+    '          <option value="other">Other area (we call you with the fee)</option>'].join('\n');
+}
+
 /** The share image (Open Graph) set in Settings, or the logo. A wide share
     image gets the large card on X/Twitter and Messenger. */
 function shareTagsHtml() {
@@ -225,7 +247,8 @@ function buildHtml(allItems = menu.list(), cats = categories.list(), now = new D
     .replace('<!--SOON_MINUTES-->', String(orders.CLOSING_SOON_MINUTES))
     .replace('<!--SOON_BAR-->', () => soonBarHtml(state))
     .replace('<!--SHOP_STATUS-->', () => shopStatusHtml(state, orders.closedNote()))
-    .replace('<!--DELIVERY_FEE-->', String(orders.getDeliveryFee()))
+    .replace('<!--DELIVERY_AREAS-->', () => esc(JSON.stringify(deliveryData())))
+    .replace('<!--AREA_OPTIONS-->', () => areaOptionsHtml())
     .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))

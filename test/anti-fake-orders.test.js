@@ -30,12 +30,16 @@ seedIfEmpty();
 // Ordering follows the opening hours. Open all day, so no test depends on the clock.
 require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 
+// Delivery orders name an area.
+const deliveryAreas = require('../server/delivery');
+const TEST_AREA = deliveryAreas.create({ name: 'Test Area', fee: 0, eta_min: 30, eta_max: 45 });
+
 const MATCHA = () => menu.list().find((i) => i.name === 'Matcha Frappe'); // Php 129
 
 /** A delivery order of one Matcha Frappe (no delivery fee is set). */
 function orderInput(over = {}) {
   return {
-    type: 'delivery', name: 'Test Customer', phone: '0917 123 4567',
+    type: 'delivery', delivery_area: TEST_AREA.id, name: 'Test Customer', phone: '0917 123 4567',
     address: '12 Mabini St, Brgy. Uno', landmark: 'beside 7-Eleven, green gate', cash: 200,
     items: [{ id: MATCHA().id, qty: 1 }], expected_total: 129,
     checkout_token: checkout.issue(new Date(Date.now() - 10000)),

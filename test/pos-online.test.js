@@ -27,6 +27,10 @@ seedIfEmpty();
 // Ordering follows the opening hours. Open all day, so no test depends on the clock.
 require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 
+// Delivery orders name an area.
+const deliveryAreas = require('../server/delivery');
+const TEST_AREA = deliveryAreas.create({ name: 'Test Area', fee: 0, eta_min: 30, eta_max: 45 });
+
 const owner = staff.create({ name: 'Dachel', role: 'owner', pin: '2580' }, null);
 const cashier = staff.create({ name: 'Ana', role: 'cashier', pin: '3691' }, owner);
 const waiter = staff.create({ name: 'Ben', role: 'waiter', pin: '4702' }, owner);
@@ -42,7 +46,7 @@ function online(type = 'delivery') {
     checkout_token: checkout.issue(new Date(Date.now() - 10000)),
   };
   if (type === 'delivery') {
-    Object.assign(base, { phone: `0917 222 33${++phoneSeq}`, address: '12 Mabini St', landmark: 'green gate', cash: 200 });
+    Object.assign(base, { phone: `0917 222 33${++phoneSeq}`, address: '12 Mabini St', landmark: 'green gate', cash: 200, delivery_area: TEST_AREA.id });
   } else if (type === 'pickup') {
     Object.assign(base, { phone: `0917 222 33${++phoneSeq}`, pickup_at: 'asap' });
   } else {

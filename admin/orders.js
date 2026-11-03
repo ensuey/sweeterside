@@ -147,6 +147,7 @@ function orderHtml(o) {
       <div class="order__who">
         <span class="order__name">${esc(o.customer_name)}</span>
         ${o.phone ? `<a class="order__phone" href="tel:${esc(o.phone_norm || o.phone)}">${esc(o.phone)}</a>` : ''}
+        ${type === 'delivery' && o.delivery_area ? `<span class="order__area"><strong>Area:</strong> ${esc(o.delivery_area)}${o.fee_to_confirm ? ' <span class="flag flag--warn">Fee to confirm</span>' : ''}</span>` : ''}
         ${type === 'delivery' ? `<span class="order__addr">${esc(o.address)}</span>` : ''}
         ${type === 'delivery' && o.landmark ? `<span class="order__landmark"><strong>Landmark:</strong> ${esc(o.landmark)}</span>` : ''}
         ${flagsHtml(o)}
@@ -160,6 +161,7 @@ function orderHtml(o) {
         ${o.manual_discount > 0 ? `<dt>Discount</dt><dd class="order__discount">−${money(o.manual_discount)}</dd>` : ''}
         ${o.service_charge > 0 ? `<dt>Service charge</dt><dd>${money(o.service_charge)}</dd>` : ''}
         ${o.delivery_fee > 0 ? `<dt>Delivery fee</dt><dd>${money(o.delivery_fee)}</dd>` : ''}
+        ${o.fee_to_confirm ? '<dt>Delivery fee</dt><dd>To confirm by call</dd>' : ''}
         <dt class="is-total">Total</dt><dd class="is-total">${money(o.total)}</dd>
         ${payment}
       </dl>
@@ -298,7 +300,6 @@ async function submitBlock(event) {
 }
 
 function showSettings(s) {
-  $('fee').value = s.delivery_fee;
   ORDER_TYPES.forEach((t) => { $(`on-${t}`).checked = s[`${t}_enabled`]; });
   showShop(s);
 }
@@ -361,7 +362,6 @@ async function saveSettings(event) {
   $('fee-save').disabled = true;
   try {
     const body = {
-      delivery_fee: $('fee').value,
     };
     ORDER_TYPES.forEach((t) => { body[`${t}_enabled`] = $(`on-${t}`).checked; });
     const s = await api('/api/settings', { method: 'PUT', body });

@@ -139,6 +139,154 @@ async function removeShare() {
   }
 }
 
+/* ---------------------------- delivery areas ---------------------------- */
+
+function areaErr(message) {
+  $('areas-err').textContent = message || '';
+  $('areas-err').hidden = !message;
+}
+
+function errorText(e) {
+  return e.fields ? Object.values(e.fields).join(' ') : e.message;
+}
+
+/** One small labelled input for an area row. */
+function areaField(label, input) {
+  const wrap = document.createElement('label');
+  wrap.className = 'areas__field';
+  const span = document.createElement('span');
+  span.textContent = label;
+  wrap.append(span, input);
+  return wrap;
+}
+
+function numberInput(value, max, placeholder) {
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '0';
+  input.max = String(max);
+  input.step = '1';
+  input.inputMode = 'numeric';
+  input.placeholder = placeholder;
+  input.value = value === null || value === undefined ? '' : String(value);
+  return input;
+}
+
+function areaRow(a) {
+  const li = document.createElement('li');
+  li.className = 'areas__row';
+  const form = document.createElement('form');
+  form.className = 'areas__form';
+  form.noValidate = true;
+
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.maxLength = 40;
+  name.required = true;
+  name.value = a.name;
+  const fee = numberInput(a.fee, 10000, 'Not set');
+  const etaMin = numberInput(a.eta_min, 600, 'min');
+  const etaMax = numberInput(a.eta_max, 600, 'max');
+  const active = document.createElement('input');
+  active.type = 'checkbox';
+  active.checked = a.active;
+
+  const save = document.createElement('button');
+  save.className = 'btn btn--ghost';
+  save.type = 'submit';
+  save.textContent = 'Save';
+  const remove = document.createElement('button');
+  remove.className = 'link-quiet';
+  remove.type = 'button';
+  remove.textContent = 'Remove';
+
+  const note = document.createElement('p');
+  note.className = 'hint areas__note';
+  note.textContent = !a.active ? 'Off: not offered.' : a.fee === null ? 'Set a fee to offer this area.' : 'Offered at checkout.';
+
+  const onLabel = document.createElement('label');
+  onLabel.className = 'areas__on';
+  onLabel.append(active, document.createTextNode(' On'));
+
+  form.append(
+    areaField('Area', name), areaField('Fee (₱)', fee),
+    areaField('Usual time (min)', etaMin), areaField('to (min)', etaMax),
+    onLabel, save, remove,
+  );
+  li.append(form, note);
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    areaErr('');
+    save.disabled = true;
+    try {
+      const data = await api(`/api/delivery-areas/${a.id}`, {
+        method: 'PATCH',
+        body: { name: name.value, fee: fee.value, eta_min: etaMin.value, eta_max: etaMax.value, active: active.checked },
+      });
+      showAreas(data.areas);
+      toast(`${data.area.name} saved.`);
+    } catch (e) {
+      areaErr(errorText(e));
+    } finally {
+      save.disabled = false;
+    }
+  });
+  remove.addEventListener('click', async () => {
+    areaErr('');
+    try {
+      showAreas((await api(`/api/delivery-areas/${a.id}`, { method: 'DELETE' })).areas);
+      toast(`${a.name} removed. Past orders keep the name.`);
+    } catch (e) {
+      areaErr(errorText(e));
+    }
+  });
+  return li;
+}
+
+function showAreas(areas) {
+  const list = $('areas-list');
+  list.replaceChildren(...areas.map(areaRow));
+  if (!areas.length) {
+    const li = document.createElement('li');
+    li.className = 'hint';
+    li.textContent = 'No areas yet. Customers can still choose "Other area".';
+    list.append(li);
+  }
+}
+
+async function addArea(event) {
+  event.preventDefault();
+  areaErr('');
+  try {
+    const data = await api('/api/delivery-areas', { method: 'POST', body: { name: $('area-new').value } });
+    showAreas(data.areas);
+    $('area-new').value = '';
+    toast(`${data.area.name} added. Set its fee to offer it.`);
+  } catch (e) {
+    areaErr(errorText(e));
+  }
+}
+
+async function saveFree(event) {
+  event.preventDefault();
+  const err = $('free-err');
+  err.hidden = true;
+  $('free-save').disabled = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { free_delivery_min: $('free-min').value } });
+    $('free-min').value = s.free_delivery_min ?? '';
+    toast(s.free_delivery_min ? `Free delivery from ${money(s.free_delivery_min)}.` : 'Free delivery is off.');
+  } catch (e) {
+    err.textContent = errorText(e);
+    err.hidden = false;
+  } finally {
+    $('free-save').disabled = false;
+  }
+}
+
+$('area-add').addEventListener('submit', addArea);
+$('free-form').addEventListener('submit', saveFree);
 $('trust-form').addEventListener('submit', saveTrust);
 $('hours-form').addEventListener('submit', saveHours);
 $('confirm-form').addEventListener('submit', saveConfirm);
@@ -151,4 +299,6 @@ adminBoot(async () => {
   showTrust(s);
   showConfirm(s);
   showShare(s);
+  $('free-min').value = s.free_delivery_min ?? '';
+  showAreas((await api('/api/delivery-areas')).areas);
 });
