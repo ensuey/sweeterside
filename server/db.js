@@ -625,6 +625,32 @@ addMissingColumns('order_items', { source: "TEXT NOT NULL DEFAULT ''" });
    NULL for as soon as possible. */
 addMissingColumns('orders', { scheduled_for: 'TEXT', scheduled_date: 'TEXT' });
 
+/* Past cakes for the /cakes gallery: photos uploaded through the admin (the
+   usual pipeline, metadata stripped), with a caption and an order. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS cake_gallery (
+  id       INTEGER PRIMARY KEY,
+  image    TEXT    NOT NULL,
+  caption  TEXT    NOT NULL DEFAULT '',
+  position INTEGER NOT NULL DEFAULT 0
+)`);
+
+/* What customers said, as the owner enters it: shown on the menu and on
+   /cakes while active. Never seeded. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS testimonials (
+  id       INTEGER PRIMARY KEY,
+  quote    TEXT    NOT NULL,
+  name     TEXT    NOT NULL,
+  source   TEXT    NOT NULL DEFAULT '',
+  active   INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0
+)`);
+
+/* A cake booking's estimate: the size's starting price plus the flavour's
+   surcharge, when it was booked. Dachel confirms the final price. */
+addMissingColumns('cake_bookings', { estimate_from: 'INTEGER' });
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

@@ -71,6 +71,7 @@ function bookingHtml(b) {
       <div class="cake__body">
         <dl class="cake__details">
           <dt>Size</dt><dd>${esc(b.size)} <span class="hint">(from ${money(b.size_from_price)})</span></dd>
+          ${b.estimate_from ? `<dt>Estimate</dt><dd>from ${money(b.estimate_from)} <span class="hint">(size and flavour, before the design)</span></dd>` : ''}
           ${detail('Flavour', b.flavour)}
           ${detail('Occasion', b.occasion)}
           ${detail('On the cake', b.cake_message)}
@@ -175,7 +176,9 @@ function showSettings(s) {
   $('s-lead').value = s.lead_days;
   $('s-max').value = s.max_per_day ?? '';
   $('s-sizes').value = s.sizes.map((x) => `${x.name} | ${x.from_price}`).join('\n');
-  $('s-flavours').value = s.flavours.join('\n');
+  $('s-flavours').value = s.flavours.map((f) => (s.flavour_prices[f] ? `${f} | ${s.flavour_prices[f]}` : f)).join('\n');
+  $('s-deposit').value = s.deposit_text;
+  $('s-handover').value = s.handover_text;
 }
 
 async function saveSettings(event) {
@@ -191,6 +194,8 @@ async function saveSettings(event) {
         max_per_day: $('s-max').value,
         sizes: $('s-sizes').value,
         flavours: $('s-flavours').value,
+        deposit_text: $('s-deposit').value,
+        handover_text: $('s-handover').value,
       },
     });
     showSettings(s);
@@ -246,6 +251,83 @@ document.querySelectorAll('.tab[data-show]').forEach((tab) => {
 
 $('settings-form').addEventListener('submit', saveSettings);
 
+/* ---------------------------- gallery ---------------------------- */
+
+let photos = [];
+
+function showGallery(list) {
+  photos = list;
+  $('g-empty').hidden = list.length > 0;
+  $('g-list').replaceChildren(...list.map((p, i) => {
+    const li = document.createElement('li');
+    li.className = 'gallery-admin__item';
+    const img = document.createElement('img');
+    img.src = `/${p.image.split('/').map(encodeURIComponent).join('/')}`;
+    img.alt = p.caption || 'Cake photo';
+    const caption = document.createElement('input');
+    caption.type = 'text';
+    caption.maxLength = 120;
+    caption.value = p.caption;
+    caption.placeholder = 'Caption, e.g. Ube 2-tier for a 1st birthday';
+    caption.setAttribute('aria-label', `Caption for photo ${i + 1}`);
+    const btn = (text, label, fn, disabled = false) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn--ghost btn--sm';
+      b.textContent = text;
+      b.setAttribute('aria-label', label);
+      b.disabled = disabled;
+      b.addEventListener('click', fn);
+      return b;
+    };
+    const move = (by) => async () => {
+      const ids = photos.map((x) => x.id);
+      [ids[i], ids[i + by]] = [ids[i + by], ids[i]];
+      try { showGallery((await api('/api/cake-gallery/reorder', { method: 'POST', body: { ids } })).photos); } catch (e) { toast(e.message, 'error'); }
+    };
+    const actions = document.createElement('div');
+    actions.className = 'gallery-admin__actions';
+    actions.append(
+      btn('Save', `Save the caption of photo ${i + 1}`, async () => {
+        try {
+          showGallery((await api(`/api/cake-gallery/${p.id}`, { method: 'PATCH', body: { caption: caption.value } })).photos);
+          toast('Caption saved.');
+        } catch (e) { toast(e.fields ? Object.values(e.fields).join(' ') : e.message, 'error'); }
+      }),
+      btn('↑', `Move photo ${i + 1} up`, move(-1), i === 0),
+      btn('↓', `Move photo ${i + 1} down`, move(1), i === list.length - 1),
+      btn('Remove', `Remove photo ${i + 1} from the gallery`, async () => {
+        try {
+          showGallery((await api(`/api/cake-gallery/${p.id}`, { method: 'DELETE' })).photos);
+          toast('Photo taken off the gallery.');
+        } catch (e) { toast(e.message, 'error'); }
+      }),
+    );
+    li.append(img, caption, actions);
+    return li;
+  }));
+}
+
+/** Upload through the usual pipeline (type checked, metadata stripped), then add it. */
+async function addPhoto(file) {
+  if (!file) return;
+  $('g-status').textContent = 'Uploading…';
+  try {
+    const res = await fetch('/api/images', { method: 'POST', headers: { 'X-CSRF-Token': state.csrf }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Upload failed.');
+    showGallery((await api('/api/cake-gallery', { method: 'POST', body: { image: data.path, caption: '' } })).photos);
+    $('g-status').textContent = 'Photo added. Give it a caption below.';
+  } catch (e) {
+    $('g-status').textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+  }
+}
+
+$('g-file').addEventListener('change', (e) => {
+  addPhoto(e.target.files[0]);
+  e.target.value = '';
+});
+
 setInterval(() => {
   if (document.visibilityState === 'visible') loadBookings().catch(() => {});
 }, POLL_MS);
@@ -256,4 +338,5 @@ document.addEventListener('visibilitychange', () => {
 adminBoot(async () => {
   const [, settings] = await Promise.all([loadBookings({ force: true }), api('/api/cake-settings')]);
   showSettings(settings);
+  showGallery((await api('/api/cake-gallery')).photos);
 });

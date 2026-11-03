@@ -109,6 +109,47 @@
     <p class="field__err" id="suggest-err" role="alert" hidden></p>
   </section>
 
+  <!-- What customers said: on the menu and the cake page. Real ones only. -->
+  <section class="hours" aria-labelledby="reviews-title">
+    <h2 class="admin__title" id="reviews-title">Testimonials</h2>
+    <p class="admin__sub">Quotes from real customers (a Facebook review, a message, a note at the counter), shown on the menu and the cake page while switched on. Use a name or initials the customer is happy with.</p>
+    <ul class="areas" id="t-list" aria-label="Testimonials"></ul>
+    <form class="t-add" id="t-form" novalidate>
+      <div class="field">
+        <label for="t-quote">What they said</label>
+        <textarea id="t-quote" rows="3" maxlength="300" required></textarea>
+      </div>
+      <div class="hours__form">
+        <div class="field">
+          <label for="t-name">Name or initials</label>
+          <input id="t-name" type="text" maxlength="40" required>
+        </div>
+        <div class="field">
+          <label for="t-source">From</label>
+          <select id="t-source">
+            <option value="">—</option>
+            <option>Facebook</option>
+            <option>Google</option>
+            <option>In person</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <button class="btn btn--ghost" type="submit" id="t-add">Add testimonial</button>
+      </div>
+    </form>
+    <p class="field__err" id="t-err" role="alert" hidden></p>
+
+    <form class="hours__form" id="rating-form" novalidate>
+      <div class="field field--wide">
+        <label for="rating-line">Rating line <span class="hint">(optional, e.g. 4.9★ on Facebook, 120 reviews)</span></label>
+        <input id="rating-line" type="text" maxlength="80">
+      </div>
+      <button class="btn btn--ghost" type="submit" id="rating-save">Save</button>
+    </form>
+    <p class="hint">Only write what your Facebook or Google page shows today. It is shown as you type it, and only when filled in.</p>
+    <p class="field__err" id="rating-err" role="alert" hidden></p>
+  </section>
+
   <!-- What the customer sees right after ordering. -->
   <section class="hours" aria-labelledby="confirm-title">
     <h2 class="admin__title" id="confirm-title">Order confirmation</h2>

@@ -92,16 +92,45 @@
           <p class="field__err" data-err="sizes" hidden></p>
         </div>
         <div class="field">
-          <label for="s-flavours">Flavours <span class="hint">(one per line)</span></label>
+          <label for="s-flavours">Flavours <span class="hint">(one per line; add | price for one that costs more, e.g. Ube | 100)</span></label>
           <textarea id="s-flavours" name="flavours" rows="6"></textarea>
           <p class="field__err" data-err="flavours" hidden></p>
         </div>
       </div>
 
+      <div class="row">
+        <div class="field">
+          <label for="s-deposit">Price and deposit <span class="hint">(shown under "Before you book"; blank for the default)</span></label>
+          <textarea id="s-deposit" name="deposit_text" rows="3" maxlength="400"></textarea>
+          <p class="field__err" data-err="deposit_text" hidden></p>
+        </div>
+        <div class="field">
+          <label for="s-handover">Pick-up or delivery <span class="hint">(blank for the default)</span></label>
+          <textarea id="s-handover" name="handover_text" rows="3" maxlength="400"></textarea>
+          <p class="field__err" data-err="handover_text" hidden></p>
+        </div>
+      </div>
+      <p class="hint">The notice line ("Book at least 3 days ahead") comes from Days of notice needed.</p>
+
       <div class="cake-settings__foot">
         <button class="btn btn--primary" type="submit" id="settings-save">Save settings</button>
       </div>
     </form>
+  </section>
+
+  <!-- Photos of past cakes, shown on /cakes above the form. -->
+  <section class="admin__section" aria-labelledby="gallery-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="gallery-title">Cake gallery</h2>
+        <p class="admin__sub">Photos of cakes you have made, shown on the booking page. JPEG, PNG or WebP; location and camera details are removed on upload.</p>
+      </div>
+      <label class="btn btn--primary" for="g-file">Add a photo</label>
+      <input id="g-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+    </div>
+    <p class="hint" id="g-status" role="status"></p>
+    <ul class="gallery-admin" id="g-list"></ul>
+    <p class="empty-note" id="g-empty" hidden>No photos yet. The booking page shows the sizes and the form without them.</p>
   </section>
 </main>
 

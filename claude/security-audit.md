@@ -75,6 +75,8 @@ Legend:
 | `GET /api/items`, `GET /api/categories` | S | | | |
 | `POST /api/items`, `PUT|PATCH|DELETE /api/items/:id` | S | ✓ | | `menu.validate`: whole-peso prices, image must resolve inside `assets/`, crop inside the image, description ≤120, size ≤20, option groups must exist (≤10). Rewrites `index.html` (escaped). |
 | `POST /api/items/reorder`, `PATCH /api/items/:id/stock` | S | ✓ | | |
+| `GET|POST /api/cake-gallery`, `PUT|PATCH|DELETE /api/cake-gallery/:id`, `POST /api/cake-gallery/reorder` | S | ✓ (writes) | | Image must be an upload under `assets/uploads/` that resolves inside the upload dir (so it went through the magic-byte check and metadata stripping); caption ≤120; at most 30. Public on `/cakes`, escaped. |
+| `GET|POST /api/testimonials`, `PUT|PATCH|DELETE /api/testimonials/:id`, `PUT|PATCH /api/testimonials/rating` | S | ✓ (writes) | | Quote ≤300, name ≤40, source from a fixed list, rating line ≤80. Shown escaped on the menu and `/cakes`; never seeded; no review structured data. |
 | `GET|PUT|PATCH /api/suggestions` | S | ✓ (writes) | | Up to 3 item ids per list; items and categories must exist. Rewrites `index.html`; the lists go out as an escaped `data-suggest` attribute (ids only). |
 | `GET|POST /api/option-groups`, `PUT|PATCH|DELETE /api/option-groups/:id` | S | ✓ (writes) | | Name 1–40; pick one/several; least/most 1–30; 1–30 options, names unique, price whole pesos 0–10000 (no negatives); an option id from another group is refused. Prepared statements only. Rewrites `index.html`; option names go out escaped in a `data-options` attribute. |
 | `POST /api/categories`, `PUT|PATCH|DELETE /api/categories/:id`, `POST /api/categories/reorder` | S | ✓ | | A category with items cannot be deleted (FK `RESTRICT`). |
@@ -82,7 +84,7 @@ Legend:
 | `POST /api/images` | S | ✓ | | Item photo upload: magic bytes, 5 MB, random name, metadata stripped (F2). Public once used on the menu. |
 | `GET /api/vouchers`, `POST /api/vouchers`, `PUT|PATCH|DELETE /api/vouchers/:id`, `PATCH /api/vouchers/:id/active` | S | ✓ (writes) | | |
 | `GET|PUT|PATCH /api/settings` | S | ✓ (writes) | | Ordering settings, `preorder_days` (0–14), `free_delivery_min` (whole pesos 1–100000 or blank), opening hours (`open_at`/`close_at`), the shop Open/Closed switch, `confirm_call_minutes` (1–120), `facebook_url` (https Facebook/Messenger hosts only), `share_image` (must be an uploaded image under `assets/uploads/`, so it went through the metadata-stripping upload). The server refuses orders outside the hours. |
-| `GET|PUT|PATCH /api/cake-settings` | S | ✓ (writes) | | |
+| `GET|PUT|PATCH /api/cake-settings` | S | ✓ (writes) | | Sizes, flavours with optional extra (whole pesos, no negatives), notice, per-day limit, deposit and pick-up/delivery text ≤400 (escaped on `/cakes`). |
 | `GET|POST /api/delivery-areas`, `PUT|PATCH|DELETE /api/delivery-areas/:id`, `POST /api/delivery-areas/reorder` | S | ✓ (writes) | | Name 1–40 chars, unique; fee whole pesos 0–10000 or blank; times 0–600 min, both or neither; at most 40 areas. Prepared statements only. Removing an area leaves past orders' name snapshot. |
 
 ### Admin: orders, blocklist, cakes

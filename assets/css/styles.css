@@ -60,7 +60,9 @@ img { max-width: 100%; }
 
 /* Visually hidden, still read by screen readers. */
 .vh {
-  position: absolute !important; width: 1px; height: 1px;
+  /* !important: a field rule such as .cfield input (width 100%) must not
+     widen a hidden file input past the page edge. */
+  position: absolute !important; width: 1px !important; height: 1px !important;
   margin: -1px; padding: 0; border: 0; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
 }
@@ -638,6 +640,44 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .cake-done .cart__back { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; align-self: flex-start; }
 .cake-step { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-4); }
 .cake-step + .cake-step { padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+/* Gallery, prices and booking info above the form; all plain HTML. */
+.cakes__h2 { font-size: 1.375rem; margin: var(--sp-6) 0 var(--sp-3); }
+.gallery__grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
+.gallery__item figure { margin: 0; }
+.gallery__item img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-md); border: 1px solid var(--line); background: #fff; }
+.gallery__item figcaption { margin-top: var(--sp-1); font-size: .875rem; color: var(--ink-soft); }
+@media (min-width: 560px) { .gallery__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cake-prices__table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; }
+.cake-prices__table th, .cake-prices__table td { padding: var(--sp-3); text-align: left; border-bottom: 1px solid var(--line); }
+.cake-prices__table thead th { font-size: .8125rem; color: var(--ink-soft); background: var(--cream); }
+.cake-prices__table td { white-space: nowrap; font-weight: 700; color: var(--coral-ink); text-align: right; }
+.cake-prices__table thead th:last-child { text-align: right; }
+.cake-prices__extra, .cake-prices__note { margin: var(--sp-2) 0 0; font-size: .9375rem; color: var(--ink-soft); }
+.cake-info__list { margin: 0; display: grid; gap: var(--sp-3); }
+.cake-info__list dt { font-weight: 700; }
+.cake-info__list dd { margin: 0; color: var(--ink-soft); }
+#book-title { margin-top: var(--sp-7); }
+.cakes__nojs p { margin: 0 0 var(--sp-3); }
+.cakes__nojs-links { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: 0 !important; }
+.cakes__link { display: inline-flex; align-items: center; min-height: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full); border: 1.5px solid var(--coral-ink); color: var(--coral-ink); font-weight: 700; text-decoration: none; background: #fff; }
+.cake-estimate { margin: 0; padding: var(--sp-3); border-radius: var(--r-sm); background: #EEF6F0; color: #1F5A3A; font-weight: 700; }
+.cake-estimate[hidden] { display: none; }
+
+/* What customers say: on the menu and on /cakes. */
+.reviews { padding: var(--sp-7) 0; border-top: 1px solid var(--line); }
+.cakes .reviews { padding-bottom: 0; }
+.cakes .reviews .wrap { padding: 0; }
+.reviews__title { font-size: 1.5rem; margin-bottom: var(--sp-2); }
+.reviews__rating { margin: 0 0 var(--sp-3); font-weight: 700; }
+.reviews__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-3); }
+@media (min-width: 720px) { .reviews__list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.reviews__item figure { margin: 0; height: 100%; padding: var(--sp-4); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.reviews__item blockquote { margin: 0 0 var(--sp-2); }
+.reviews__item blockquote p { margin: 0; }
+.reviews__item blockquote p::before { content: "“"; }
+.reviews__item blockquote p::after { content: "”"; }
+.reviews__item figcaption { font-weight: 700; font-size: .9375rem; }
+.reviews__source { font-weight: 400; color: var(--ink-soft); }
 .cake-step__title { padding: 0; margin-bottom: var(--sp-1); font: 600 1.25rem "Fredoka", "Nunito", sans-serif; color: var(--ink); }
 .cfield select { appearance: auto; }
 .cfield__label { font-weight: 700; font-size: .9375rem; }

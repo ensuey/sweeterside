@@ -43,7 +43,18 @@
 </header>
 
 <main class="wrap cakes">
-  <p class="cakes__nojs">Booking a cake needs JavaScript. You can also call us or message the shop to order.</p>
+<!--GALLERY-->
+
+<!--PRICES-->
+
+<!--INFO-->
+
+  <h2 class="cakes__h2" id="book-title">Book a cake</h2>
+  <div class="cakes__nojs">
+    <p>Booking a cake here needs JavaScript. You can also call us or message the shop to order.</p>
+    <p class="cakes__nojs-links"><a class="cakes__link" href="tel:<!--SHOP_TEL-->">Call <!--SHOP_PHONE--></a>
+      <a class="cakes__link" href="<!--FACEBOOK_URL-->" rel="noopener" target="_blank">Message us on Facebook</a></p>
+  </div>
 
   <form class="cake-form" id="cake-form" novalidate hidden>
     <p class="cart__alert" id="cake-error" role="alert" hidden></p>
@@ -66,6 +77,7 @@
         </select>
         <p class="cfield__err" data-err="flavour" hidden></p>
       </div>
+      <p class="cake-estimate" id="k-estimate" aria-live="polite" hidden></p>
 
       <div class="cfield">
         <label for="k-occasion">Occasion <span class="cfield__hint">optional, e.g. 7th birthday</span></label>
@@ -140,6 +152,8 @@
     <button class="checkout__submit" type="submit" id="cake-submit">Send cake request</button>
     <p class="checkout__note">Prices start from the amount shown for each size. Dachel will call you to confirm the final price and the deposit. Nothing is charged online.</p>
   </form>
+
+<!--TESTIMONIALS-->
 
   <section class="cake-done" id="cake-done" hidden>
     <h2 class="cart__title" id="cake-done-title" tabindex="-1">Request received!</h2>

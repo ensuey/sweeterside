@@ -15,6 +15,84 @@ const delivery = require('./delivery');
 const itemOptions = require('./options');
 const suggestions = require('./suggestions');
 const schedule = require('./schedule');
+const gallery = require('./gallery');
+const testimonials = require('./testimonials');
+
+const peso = (n) => `₱${Number(n).toLocaleString('en-US')}`;
+
+/** What customers said (switched on in the admin), and the optional rating
+    line. Nothing at all when there is neither. Visual only: no review
+    structured data (see server/testimonials.js). */
+function testimonialsHtml() {
+  const list = testimonials.list({ activeOnly: true });
+  const rating = testimonials.ratingLine();
+  if (!list.length && !rating) return '';
+  const items = list.map((t) => `      <li class="reviews__item">
+        <figure>
+          <blockquote><p>${esc(t.quote)}</p></blockquote>
+          <figcaption>${esc(t.name)}${t.source ? ` <span class="reviews__source">· ${esc(t.source)}</span>` : ''}</figcaption>
+        </figure>
+      </li>`).join('\n');
+  return `<section class="reviews" aria-labelledby="reviews-title">
+  <div class="wrap">
+    <h2 class="reviews__title" id="reviews-title">What customers say</h2>
+    ${rating ? `<p class="reviews__rating">${esc(rating)}</p>` : ''}
+    ${list.length ? `<ul class="reviews__list">\n${items}\n    </ul>` : ''}
+  </div>
+</section>`;
+}
+
+/** Photos of past cakes, in the owner's order. Plain HTML: no JavaScript needed. */
+function galleryHtml() {
+  const photos = gallery.list();
+  if (!photos.length) return '';
+  const items = photos.map((p, i) => {
+    const size = imageSize(p.image);
+    const dims = size ? ` width="${size.width}" height="${size.height}"` : '';
+    return `      <li class="gallery__item"><figure>
+        <img src="/${esc(encPath(p.image))}" alt="${esc(p.caption || 'A cake made by Sweeter Side')}"${dims}${i < 2 ? '' : ' loading="lazy"'} decoding="async">
+        ${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ''}
+      </figure></li>`;
+  }).join('\n');
+  return `<section class="gallery" aria-labelledby="gallery-title">
+    <h2 class="cakes__h2" id="gallery-title">Cakes we have made</h2>
+    <ul class="gallery__grid">
+${items}
+    </ul>
+  </section>`;
+}
+
+/** Sizes and starting prices, and flavours that cost extra. */
+function cakePricesHtml(s) {
+  const rows = s.sizes.map((x) => `        <tr><th scope="row">${esc(x.name)}</th><td>from ${esc(peso(x.from_price))}</td></tr>`).join('\n');
+  const extras = s.flavours.filter((f) => s.flavour_prices[f])
+    .map((f) => `${f} +${peso(s.flavour_prices[f])}`);
+  return `<section class="cake-prices" aria-labelledby="prices-title">
+    <h2 class="cakes__h2" id="prices-title">Sizes and starting prices</h2>
+    <table class="cake-prices__table">
+      <thead><tr><th scope="col">Size</th><th scope="col">Price</th></tr></thead>
+      <tbody>
+${rows}
+      </tbody>
+    </table>
+    ${extras.length ? `<p class="cake-prices__extra">Some flavours cost a little more: ${esc(extras.join(', '))}.</p>` : ''}
+    <p class="cake-prices__note">The final price depends on the design. Dachel confirms it when she calls.</p>
+  </section>`;
+}
+
+/** Before you book: notice (from the setting), deposit, pick-up and delivery. */
+function cakeInfoHtml(s, avail) {
+  const notice = avail.lead_days === 0 ? 'Order any time; same-day cakes depend on what we have on.'
+    : `Book at least ${avail.lead_days} day${avail.lead_days === 1 ? '' : 's'} ahead. The earliest day you can book now is ${cakes.niceDate(avail.earliest)}.`;
+  return `<section class="cake-info" aria-labelledby="info-title">
+    <h2 class="cakes__h2" id="info-title">Before you book</h2>
+    <dl class="cake-info__list">
+      <div><dt>Notice</dt><dd>${esc(notice)}</dd></div>
+      <div><dt>Price and deposit</dt><dd>${esc(s.deposit_text)}</dd></div>
+      <div><dt>Pick-up or delivery</dt><dd>${esc(s.handover_text)}</dd></div>
+    </dl>
+  </section>`;
+}
 const { manilaDate, addDays } = require('./clock');
 
 /** Items with a daily limit: how many are left on each day that can be
@@ -316,6 +394,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date()) 
     .replaceAll('<!--SHOP_PHONE-->', () => esc(BUSINESS.phone.display))
     .replaceAll('<!--FACEBOOK_URL-->', () => esc(orders.facebookUrl()))
     .replace('<!--LD_JSON-->', () => seo.homeLd(groups))
+    .replace('<!--TESTIMONIALS-->', () => testimonialsHtml())
     .replace('<!--VISIT-->', () => seo.visitHtml())
     .replace('<!--FAQ-->', () => seo.faqHtml())
     .replace('<!--FOOT_NAP-->', () => seo.footHtml())
@@ -339,7 +418,7 @@ function buildCakesHtml(now = new Date()) {
   const avail = cakes.availability(now);
 
   const sizes = s.sizes.map((size, i) => `        <label class="size">
-          <input type="radio" name="size" value="${esc(size.name)}"${i === 0 ? ' checked' : ''}>
+          <input type="radio" name="size" value="${esc(size.name)}" data-price="${size.from_price}"${i === 0 ? ' checked' : ''}>
           <span class="size__body">
             <span class="size__name">${esc(size.name)}</span>
             <span class="size__price">from <strong>₱${size.from_price.toLocaleString('en-US')}</strong></span>
@@ -347,7 +426,10 @@ function buildCakesHtml(now = new Date()) {
         </label>`).join('\n');
 
   const flavours = [...s.flavours, cakes.OTHER_FLAVOUR]
-    .map((f) => `          <option value="${esc(f)}">${esc(f)}</option>`).join('\n');
+    .map((f) => {
+      const extra = s.flavour_prices[f] || 0;
+      return `          <option value="${esc(f)}" data-extra="${extra}">${esc(f)}${extra ? ` (+${peso(extra)})` : ''}</option>`;
+    }).join('\n');
 
   return template
     .replace('<!--EARLIEST-->', avail.earliest)
@@ -357,7 +439,14 @@ function buildCakesHtml(now = new Date()) {
     .replace('<!--LEAD_DAYS-->', `${avail.lead_days} day${avail.lead_days === 1 ? '' : 's'}`)
     .replace('<!--SIZES-->', sizes)
     .replace('<!--FLAVOURS-->', flavours)
-    .replace('<!--LD_JSON-->', () => seo.cakesLd(s.sizes));
+    .replace('<!--LD_JSON-->', () => seo.cakesLd(s.sizes))
+    .replace('<!--GALLERY-->', () => galleryHtml())
+    .replace('<!--PRICES-->', () => cakePricesHtml(s))
+    .replace('<!--INFO-->', () => cakeInfoHtml(s, avail))
+    .replace('<!--TESTIMONIALS-->', () => testimonialsHtml())
+    .replaceAll('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
+    .replaceAll('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
+    .replaceAll('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()));
 }
 
 /* ---------------------------- about us ---------------------------- */

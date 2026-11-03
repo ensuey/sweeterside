@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 226 (`npm test`):
+**Tests:** 232 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -25,6 +25,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 11 in `test/options.test.js`
 - 5 in `test/suggestions.test.js`
 - 8 in `test/preorders.test.js`
+- 6 in `test/cakes-page.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -425,6 +426,26 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser outside the hours: pre-order menu, days and
     times, per-day stock, two scheduled orders, the Orders page and the POS.
   - **Tests:** `test/preorders.test.js` (8).
+- **PR F: cakes page and social proof.**
+  - **Gallery** (`server/gallery.js`, table `cake_gallery`): photos uploaded
+    through `/api/images` (metadata stripped), caption, order; on `/cakes`.
+  - **Prices:** size table on `/cakes`; flavour extras (`Ube | 100`,
+    `cake_flavour_prices`); a live estimate in the form, the same worked out
+    on the server (`cakes.estimate`) and kept on the booking (`estimate_from`).
+  - **Booking info:** notice from the setting; deposit and pick-up/delivery
+    text editable on the Cakes page, neutral defaults (no amounts promised).
+  - **No-JS:** gallery, prices and info are plain HTML; the fallback adds
+    tap-to-call and Facebook links.
+  - **Testimonials** (`server/testimonials.js`, table `testimonials`): quote,
+    name, source, on/off; optional rating line. Menu (above Visit us) and
+    `/cakes`. Nothing seeded; no review structured data (Google does not
+    show snippets for reviews a business hosts about itself).
+  - Also fixed: the hidden photo input on `/cakes` was 1,500 px wide (a
+    field rule beat `.vh`), so the page scrolled sideways; `.vh` sizes are
+    `!important` now.
+  - Checked in the browser (and at about 360 px): gallery upload and
+    caption, flavour extras, the estimate, testimonials on/off, rating line.
+  - **Tests:** `test/cakes-page.test.js` (6).
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -492,6 +513,11 @@ After deploying (owner, once):
     opening hours setting is one pair of times for every day).
   - For `/about`: the year the shop opened, a few lines about Dachel, best
     sellers, and shop and cake photos.
+- After PR F (owner): Cakes → **Cake gallery** (photos of past cakes, with
+  captions); check the **sizes and starting prices** and add flavour extras;
+  read the **Price and deposit** and **Pick-up or delivery** wording; Settings
+  → **Testimonials** (real quotes, with the customer's OK) and the optional
+  **rating line**.
 - After PR E (owner): Settings → Opening hours → **Pre-orders up to** (days
   ahead, default 3). Expect orders for tomorrow to arrive overnight.
 - After PR D (owner): Settings → **Cart suggestions**: e.g. with drinks →

@@ -20,6 +20,8 @@ const push = require('./push');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
 const suggestions = require('./suggestions');
+const gallery = require('./gallery');
+const testimonials = require('./testimonials');
 const seo = require('./seo');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
@@ -1199,6 +1201,58 @@ async function route(req, res) {
     const booking = cakes.update(Number(cakeMatch[1]), await readJson(req));
     if (!booking) return sendJson(res, 404, { error: 'That booking no longer exists.' });
     return sendJson(res, 200, { booking });
+  }
+
+  /* ---- cake gallery (Cakes page), all authenticated ---- */
+  if (pathname === '/api/cake-gallery' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { photos: gallery.list() });
+  }
+  if (pathname === '/api/cake-gallery' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    return sendJson(res, 201, { photos: gallery.add(await readJson(req)) });
+  }
+  if (pathname === '/api/cake-gallery/reorder' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    return sendJson(res, 200, { photos: gallery.reorder((await readJson(req)).ids) });
+  }
+  const galleryMatch = pathname.match(/^\/api\/cake-gallery\/(\d+)$/);
+  if (galleryMatch && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const photos = gallery.update(Number(galleryMatch[1]), await readJson(req));
+    if (!photos) return sendJson(res, 404, { error: 'That photo is no longer in the gallery.' });
+    return sendJson(res, 200, { photos });
+  }
+  if (galleryMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!gallery.remove(Number(galleryMatch[1]))) return sendJson(res, 404, { error: 'That photo is no longer in the gallery.' });
+    return sendJson(res, 200, { photos: gallery.list() });
+  }
+
+  /* ---- testimonials (Settings), all authenticated; on the menu page too ---- */
+  if (pathname === '/api/testimonials' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { testimonials: testimonials.list(), rating_line: testimonials.ratingLine() });
+  }
+  if (pathname === '/api/testimonials' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    return afterMutation(res, 201, { testimonials: testimonials.create(await readJson(req)) });
+  }
+  if (pathname === '/api/testimonials/rating' && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    return afterMutation(res, 200, { rating_line: testimonials.setRatingLine((await readJson(req)).rating_line) });
+  }
+  const testimonialMatch = pathname.match(/^\/api\/testimonials\/(\d+)$/);
+  if (testimonialMatch && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const list = testimonials.update(Number(testimonialMatch[1]), await readJson(req));
+    if (!list) return sendJson(res, 404, { error: 'That testimonial no longer exists.' });
+    return afterMutation(res, 200, { testimonials: list });
+  }
+  if (testimonialMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!testimonials.remove(Number(testimonialMatch[1]))) return sendJson(res, 404, { error: 'That testimonial no longer exists.' });
+    return afterMutation(res, 200, { testimonials: testimonials.list() });
   }
 
   if (pathname === '/api/cake-settings' && method === 'GET') {

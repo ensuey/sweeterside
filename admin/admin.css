@@ -533,6 +533,15 @@ a { color: var(--navy); }
 .areas__on { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
 .areas__on input { width: 20px; height: 20px; }
 .areas__note { margin: .35rem 0 0; }
+.t-row textarea, .t-add textarea { width: 100%; font-size: 16px; }
+.t-row .hours__form { margin-top: .4rem; margin-bottom: 0; }
+.t-row input, .t-row select { font-size: 16px; min-height: 44px; }
+.t-add { margin-bottom: 1rem; }
+.gallery-admin { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.gallery-admin__item { display: grid; grid-template-columns: 72px 1fr; gap: .5rem .75rem; align-items: center; padding: .6rem; border: 1px solid var(--line); border-radius: 10px; }
+.gallery-admin__item img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; grid-row: span 2; }
+.gallery-admin__item input { font-size: 16px; min-height: 44px; min-width: 0; }
+.gallery-admin__actions { display: flex; flex-wrap: wrap; gap: .4rem; }
 .suggest-rows { display: grid; gap: .6rem; margin-bottom: .8rem; }
 .suggest-row { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid var(--line); border-radius: 10px; padding: .5rem .75rem .7rem; margin: 0; }
 .suggest-row legend { font-weight: 700; padding: 0 .25rem; }
