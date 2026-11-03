@@ -616,6 +616,10 @@ addMissingColumns('order_items', {
   options_cents: 'INTEGER NOT NULL DEFAULT 0',
 });
 
+/* Where a line came from: '' (the menu) or 'suggested' (added from the
+   cart's "Goes well with" strip), for the Reports page. */
+addMissingColumns('order_items', { source: "TEXT NOT NULL DEFAULT ''" });
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

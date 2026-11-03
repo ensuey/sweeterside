@@ -19,6 +19,7 @@ const checkout = require('./checkout');
 const push = require('./push');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
+const suggestions = require('./suggestions');
 const seo = require('./seo');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
@@ -462,6 +463,17 @@ async function route(req, res) {
     if (!requireApiAuth(req, res)) return;
     // Each item with the ids of its option groups, for the item editor.
     return sendJson(res, 200, { items: menu.list().map((i) => ({ ...i, option_groups: itemOptions.itemGroupIds(i.id) })) });
+  }
+
+  /* ---- cart suggestions (Settings), all authenticated ---- */
+  if (pathname === '/api/suggestions' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, suggestions.get());
+  }
+  if (pathname === '/api/suggestions' && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    // The lists ship with the menu page, so rebuild it.
+    return afterMutation(res, 200, suggestions.save(await readJson(req)));
   }
 
   /* ---- option groups (Items page), all authenticated ---- */

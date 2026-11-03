@@ -446,7 +446,9 @@ function cartLines(rawItems) {
     const ids = [...new Set((opts || []).map(Number))].sort((a, b) => a - b);
     const key = ids.length ? `${id}:${ids.join('.')}` : String(id);
     const had = byKey.get(key);
-    byKey.set(key, { id, qty: (had ? had.qty : 0) + qty, options: ids });
+    // Added from the cart's suggestions; anything else is the menu.
+    const suggested = line.source === 'suggested' || !!(had && had.suggested);
+    byKey.set(key, { id, qty: (had ? had.qty : 0) + qty, options: ids, suggested });
     qtyById.set(id, (qtyById.get(id) || 0) + qty);
   }
   for (const qty of qtyById.values()) {
@@ -476,7 +478,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const short = [];
 
   const perItem = new Map(); // item_id -> qty over all its lines
-  for (const { id, qty, options } of cartLines(rawItems)) {
+  for (const { id, qty, options, suggested } of cartLines(rawItems)) {
     const item = menu.get(id, { now });
     if (!item || item.availability === 'unavailable' || item.sold_out) {
       if (!unavailable.includes(id)) unavailable.push(id);
@@ -489,6 +491,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
     lines.push({
       item_id: item.id, name: item.name, price: prices.sale_cents / 100, regular: prices.unit_cents / 100,
       sc_eligible: item.sc_eligible, qty, key: chosen.key, options: chosen.snapshot, options_cents: chosen.options_cents,
+      source: suggested ? 'suggested' : '',
     });
   }
   // Today's limit counts the item, whatever options each line has.
@@ -708,13 +711,14 @@ function create(input, { now = new Date() } = {}) {
 function insertLines(orderId, lines, quoted = []) {
   const line = db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty,
-                             options, options_cents)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                             options, options_cents, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // The engine's lines are keyed by their place in the quote.
   lines.forEach((l) => {
     const q = quoted[Number(l.key)] || {};
     line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty,
-      q.options && q.options.length ? JSON.stringify(q.options) : '', q.options_cents || 0);
+      q.options && q.options.length ? JSON.stringify(q.options) : '', q.options_cents || 0,
+      q.source === 'suggested' ? 'suggested' : '');
   });
 }
 
