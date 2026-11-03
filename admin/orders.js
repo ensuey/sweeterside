@@ -54,11 +54,25 @@ function clock(hhmm) {
 
 /** The badge in an order's head: what kind of order, and when or where. */
 function typeBadge(o) {
+  if (o.scheduled_label) return o.order_type === 'pickup' ? 'Pick-up' : 'Delivery';
   if (o.order_type === 'pickup') {
     return o.pickup_at === 'asap' ? 'Pick-up · ASAP' : `Pick-up · ${clock(o.pickup_at)}`;
   }
   if (o.order_type === 'dinein') return `Dine-in · Table ${o.table_no}`;
   return 'Delivery';
+}
+
+// A scheduled order is not late before its time: its waiting clock starts
+// this long before it.
+const SCHEDULED_WAIT_FROM_MIN = 30;
+
+/** When an order starts waiting: when it was placed, or for a scheduled
+    order 30 minutes before its time, whichever is later. */
+function waitingFrom(o) {
+  if (!o.scheduled_for) return o.created_at;
+  const due = new Date(`${String(o.scheduled_for).replace(' ', 'T')}Z`).getTime() - SCHEDULED_WAIT_FROM_MIN * 60000;
+  const placed = new Date(`${String(o.created_at).replace(' ', 'T')}Z`).getTime();
+  return new Date(Math.max(due, placed)).toISOString().slice(0, 19).replace('T', ' ');
 }
 
 /** Minutes since an order was placed. */
@@ -87,7 +101,8 @@ function flagsHtml(o) {
       : o.history.completed > 0 ? 'good' : 'new';
     flags.push(`<span class="flag flag--${kind}">${esc(historyText(o.history))}</span>`);
   }
-  const waited = minutesSince(o.created_at);
+  if (o.scheduled_label) flags.push(`<span class="flag flag--sched">Scheduled — ${esc(o.scheduled_label)}</span>`);
+  const waited = minutesSince(waitingFrom(o));
   if (o.status === 'new' && o.needs_confirm && waited >= WAITING_FLAG_MIN) {
     flags.push(`<span class="flag flag--wait">Waiting ${waited} min</span>`);
   }
@@ -317,7 +332,9 @@ function showShop(s) {
     ? 'Closed by hand: customers can browse the menu but not order. Cake bookings still work. Tap Open to follow your opening hours again.'
     : s.closing_soon ? `Closing soon: customers can order until ${clock(s.close_at)}. The menu says so.`
     : s.open_now ? `Open: customers can order until ${clock(s.close_at)}. Opening hours ${hours}.`
-    : `Outside opening hours (${hours}): customers can browse but not order. Ordering opens by itself at ${clock(s.open_at)}.`;
+    : s.preorder_days > 0
+      ? `Outside opening hours (${hours}): customers can pre-order pick-up or delivery for a later time, up to ${plural(s.preorder_days, 'day')} ahead. Ordering for now opens at ${clock(s.open_at)}.`
+      : `Outside opening hours (${hours}): customers can pre-order for later today only. Ordering for now opens at ${clock(s.open_at)}.`;
   // Do not overwrite a note being typed.
   if (document.activeElement !== $('closed-note')) $('closed-note').value = s.closed_note;
   showShopPill(s);

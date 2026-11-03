@@ -508,6 +508,7 @@ a { color: var(--navy); }
 .flag--bad  { background: #FDF3F1; color: var(--danger); }
 .flag--wait { background: var(--danger); color: #fff; }
 .flag--warn { background: #FFF4DB; color: #7A4B00; }
+.flag--sched { background: #EAF1F7; color: var(--navy); white-space: normal; }
 .order__area strong { color: var(--ink); }
 .order__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .order__actions [data-confirm] { min-width: 7rem; }

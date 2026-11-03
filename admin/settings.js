@@ -48,6 +48,7 @@ function showHours(s) {
   $('open-at').value = s.open_at;
   // A time field cannot hold 24:00 (open until midnight); it is left as set.
   if (s.close_at !== '24:00') $('close-at').value = s.close_at;
+  $('preorder-days').value = s.preorder_days;
   $('hours-now').textContent = !s.shop_open
     ? 'Right now the shop is set to Closed on the Orders page, so online ordering is closed whatever the hours.'
     : s.closing_soon ? `Right now: closing soon. Online orders until ${clock12(s.close_at)}.`
@@ -62,7 +63,7 @@ async function saveHours(event) {
   err.hidden = true;
   $('hours-save').disabled = true;
   try {
-    const s = await api('/api/settings', { method: 'PUT', body: { open_at: $('open-at').value, close_at: $('close-at').value } });
+    const s = await api('/api/settings', { method: 'PUT', body: { open_at: $('open-at').value, close_at: $('close-at').value, preorder_days: $('preorder-days').value } });
     showHours(s);
     toast(`Saved. Online ordering is open ${clock12(s.open_at)} to ${clock12(s.close_at)} every day.`);
   } catch (e) {

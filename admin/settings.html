@@ -53,7 +53,7 @@
   <!-- When online ordering is open. Pick-up times are offered within the same hours. -->
   <section class="hours" aria-labelledby="hours-title">
     <h2 class="admin__title" id="hours-title">Opening hours</h2>
-    <p class="admin__sub">The same every day, in Philippine time. Online ordering opens and closes with these hours, pick-up times are offered within them, and 30 minutes before closing the menu says "Closing soon". To close for a holiday or close early, set the shop to Closed on the <a href="/admin">Orders</a> page.</p>
+    <p class="admin__sub">The same every day, in Philippine time. Online ordering opens and closes with these hours, pick-up times are offered within them, and 30 minutes before closing the menu says "Closing soon". Outside the hours customers can pre-order: pick-up or delivery for a later time, up to the number of days you set (0: today only). To close for a holiday or close early, set the shop to Closed on the <a href="/admin">Orders</a> page.</p>
     <form class="hours__form" id="hours-form" novalidate>
       <div class="field">
         <label for="open-at">Opens</label>
@@ -62,6 +62,10 @@
       <div class="field">
         <label for="close-at">Closes</label>
         <input id="close-at" type="time" step="900" required>
+      </div>
+      <div class="field">
+        <label for="preorder-days">Pre-orders up to <span class="hint">(days ahead)</span></label>
+        <input id="preorder-days" type="number" min="0" max="14" step="1" inputmode="numeric" required>
       </div>
       <button class="btn btn--ghost" type="submit" id="hours-save">Save</button>
     </form>
