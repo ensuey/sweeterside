@@ -412,6 +412,10 @@ async function route(req, res) {
     return sendHtml(res, 200, render.buildCakesHtml(), { 'Cache-Control': 'no-cache' });
   }
 
+  if (pathname === '/about' && (method === 'GET' || method === 'HEAD')) {
+    return sendHtml(res, 200, render.buildAboutHtml(), { 'Cache-Control': 'no-cache' });
+  }
+
   /* ---- health check (for the hosting platform) ---- */
   if (pathname === '/healthz' && (method === 'GET' || method === 'HEAD')) {
     return sendJson(res, 200, { ok: true, items: menu.list().length });

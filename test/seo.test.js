@@ -174,3 +174,57 @@ test('the favicon and app icons: a real .ico at /favicon.ico, and every page lin
     assert.ok(html.includes('href="/favicon.ico"') && !html.includes('rel="icon" href="/assets/Sweeter'), page);
   }
 });
+
+test('the About us page is indexable, linked, in the sitemap, and says only the shop\'s facts', async () => {
+  const seo = require('../server/seo');
+  const cakes = require('../server/cakes');
+  await withServer(async (url) => {
+    const res = await fetch(`${url}/about`);
+    assert.strictEqual(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/html/);
+    assert.ok(!/noindex/i.test(res.headers.get('x-robots-tag') || ''), 'no noindex header');
+    const html = await res.text();
+    assert.ok(!/<meta name="robots"[^>]*noindex/i.test(html), 'no noindex meta');
+    assert.ok(html.includes('<link rel="canonical" href="https://sweeterside.ph/about">'));
+    const title = html.match(/<title>(.*?)<\/title>/)[1];
+    for (const word of ['About', 'Café', 'Coffee Shop', 'Cake Shop', 'San Isidro']) assert.ok(title.includes(word), word);
+    assert.strictEqual((html.match(/<h1[ >]/g) || []).length, 1, 'one h1');
+
+    // The facts, the same as everywhere else.
+    assert.ok(html.includes(BUSINESS.address.street) && html.includes(BUSINESS.phone.display));
+    assert.ok(html.includes(seo.hours().label));
+    for (const area of BUSINESS.deliveryAreas) assert.ok(html.includes(area), area);
+    // Today's menu with prices, and the cake sizes and notice.
+    assert.ok(html.includes('Matcha Frappe <span class="about__price">Php 129</span>'));
+    const s = cakes.settings();
+    assert.ok(html.includes(`${render.esc(s.sizes[0].name)}: from Php ${s.sizes[0].from_price.toLocaleString('en-US')}`),
+      'sizes like 6" are escaped');
+    assert.ok(html.includes(`at least ${s.lead_days} days ahead`));
+
+    const graph = ldBlocks(html)[0]['@graph'];
+    const page = graph.find((n) => n['@type'] === 'AboutPage');
+    assert.strictEqual(page.mainEntity['@id'], 'https://sweeterside.ph/#business');
+    const crumbs = graph.find((n) => n['@type'] === 'BreadcrumbList');
+    assert.deepStrictEqual(crumbs.itemListElement.map((i) => i.item), ['https://sweeterside.ph/', 'https://sweeterside.ph/about']);
+
+    const robots = await (await fetch(`${url}/robots.txt`)).text();
+    assert.ok(!/^Disallow: \/about/m.test(robots) && !/^Disallow: \/$/m.test(robots), 'robots.txt allows /about');
+    assert.ok((await (await fetch(`${url}/sitemap.xml`)).text()).includes('<loc>https://sweeterside.ph/about</loc>'));
+    assert.ok((await (await fetch(`${url}/llms.txt`)).text()).includes('https://sweeterside.ph/about'));
+  });
+  assert.ok(render.buildHtml().includes('<a href="/about">About us</a>'), 'linked from the menu');
+  assert.ok(render.buildCakesHtml().includes('<a href="/about">About us</a>'), 'linked from the cakes page');
+});
+
+test('menu text on the About page is escaped', () => {
+  const cat = menu.list()[0].category_id;
+  const evil = menu.create({ name: '<img src=x onerror=alert(1)>', price: 99, category_id: cat, image: '', alt: '' });
+  try {
+    const html = render.buildAboutHtml();
+    assert.ok(!html.includes('<img src=x onerror'), 'never live markup');
+    assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+    assert.strictEqual(ldBlocks(html).length, 1);
+  } finally {
+    menu.remove(evil.id);
+  }
+});

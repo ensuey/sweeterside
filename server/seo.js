@@ -198,7 +198,116 @@ function robotsTxt() {
 function sitemapXml(now = new Date()) {
   const day = manilaDate(now);
   const url = (loc, freq, priority) => `  <url><loc>${BUSINESS.url}${loc}</loc><lastmod>${day}</lastmod><changefreq>${freq}</changefreq><priority>${priority}</priority></url>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${url('/', 'daily', '1.0')}\n${url('/cakes', 'weekly', '0.8')}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${url('/', 'daily', '1.0')}\n${url('/cakes', 'weekly', '0.8')}\n${url('/about', 'monthly', '0.7')}\n</urlset>\n`;
+}
+
+/* ---------------------------- about us ---------------------------- */
+
+const PAGE_TYPES = { delivery: 'delivery', pickup: 'pick-up', dinein: 'dine-in' };
+
+/** "a, b and c" */
+function listOf(words) {
+  return words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} and ${words.at(-1)}`;
+}
+
+/**
+ * The About us page body: who we are, what we serve (from today's menu),
+ * custom cakes (from the cake settings), how to order (from the order types
+ * that are on) and quick facts. Only facts the shop has given us; nothing is
+ * made up.
+ */
+function aboutHtml({ groups, cakeSizes, leadDays, orderTypes }) {
+  const b = BUSINESS;
+  const h = hours();
+  const types = orderTypes.map((t) => PAGE_TYPES[t]).filter(Boolean);
+  const menuList = groups.map((g) => {
+    const items = g.items.slice(0, 8).map((i) => `<li>${esc(i.name)} <span class="about__price">Php ${esc(i.sale_price ?? i.price)}</span></li>`).join('');
+    const more = g.items.length > 8 ? `<li><a href="/#menu">and ${g.items.length - 8} more on the menu</a></li>` : '';
+    return `        <div class="about__group">\n          <h3>${esc(g.category.name)}</h3>\n          <ul>${items}${more}</ul>\n        </div>`;
+  }).join('\n');
+  const sizes = cakeSizes.filter((s) => s.from_price > 0)
+    .map((s) => `<li>${esc(s.name)}: from Php ${esc(s.from_price.toLocaleString('en-US'))}</li>`).join('');
+  const facts = [
+    ['Name', esc(b.name)],
+    ['What we are', 'Café, coffee shop and cake shop'],
+    ['Address', `${esc(addressLine())}, Philippines`],
+    ['Opening hours', esc(h.label)],
+    ['Phone', `<a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a>`],
+    ['We serve', esc(listOf(b.serves.map((s) => s.toLowerCase())))],
+    ['Order', esc(types.length ? `Online for ${listOf(types)}` : 'Call or message us')],
+    ['Delivery areas', `${esc(listOf(b.deliveryAreas))}; farther for a higher fee`],
+    ['Custom cakes', `<a href="/cakes">Book online</a>, at least ${esc(leadDays)} days ahead`],
+    ['Map', `<a href="${esc(b.map)}" target="_blank" rel="noopener">Google Maps</a>`],
+    ['Facebook', `<a href="${esc(b.facebook)}" target="_blank" rel="noopener">Sweeter Side by Dachel</a>`],
+  ].map(([k, v]) => `          <div><dt>${k}</dt><dd>${v}</dd></div>`).join('\n');
+
+  return `  <section class="about__section" aria-labelledby="who-title">
+    <h2 id="who-title">Who we are</h2>
+    <p><strong>${esc(b.name)}</strong> is a café, coffee shop and cake shop run by Dachel, at the Public Market in Batobato, San Isidro, Davao Oriental. We serve coffee and frappe-based drinks, slices of cake, whole cakes and brownies, along with pasta and sandwiches, made fresh by Dachel.</p>
+    <p>Come in and eat at the café, pick up your order, or have it delivered around San Isidro. For birthdays and celebrations, Dachel bakes custom cakes to order.</p>
+  </section>
+
+  <section class="about__section" aria-labelledby="serve-title">
+    <h2 id="serve-title">What we serve</h2>
+    <p>Coffee and frappes, cakes by the slice or whole, and brownies, plus pasta and sandwiches. Here is today's menu with prices; see the <a href="/#menu">full menu</a> to order.</p>
+    <div class="about__menu">
+${menuList || '        <p>The menu is being updated.</p>'}
+    </div>
+  </section>
+
+  <section class="about__section" aria-labelledby="cakes-title">
+    <h2 id="cakes-title">Custom cakes</h2>
+    <p>Dachel bakes custom cakes for birthdays and celebrations. Choose a size and flavour, describe your design and pick the day; Dachel calls you to confirm the price. Book at least ${esc(leadDays)} days ahead.</p>
+    ${sizes ? `<ul class="about__sizes">${sizes}</ul>` : ''}
+    <p><a class="about__cta" href="/cakes">Book a custom cake</a></p>
+  </section>
+
+  <section class="about__section" aria-labelledby="order-title">
+    <h2 id="order-title">How to order</h2>
+    <ul>
+      <li><strong>Online:</strong> ${types.length ? `order on <a href="/">our menu</a> for ${esc(listOf(types))}.` : 'online ordering is closed right now.'} Online ordering is open ${esc(h.label.replace(/^Open daily, /, 'every day, '))}.</li>
+      <li><strong>Delivery:</strong> to ${esc(listOf(b.deliveryAreas))}, and farther for a higher delivery fee. Delivery orders are paid in cash when they arrive.</li>
+      <li><strong>By phone:</strong> call or text <a href="tel:${esc(b.phone.tel)}">${esc(b.phone.display)}</a>, or message us on <a href="${esc(b.facebook)}" target="_blank" rel="noopener">Facebook</a>.</li>
+    </ul>
+  </section>
+
+  <section class="about__section" aria-labelledby="facts-title">
+    <h2 id="facts-title">Quick facts</h2>
+    <dl class="about__facts">
+${facts}
+    </dl>
+  </section>`;
+}
+
+/** The About us page data: an AboutPage about the business, with breadcrumbs. */
+function aboutLd() {
+  const b = BUSINESS;
+  return jsonLd({
+    '@context': 'https://schema.org',
+    '@graph': [
+      businessNode(),
+      {
+        '@type': 'AboutPage',
+        '@id': `${b.url}/about#page`,
+        url: `${b.url}/about`,
+        name: `About ${b.name}`,
+        description: b.description,
+        inLanguage: 'en',
+        about: { '@id': ID },
+        mainEntity: { '@id': ID },
+        isPartOf: { '@type': 'WebSite', '@id': `${b.url}/#website`, name: b.name, url: `${b.url}/` },
+        breadcrumb: { '@id': `${b.url}/about#breadcrumb` },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${b.url}/about#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Menu', item: `${b.url}/` },
+          { '@type': 'ListItem', position: 2, name: 'About us', item: `${b.url}/about` },
+        ],
+      },
+    ],
+  });
 }
 
 /** A plain summary for AI assistants (llmstxt.org): who we are, where, when,
@@ -219,6 +328,7 @@ function llmsTxt(groups) {
 - Delivery: ${b.deliveryAreas.join(', ')}; farther for a higher fee. Delivery is cash on delivery.
 - Order online: ${b.url}/ (delivery, pick-up or dine-in)
 - Custom cakes: ${b.url}/cakes
+- About us: ${b.url}/about
 
 ## Menu (prices in Philippine pesos)
 
@@ -230,4 +340,6 @@ ${faqs().map(([q, a]) => `**${q}** ${a}`).join('\n\n')}
 `;
 }
 
-module.exports = { hours, jsonLd, homeLd, cakesLd, visitHtml, faqHtml, footHtml, faqs, robotsTxt, sitemapXml, llmsTxt };
+module.exports = {
+  hours, jsonLd, homeLd, cakesLd, aboutLd, aboutHtml, visitHtml, faqHtml, footHtml, faqs, robotsTxt, sitemapXml, llmsTxt,
+};

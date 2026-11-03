@@ -46,7 +46,7 @@ Legend:
 
 | Route | Auth | CSRF | Limit | Notes |
 |---|---|---|---|---|
-| `GET /`, `GET /cakes` | — | | | Server-rendered; every field escaped. |
+| `GET /`, `GET /cakes`, `GET /about` | — | | | Server-rendered; every field escaped. `/about` shows public shop facts and the menu with prices only. |
 | `GET /healthz` | — | | | `{ ok, items }` only. |
 | `GET /robots.txt`, `GET /sitemap.xml`, `GET /llms.txt` | — | | | For search engines and AI assistants. Public facts only (`server/business.js` and the live menu with prices); robots.txt keeps crawlers out of `/admin` and `/api/`. |
 | `GET /api/checkout-token` | — | | | Signed token; an order must arrive 3 s – 2 h after it was issued. |
@@ -180,6 +180,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-03: About us page (`/about`) added.
 - 2026-11-03: robots.txt, sitemap.xml and llms.txt added (local SEO).
 - 2026-11-02: order alerts (Web Push) routes added.
 - 2026-11-02: F2 fixed: new uploads are stripped, and the existing menu photos were cleaned on the live volume.
