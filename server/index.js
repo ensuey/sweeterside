@@ -1148,6 +1148,12 @@ async function route(req, res) {
     return handleUpload(req, res, session);
   }
 
+  /* Browsers ask for /favicon.ico on their own. Made by scripts/make-icons.js. */
+  if (pathname === '/favicon.ico' && (method === 'GET' || method === 'HEAD')) {
+    return serveFile(req, res, path.join(ROOT, 'assets', 'icons', 'favicon.ico'), { cache: 'public, max-age=86400' })
+      || send(res, 404, 'Not found');
+  }
+
   /* ---- for search engines and AI assistants (public facts only) ---- */
   if ((pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt')
       && (method === 'GET' || method === 'HEAD')) {

@@ -18,8 +18,8 @@ self.addEventListener('push', (event) => {
   const url = typeof msg.url === 'string' && msg.url.startsWith('/admin') ? msg.url : '/admin';
   event.waitUntil(self.registration.showNotification(title, {
     body: typeof msg.body === 'string' ? msg.body : 'Something new needs you.',
-    icon: '/assets/Sweeter%20Side%20-%20PNG.png',
-    badge: '/assets/Sweeter%20Side%20-%20PNG.png',
+    icon: '/assets/icons/icon-192.png',
+    badge: '/assets/icons/favicon-48.png',
     tag: typeof msg.tag === 'string' ? msg.tag : undefined,
     data: { url },
   }));

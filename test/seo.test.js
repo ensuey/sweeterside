@@ -150,3 +150,27 @@ test('changing the opening hours in Settings changes the page, the data and llms
     orders.updateSettings({ open_at: '00:00', close_at: '24:00' });
   }
 });
+
+test('the favicon and app icons: a real .ico at /favicon.ico, and every page links them', async () => {
+  const iconsDir = path.join(__dirname, '..', 'assets', 'icons');
+  for (const [name, size] of [['favicon-16.png', 16], ['favicon-32.png', 32], ['favicon-48.png', 48],
+    ['apple-touch-icon.png', 180], ['icon-192.png', 192], ['icon-512.png', 512]]) {
+    const png = fs.readFileSync(path.join(iconsDir, name));
+    assert.deepStrictEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [size, size], `${name} is ${size}x${size}`);
+  }
+  await withServer(async (url) => {
+    const ico = await fetch(`${url}/favicon.ico`);
+    assert.strictEqual(ico.status, 200);
+    assert.strictEqual(ico.headers.get('content-type'), 'image/x-icon');
+    const buf = Buffer.from(await ico.arrayBuffer());
+    assert.deepStrictEqual([buf.readUInt16LE(0), buf.readUInt16LE(2), buf.readUInt16LE(4)], [0, 1, 3], 'an icon file with 16, 32 and 48 px');
+  });
+  const home = render.buildHtml();
+  assert.ok(home.includes('<link rel="icon" href="favicon.ico" sizes="48x48">'));
+  assert.ok(home.includes('href="assets/icons/apple-touch-icon.png"'));
+  assert.ok(render.buildCakesHtml().includes('<link rel="icon" href="/favicon.ico" sizes="48x48">'));
+  for (const page of fs.readdirSync(path.join(__dirname, '..', 'admin')).filter((n) => n.endsWith('.html'))) {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'admin', page), 'utf8');
+    assert.ok(html.includes('href="/favicon.ico"') && !html.includes('rel="icon" href="/assets/Sweeter'), page);
+  }
+});

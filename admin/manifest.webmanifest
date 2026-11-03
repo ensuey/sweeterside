@@ -8,6 +8,7 @@
   "background_color": "#FBF8F1",
   "theme_color": "#FBF8F1",
   "icons": [
-    { "src": "/assets/Sweeter%20Side%20-%20PNG.png", "sizes": "1563x1563", "type": "image/png", "purpose": "any" }
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
