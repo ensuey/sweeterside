@@ -71,11 +71,20 @@ test('the menu page: open, closing soon with the bar, and closed after hours', (
   assert.match(soon, /<span class="status__pill">Closing soon<\/span> We take orders until 8:00 PM today\./);
   assert.match(soon, /<p class="soonbar" id="soonbar" role="status">Closing soon: we take online orders until 8:00 PM today\.<\/p>/);
 
+  // Closed, but taking pre-orders (the default, 3 days ahead).
   const closed = render.buildHtml(undefined, undefined, manila(20, 5));
   assert.match(closed, /data-shop-open="0"/);
-  assert.match(closed, /<span class="status__pill">Closed<\/span> We&#39;re closed for today\. We take orders again from 10:00 AM tomorrow\./);
+  assert.match(closed, /data-preorder="1"/);
+  assert.match(closed, /<span class="status__pill">Closed now<\/span> You can pre-order for tomorrow at 10:00 AM\./);
   const early = render.buildHtml(undefined, undefined, manila(8, 0));
-  assert.match(early, /We open at 10:00 AM today\./);
+  assert.match(early, /You can pre-order for today at 10:00 AM\./);
+
+  // Pre-orders off (today only): after closing there is nothing to order for.
+  orders.updateSettings({ preorder_days: 0 });
+  const off = render.buildHtml(undefined, undefined, manila(20, 5));
+  assert.match(off, /data-preorder="0"/);
+  assert.match(off, /<span class="status__pill">Closed<\/span> We&#39;re closed for today\. We take orders again from 10:00 AM tomorrow\./);
+  orders.updateSettings({ preorder_days: 3 });
 
   // The page carries what hours.js needs to keep it current.
   for (const attr of ['data-switch-open="1"', 'data-soon-minutes="30"', 'data-pickup-open="10:00"', 'data-pickup-close="20:00"']) {

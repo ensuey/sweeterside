@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 217 (`npm test`):
+**Tests:** 226 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -23,7 +23,8 @@ npm dependencies, SQLite via `node:sqlite`.
 - 12 in `test/cro.test.js`
 - 9 in `test/delivery.test.js`
 - 11 in `test/options.test.js`
-- 4 in `test/suggestions.test.js`
+- 5 in `test/suggestions.test.js`
+- 8 in `test/preorders.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -403,6 +404,27 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser (and at about 360 px): strip, one-tap add, Choose
     with options, a placed order with the flags saved, the Settings section.
   - **Tests:** `test/suggestions.test.js` (4).
+  - **Fixed after (#44):** the cart's + and − did nothing, because `<body>`
+    carries `data-suggest` and the click handler matched it. Only the strip's
+    buttons match now; a test pins it.
+- **PR E: pre-orders and scheduled orders.**
+  - **Rules** in `server/schedule.js` (Manila time): pick-up on a day and a
+    15-minute slot; delivery ASAP or a 30-minute window; dine-in now only.
+    ASAP and dine-in need the shop open now; up to N days ahead (Settings →
+    Opening hours → **Pre-orders up to**, default 3, 0 = today only).
+  - **Outside the hours** (switch on) the menu takes pre-orders: "Closed
+    now · You can pre-order for …", the cart starts at the next slot. At
+    closing time an open page switches over by itself (`shop:preorder`).
+    The Closed switch still blocks everything.
+  - **Orders** gain `scheduled_for` (UTC) and `scheduled_date` (Manila day),
+    additive columns. **Daily limits count by that day** (or the day placed),
+    and the page ships each day's stock (`data-stock`) for the cart.
+  - **Admin and POS:** "Scheduled — Tue 4 Nov, 10:30 AM" badge, sorted by
+    the time, "Waiting" from 30 minutes before it. Alerts say "Scheduled" +
+    time (no customer details). The confirmation shows the time.
+  - Checked in the browser outside the hours: pre-order menu, days and
+    times, per-day stock, two scheduled orders, the Orders page and the POS.
+  - **Tests:** `test/preorders.test.js` (8).
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -470,6 +492,8 @@ After deploying (owner, once):
     opening hours setting is one pair of times for every day).
   - For `/about`: the year the shop opened, a few lines about Dachel, best
     sellers, and shop and cake photos.
+- After PR E (owner): Settings → Opening hours → **Pre-orders up to** (days
+  ahead, default 3). Expect orders for tomorrow to arrive overnight.
 - After PR D (owner): Settings → **Cart suggestions**: e.g. with drinks →
   brownies, cinnamon rolls; with pasta → fries; any order → a best-selling
   frappe.

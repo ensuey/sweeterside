@@ -592,7 +592,7 @@ async function route(req, res) {
     }
     const body = await readJson(req);
     // Closed says closed, whatever else is wrong with the order.
-    if (!orders.isShopOpen()) throw orders.shopClosedError();
+    if (!orders.canOrder()) throw orders.shopClosedError();
     // A hidden field people never see. Bots that fill every field fill it.
     if (String(body.website ?? '').trim()) {
       logRejected('honeypot');
@@ -621,6 +621,7 @@ async function route(req, res) {
         cash: order.cash, change_due: order.change_due,
         table_no: order.table_no, pickup_at: order.pickup_at,
         delivery_area: order.delivery_area, fee_to_confirm: order.fee_to_confirm === 1,
+        scheduled_label: order.scheduled_label,
         eta: order.delivery_area_id ? delivery.etaLabel(delivery.get(order.delivery_area_id)) : '',
       },
     });
@@ -632,7 +633,7 @@ async function route(req, res) {
       return sendJson(res, 415, { error: 'Send the code as JSON.' });
     }
     // A cart left open while the shop closed should not keep checking codes.
-    if (!orders.isShopOpen()) throw orders.shopClosedError();
+    if (!orders.canOrder()) throw orders.shopClosedError();
     const ip = clientIp(req);
     if (voucherLimiter.limited(ip)) {
       return sendJson(res, 429, { error: 'Too many codes tried. Please wait a few minutes and try again.' });

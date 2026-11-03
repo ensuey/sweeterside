@@ -14,6 +14,23 @@ const { BUSINESS } = require('./business');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
 const suggestions = require('./suggestions');
+const schedule = require('./schedule');
+const { manilaDate, addDays } = require('./clock');
+
+/** Items with a daily limit: how many are left on each day that can be
+    ordered for, so the cart says "Only N left" for the day chosen.
+    { 'YYYY-MM-DD': { item_id: remaining } } */
+function stockByDay(now) {
+  const today = manilaDate(now);
+  const out = {};
+  for (let i = 0; i <= schedule.preorderDays(); i++) {
+    const date = addDays(today, i);
+    const left = {};
+    for (const item of menu.list({ now, date })) if (item.remaining !== null) left[item.id] = item.remaining;
+    out[date] = left;
+  }
+  return out;
+}
 
 // The options of the items on the page being built: { item_id: { price, sale_type, sale_value, groups } }.
 let pageOptions = {};
@@ -216,6 +233,9 @@ function chipsHtml(groups, total) {
 /** Open, closing soon or closed, shown in the hero. Rendered here so it shows
     without JavaScript; assets/js/hours.js keeps it current while the page is open. */
 function shopStatusHtml(state, note) {
+  if (state.preorder) {
+    return `<p class="status status--closed" id="shop-status"><span class="status__pill">Closed now</span> ${esc(`You can pre-order for ${state.preorder.text}.`)}</p>`;
+  }
   const closes = orders.clock12(state.closes_at);
   const opens = orders.clock12(state.opens_at);
   if (state.closing_soon) {
@@ -249,8 +269,12 @@ function menuGroups(allItems = menu.list(), cats = categories.list()) {
 }
 
 /** The menu page. now is the current time, for tests. */
-function buildHtml(allItems = menu.list(), cats = categories.list(), now = new Date()) {
+function buildHtml(allItems = null, cats = categories.list(), now = new Date()) {
   const template = fs.readFileSync(TEMPLATE, 'utf8');
+  // Closed now, switch on: a pre-order for the first time there is.
+  const state = orders.shopState(now);
+  state.preorder = !state.open && state.switch_open ? orders.nextOrderTime(now) : null;
+  if (!allItems) allItems = menu.list({ now, date: state.preorder ? state.preorder.date : undefined });
   const { items, groups } = menuGroups(allItems, cats);
   pageOptions = itemOptions.menuOptions(items);
 
@@ -268,10 +292,12 @@ function buildHtml(allItems = menu.list(), cats = categories.list(), now = new D
     : '';
 
   const hours = orders.openingHours();
-  const state = orders.shopState(now);
   return template
     .replace('<!--SHOP_OPEN-->', state.open ? '1' : '0')
     .replace('<!--SWITCH_OPEN-->', state.switch_open ? '1' : '0')
+    .replace('<!--PREORDER-->', state.preorder ? '1' : '0')
+    .replace('<!--PREORDER_DAYS-->', String(schedule.preorderDays()))
+    .replace('<!--STOCK-->', () => esc(JSON.stringify(stockByDay(now))))
     .replace('<!--SOON_MINUTES-->', String(orders.CLOSING_SOON_MINUTES))
     .replace('<!--SOON_BAR-->', () => soonBarHtml(state))
     .replace('<!--SHOP_STATUS-->', () => shopStatusHtml(state, orders.closedNote()))

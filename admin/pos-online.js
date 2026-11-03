@@ -160,6 +160,7 @@ function clock12(hhmm) {
 }
 
 function onlineType(o) {
+  if (o.scheduled_label) return `${o.order_type === 'pickup' ? 'Pick-up' : 'Delivery'} · Scheduled ${o.scheduled_label}`;
   if (o.order_type === 'pickup') return o.pickup_at === 'asap' || !o.pickup_at ? 'Pick-up · ASAP' : `Pick-up · ${clock12(o.pickup_at)}`;
   if (o.order_type === 'dinein') return `Dine-in · Table ${o.table_no}`;
   return 'Delivery';
@@ -175,12 +176,19 @@ async function loadOnlineList() {
 
 async function showOnline() {
   const orders = await loadOnlineList();
-  const rows = [...orders].sort((a, b) => b.id - a.id);
+  // Soonest first: a scheduled order by its time, the rest by when they came in.
+  const due = (o) => String(o.scheduled_for || o.created_at);
+  const rows = [...orders].sort((a, b) => due(a).localeCompare(due(b)) || a.id - b.id);
   $('online-empty').hidden = rows.length > 0;
   $('online-list').innerHTML = rows.map((o) => {
     const isNew = o.status === 'new' && !ONLINE.opened.has(o.id);
     const units = o.items.reduce((s, l) => s + l.qty, 0);
-    const waited = Math.max(0, Math.floor((Date.now() - new Date(`${String(o.created_at).replace(' ', 'T')}Z`).getTime()) / 60000));
+    // A scheduled order starts waiting 30 minutes before its time.
+    const from = o.scheduled_for
+      ? Math.max(new Date(`${String(o.scheduled_for).replace(' ', 'T')}Z`).getTime() - 30 * 60000,
+        new Date(`${String(o.created_at).replace(' ', 'T')}Z`).getTime())
+      : new Date(`${String(o.created_at).replace(' ', 'T')}Z`).getTime();
+    const waited = Math.max(0, Math.floor((Date.now() - from) / 60000));
     const waiting = o.status === 'new' && o.needs_confirm && waited >= ONLINE_WAITING_MIN
       ? ` <span class="flag flag--wait">Waiting ${waited} min</span>` : '';
     return `

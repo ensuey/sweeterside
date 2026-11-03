@@ -15,7 +15,8 @@
   if (!dialog || typeof dialog.showModal !== 'function' || !window.fetch) return;
   // While the shop is closed the menu is for browsing only: no Add buttons and
   // no cart. A saved cart is left alone for when the shop opens again.
-  if (document.body.dataset.shopOpen === '0') return;
+  // Outside the hours with pre-orders on, the cart works for a later time.
+  if (document.body.dataset.shopOpen === '0' && document.body.dataset.preorder !== '1') return;
 
   var $ = function (id) { return document.getElementById(id); };
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card[data-id]'));
@@ -131,6 +132,12 @@
 
   // Closing time came while the page was open (hours.js): stop taking the
   // order and say why. Whatever is in the cart is kept for next time.
+  // Closing time came while the page was open, and pre-orders are on: as
+  // soon as possible and dine-in go; a later time can still be chosen.
+  document.addEventListener('shop:preorder', function () {
+    refreshTypes();
+  });
+
   document.addEventListener('shop:closed', function (e) {
     shopClosed = true;
     $('cart-closed').textContent = e.detail && e.detail.message ? e.detail.message : $('cart-closed').textContent;
@@ -201,44 +208,139 @@
     return (h % 12 || 12) + ':' + pad(mins % 60) + (h < 12 ? ' AM' : ' PM');
   }
 
-  /** Today's choices: "As soon as possible" while open, then 15-minute slots
-      from at least 15 minutes from now until closing. [{ value, label }] */
-  function pickupSlots() {
-    if (pickupOpen === null || pickupClose === null) return [];
+  /* Pick-up: a day (today up to N days ahead) and a 15-minute slot within
+     the hours. Delivery: as soon as possible, or a day and a 30-minute
+     window. "As soon as possible" and dine-in only while open now. The
+     same rules as server/schedule.js, which checks them again. */
+  var WINDOW_MINUTES = 30;
+  var LEAD = { pickup: 15, delivery: 30 };
+  var preorderDays = Number(document.body.dataset.preorderDays) || 0;
+  var switchOn = document.body.dataset.switchOpen === '1';
+  var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /** Today in Manila, 'YYYY-MM-DD'. */
+  function manilaToday() { return new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10); }
+  function addDays(ymd, n) {
+    var d = new Date(ymd + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function dayLabel(ymd) {
+    var today = manilaToday();
+    if (ymd === today) return 'Today';
+    if (ymd === addDays(today, 1)) return 'Tomorrow';
+    var d = new Date(ymd + 'T00:00:00Z');
+    return DAYS[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()];
+  }
+  function hhmm(t) { return pad(Math.floor(t / 60)) + ':' + pad(t % 60); }
+  function openNow() {
     var now = manilaMinutes();
-    var slots = [];
-    if (now >= pickupOpen && now < pickupClose) {
-      slots.push({ value: 'asap', label: 'As soon as possible' });
-    }
-    var first = Math.max(pickupOpen, Math.ceil((now + 15) / SLOT_MINUTES) * SLOT_MINUTES);
-    for (var t = first; t <= pickupClose; t += SLOT_MINUTES) {
-      slots.push({ value: pad(Math.floor(t / 60)) + ':' + pad(t % 60), label: clockLabel(t) });
-    }
-    return slots;
+    return switchOn && pickupOpen !== null && pickupClose !== null && now >= pickupOpen && now < pickupClose;
   }
 
-  /** Rebuild the pick-up select, keeping the customer's choice if it is still offered. */
-  function fillPickupTimes() {
-    var select = $('o-pickup');
+  /** The start times (minutes) offered on a day. */
+  function slotsOn(kind, date) {
+    if (pickupOpen === null || pickupClose === null || !switchOn) return [];
+    var today = manilaToday();
+    if (date < today || date > addDays(today, preorderDays)) return [];
+    var step = kind === 'delivery' ? WINDOW_MINUTES : SLOT_MINUTES;
+    var last = kind === 'delivery' ? pickupClose - WINDOW_MINUTES : Math.min(pickupClose, 24 * 60 - SLOT_MINUTES);
+    var first = pickupOpen;
+    if (date === today) while (first < manilaMinutes() + LEAD[kind]) first += step;
+    var out = [];
+    for (var t = first; t <= last; t += step) out.push(t);
+    return out;
+  }
+
+  /** The days to choose from: those with a time left, or today for ASAP. */
+  function daysFor(kind) {
+    var today = manilaToday();
+    var out = [];
+    for (var i = 0; i <= preorderDays; i++) {
+      var d = addDays(today, i);
+      if (slotsOn(kind, d).length || (i === 0 && openNow())) out.push(d);
+    }
+    return out;
+  }
+
+  function fill(select, options, keep) {
     var previous = select.value;
-    var slots = pickupSlots();
     select.textContent = '';
-    slots.forEach(function (s) {
-      var opt = el('option', null, s.label);
-      opt.value = s.value;
+    options.forEach(function (o) {
+      var opt = el('option', null, o.label);
+      opt.value = o.value;
       select.appendChild(opt);
     });
-    if (slots.some(function (s) { return s.value === previous; })) select.value = previous;
-    return slots.length > 0;
+    if (keep && options.some(function (o) { return o.value === previous; })) select.value = previous;
+  }
+
+  /** Rebuild a type's day and time choices, keeping the customer's if still
+      offered; otherwise the first (as soon as possible, or the next time). */
+  function fillWhen(kind) {
+    var daySel = $(kind === 'pickup' ? 'o-pickup-date' : 'o-deliver-date');
+    var timeSel = $(kind === 'pickup' ? 'o-pickup' : 'o-deliver');
+    var days = daysFor(kind);
+    fill(daySel, days.map(function (d) { return { value: d, label: dayLabel(d) }; }), true);
+    // One day only (today): nothing to ask.
+    daySel.closest('.when__part').hidden = days.length < 2;
+    var date = daySel.value;
+    var times = [];
+    if (date === manilaToday() && openNow()) times.push({ value: 'asap', label: 'As soon as possible' });
+    slotsOn(kind, date).forEach(function (t) {
+      times.push({ value: hhmm(t), label: kind === 'delivery' ? windowLabel(t) : clockLabel(t) });
+    });
+    fill(timeSel, times, true);
+    return days.length > 0;
+  }
+
+  /** "10:30–11:00 AM", or "11:30 AM–12:00 PM" across noon. */
+  function windowLabel(t) {
+    var a = clockLabel(t);
+    var b = clockLabel(t + WINDOW_MINUTES);
+    return (a.slice(-2) === b.slice(-2) ? a.slice(0, -3) : a) + '–' + b;
+  }
+
+  /** The day the order is for: limits count against it. */
+  function orderDay() {
+    if (type === 'pickup' && $('o-pickup').value !== 'asap' && $('o-pickup-date').value) return $('o-pickup-date').value;
+    if (type === 'delivery' && $('o-deliver').value !== 'asap' && $('o-deliver-date').value) return $('o-deliver-date').value;
+    return manilaToday();
+  }
+
+  /* Items with a daily limit: how many are left on each day, so "only N
+     left" follows the day chosen. */
+  var stockByDay = {};
+  try { stockByDay = JSON.parse(document.body.dataset.stock || '{}'); } catch (e) { stockByDay = {}; }
+  function applyDay() {
+    var left = stockByDay[orderDay()];
+    if (!left) return;
+    var cut = [];
+    Object.keys(catalog).forEach(function (id) {
+      if (!(id in left)) return;
+      catalog[id].max = Math.min(MAX_QTY, left[id]);
+      for (var i = lines.length - 1; i >= 0 && itemQty(id) > catalog[id].max; i--) {
+        if (lines[i].id !== id) continue;
+        lines[i].qty -= Math.min(lines[i].qty, itemQty(id) - catalog[id].max);
+        if (lines[i].qty === 0) lines.splice(i, 1);
+        if (cut.indexOf(id) === -1) cut.push(id);
+      }
+    });
+    if (cut.length) {
+      notice(cut.length === 1
+        ? 'Only ' + catalog[cut[0]].max + ' ' + catalog[cut[0]].name + ' left for that day. Your cart has been updated.'
+        : 'Some items have only a few left for that day. Your cart has been updated.');
+      save();
+    }
   }
 
   /* ---------------------------- order type ---------------------------- */
 
-  /** Which types can be chosen right now: turned on, and pick-up only while
-      there is a slot left today. */
+  /** Which types can be chosen right now: turned on, dine-in only while
+      open, and pick-up or delivery while there is a time to choose. */
   function availableTypes() {
-    var pickupOk = fillPickupTimes();
-    return enabledTypes.filter(function (t) { return t !== 'pickup' || pickupOk; });
+    var ok = { pickup: fillWhen('pickup'), delivery: fillWhen('delivery'), dinein: openNow() };
+    return enabledTypes.filter(function (t) { return ok[t]; });
   }
 
   function setType(next) {
@@ -258,6 +360,7 @@
       });
     });
     clearErrors();
+    applyDay();
     render();
   }
 
@@ -272,7 +375,10 @@
 
     var note = '';
     if (enabledTypes.indexOf('pickup') > -1 && open.indexOf('pickup') === -1) {
-      note = 'Pick-up is closed for today.';
+      note = 'Pick-up is closed for now.';
+    }
+    if (enabledTypes.indexOf('dinein') > -1 && open.indexOf('dinein') === -1 && open.length) {
+      note = (note ? note + ' ' : '') + "Dine-in orders are taken while we're open.";
     }
     $('otype-note').textContent = note;
     $('otype-note').hidden = !note;
@@ -754,6 +860,9 @@
       else if (cashRaw && cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
     }
 
+    if (type === 'delivery' && !form.elements.deliver_at.value) {
+      errors.deliver_at = 'Choose when you would like it delivered.';
+    }
     if (type === 'pickup' && !form.elements.pickup_at.value) {
       errors.pickup_at = 'Choose when you will pick up your order.';
     }
@@ -792,15 +901,16 @@
     var when;
     var next;
     if (order.order_type === 'pickup') {
-      when = order.pickup_at === 'asap' ? 'Pick-up · as soon as it is ready' : 'Pick-up · ' + clockLabel(toMinutes(order.pickup_at)) + ' today';
-      next = order.pickup_at === 'asap'
-        ? 'Pick it up as soon as it is ready. Dachel will call you when it is.'
-        : 'Pick it up at ' + clockLabel(toMinutes(order.pickup_at)) + ' today.';
+      when = order.scheduled_label ? 'Pick-up · ' + order.scheduled_label : 'Pick-up · as soon as it is ready';
+      next = order.scheduled_label
+        ? 'Pick it up on ' + order.scheduled_label + '.'
+        : 'Pick it up as soon as it is ready. Dachel will call you when it is.';
     } else if (order.order_type === 'dinein') {
       when = 'Dine-in · table ' + order.table_no;
       next = 'We will bring it to table ' + order.table_no + '.';
     } else {
-      when = 'Delivery · ' + (order.delivery_area || 'today') + (order.eta ? ' · ' + order.eta.charAt(0).toLowerCase() + order.eta.slice(1) : '');
+      when = 'Delivery · ' + (order.delivery_area || 'today') + (order.scheduled_label ? ' · ' + order.scheduled_label
+        : order.eta ? ' · ' + order.eta.charAt(0).toLowerCase() + order.eta.slice(1) : '');
       next = order.fee_to_confirm
         ? 'Delivery fee: to be confirmed. We will call you with it before we send your order. Pay in cash when it arrives.'
         : 'Pay in cash when it arrives.';
@@ -842,6 +952,9 @@
       cash: type === 'delivery' ? form.elements.cash.value.trim() : '',
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
+      pickup_date: type === 'pickup' && form.elements.pickup_at.value !== 'asap' ? form.elements.pickup_date.value : '',
+      deliver_at: type === 'delivery' ? form.elements.deliver_at.value : '',
+      deliver_date: type === 'delivery' && form.elements.deliver_at.value !== 'asap' ? form.elements.deliver_date.value : '',
       voucher: voucher ? voucher.code : '',
       items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [], source: l.src || '' }; }),
       expected_total: total(),
@@ -1050,6 +1163,16 @@
   $('cart-open').addEventListener('click', open);
   form.addEventListener('submit', submit);
   $('o-cash').addEventListener('input', renderChange);
+  ['o-pickup-date', 'o-deliver-date'].forEach(function (id) {
+    $(id).addEventListener('change', function () {
+      fillWhen(id === 'o-pickup-date' ? 'pickup' : 'delivery');
+      applyDay();
+      render();
+    });
+  });
+  ['o-pickup', 'o-deliver'].forEach(function (id) {
+    $(id).addEventListener('change', function () { applyDay(); render(); });
+  });
   // A new area changes the fee, the time and the total.
   $('o-area').addEventListener('change', function () { render(); });
   // Exact amount: the total, so no change is needed (blank means the same).

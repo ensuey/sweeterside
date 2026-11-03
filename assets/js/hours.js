@@ -64,6 +64,21 @@
       return;
     }
 
+    // Pre-orders on: after closing, a time tomorrow (or later) can still be
+    // chosen, so the cart stays; as soon as possible and dine-in go.
+    var types = (body.dataset.orderTypes || '').split(' ');
+    var canPreorder = Number(body.dataset.preorderDays) > 0
+      && (types.indexOf('pickup') > -1 || types.indexOf('delivery') > -1);
+    if (!inHours && canPreorder) {
+      shopOpen = false;
+      body.dataset.shopOpen = '0';
+      body.dataset.preorder = '1';
+      if (bar) bar.hidden = true;
+      setStatus('closed', 'Closed now', 'You can pre-order for tomorrow at ' + clock12(open) + '.');
+      document.dispatchEvent(new CustomEvent('shop:preorder'));
+      return;
+    }
+
     if (!inHours) {
       shopOpen = false;
       body.dataset.shopOpen = '0';

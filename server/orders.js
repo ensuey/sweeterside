@@ -13,6 +13,7 @@ const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
+const schedule = require('./schedule');
 
 const { ValidationError } = menu;
 
@@ -106,33 +107,6 @@ function clock12(hhmm) {
   return `${h % 12 || 12}:${String(mins % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
-/** @returns 'asap' or 'HH:MM', or throws ValidationError */
-function parsePickupTime(input, now) {
-  const { open, close } = pickupHours();
-  const openMins = toMinutes(open);
-  const closeMins = closeMinutes(close);
-  const nowMins = manilaMinutes(now);
-  const value = String(input ?? '').trim();
-
-  if (!value) throw new ValidationError({ pickup_at: 'Choose when you will pick up your order.' });
-  if (value === 'asap') {
-    if (nowMins < openMins || nowMins >= closeMins) {
-      throw new ValidationError({ pickup_at: `Pick-up is from ${open} to ${close}. Choose a time.` });
-    }
-    return value;
-  }
-  const mins = toMinutes(value);
-  if (mins === null || mins % SLOT_MINUTES !== 0 || mins < openMins || mins > closeMins) {
-    throw new ValidationError({ pickup_at: `Choose a pick-up time between ${open} and ${close}.` });
-  }
-  // The page offers times at least 15 minutes ahead; allow 10 so a slow
-  // submit is not refused.
-  if (mins < nowMins + 10) {
-    throw new ValidationError({ pickup_at: 'That time is too soon. Choose a later pick-up time.' });
-  }
-  return value;
-}
-
 /* ---------------------------- open / closed ---------------------------- */
 
 // Ordering opens and closes with the opening hours. The Open/Closed switch is
@@ -168,6 +142,24 @@ function shopState(now = new Date()) {
 
 function isShopOpen(now = new Date()) {
   return shopState(now).open;
+}
+
+/** The first time anything can be ordered for, when not open now:
+    { date, minutes, text } over the order types turned on, or null. */
+function nextOrderTime(now = new Date()) {
+  let best = null;
+  for (const type of enabledTypes().filter((t) => t !== 'dinein')) {
+    const n = schedule.next(type, now);
+    if (n && (!best || n.date < best.date || (n.date === best.date && n.minutes < best.minutes))) best = n;
+  }
+  return best ? { ...best, text: schedule.whenText(best.date, best.minutes, now) } : null;
+}
+
+/** Orders can be placed: open now, or a pre-order for a later time. The
+    Open/Closed switch set to Closed stops both. */
+function canOrder(now = new Date()) {
+  const st = shopState(now);
+  return st.open || (st.switch_open && nextOrderTime(now) !== null);
 }
 
 function closedNote() {
@@ -256,6 +248,7 @@ function closedMessage(now = new Date()) {
 
 /** The error an order (or a voucher check) gets while the shop is closed. */
 function shopClosedError(now = new Date()) {
+  // Stays as it was for the switch; outside the hours it says when to pre-order for.
   const message = closedMessage(now);
   return Object.assign(new Error(message), { status: 409, body: { error: message, closed: true } });
 }
@@ -358,6 +351,7 @@ function settings() {
     facebook_url: facebookUrl(),
     share_image: shareImage(),
     free_delivery_min: delivery.freeOver(),
+    preorder_days: schedule.preorderDays(),
     require_confirm_delivery: requiresConfirmation('delivery'),
     require_confirm_pickup: requiresConfirmation('pickup'),
     require_confirm_dinein: requiresConfirmation('dinein'),
@@ -382,6 +376,7 @@ function updateSettings(input) {
     facebook_url: parseFacebookUrl,
     share_image: parseShareImage,
     free_delivery_min: parseFreeMin,
+    preorder_days: schedule.parseDays,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
     require_confirm_pickup: parseSwitch('require_confirm_pickup'),
     require_confirm_dinein: parseSwitch('require_confirm_dinein'),
@@ -472,14 +467,14 @@ function cartLines(rawItems) {
  * @returns {{ lines, unavailable, limits, short, subtotal, discount, voucher,
  *             voucherError, delivery_fee, total, priced }}
  */
-function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', areaChoice = null) {
+function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', areaChoice = null, date = null) {
   const lines = [];
   const unavailable = [];
   const short = [];
 
   const perItem = new Map(); // item_id -> qty over all its lines
   for (const { id, qty, options, suggested } of cartLines(rawItems)) {
-    const item = menu.get(id, { now });
+    const item = menu.get(id, { now, date: date || undefined });
     if (!item || item.availability === 'unavailable' || item.sold_out) {
       if (!unavailable.includes(id)) unavailable.push(id);
       continue;
@@ -571,7 +566,7 @@ function staleCart(message, q) {
  * options.now is the current time, for tests.
  */
 function create(input, { now = new Date() } = {}) {
-  if (!isShopOpen(now)) throw shopClosedError(now);
+  if (!canOrder(now)) throw shopClosedError(now);
 
   const type = input.type === undefined ? 'delivery' : String(input.type);
   if (!ORDER_TYPES.includes(type) || !isEnabled(type)) {
@@ -625,22 +620,25 @@ function create(input, { now = new Date() } = {}) {
     else if (tableNo.length > TABLE_MAX) errors.table_no = `Keep the table number under ${TABLE_MAX} characters.`;
   }
 
-  let pickupAt = '';
-  if (type === 'pickup') {
-    try {
-      pickupAt = parsePickupTime(input.pickup_at, now);
-    } catch (err) {
-      if (!(err instanceof ValidationError)) throw err;
-      Object.assign(errors, err.errors);
-    }
+  // When: as soon as possible (open now), or a date and time (a pre-order
+  // when closed). Dine-in is now only.
+  if (type === 'dinein' && !isShopOpen(now)) throw shopClosedError(now);
+  let when = { pickup_at: '', scheduled_for: null, scheduled_date: null, service_date: null };
+  try {
+    when = schedule.parseWhen(type, input, now);
+  } catch (err) {
+    if (!(err instanceof ValidationError)) throw err;
+    Object.assign(errors, err.errors);
   }
+  const pickupAt = when.pickup_at;
 
   // The stock check and the insert below run with no await in between, and
   // Node runs one request's synchronous code at a time, so two customers
   // cannot both take the last one.
   let q = null;
   try {
-    q = quote(input.items, type, now, input.voucher, input.delivery_area);
+    // Today's limits count against the day the order is for.
+    q = quote(input.items, type, now, input.voucher, input.delivery_area, when.service_date);
     if (type === 'delivery' && !q.area) {
       errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
     }
@@ -694,12 +692,13 @@ function create(input, { now = new Date() } = {}) {
       INSERT INTO orders (source, order_type, status, customer_name, phone, phone_norm, address, landmark,
                           table_no, pickup_at, gross_cents, subtotal_cents, voucher_code, discount_cents,
                           delivery_fee_cents, total_cents, cash_cents, change_due_cents, pricing,
-                          delivery_area_id, delivery_area, fee_to_confirm)
-      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                          delivery_area_id, delivery_area, fee_to_confirm, scheduled_for, scheduled_date)
+      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       type, status, name, phone, phoneNorm, address, landmark, tableNo, pickupAt,
       t.gross, t.subtotal, q.voucher ? q.voucher.code : '', t.voucher_discount,
       t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced),
-      q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0);
+      q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0,
+      when.scheduled_for, when.scheduled_date);
     insertLines(info.lastInsertRowid, q.priced.lines, q.lines);
     return info.lastInsertRowid;
   });
@@ -759,6 +758,8 @@ function withLines(order, { fullIds = false } = {}) {
       return { ...l, qty: l.qty - l.voided_qty, price: l.price_cents / 100, options, options_text: itemOptions.optionsText(options) };
     });
   order.pricing = order.pricing ? JSON.parse(order.pricing) : null;
+  // "Tue 4 Nov, 10:30 AM": a scheduled order (pre-order), or '' for as soon as possible.
+  order.scheduled_label = schedule.label(order);
   // pos_input is what the cashier typed, SC/PWD ID numbers in full; the POS
   // reads it from the database itself (pos.view masks it per role). Neither
   // it nor the request key ever goes out with an order.
@@ -791,7 +792,8 @@ function list(which = 'active') {
 
   const params = which === 'active' ? ACTIVE_STATUSES : [];
   // Active orders oldest first (the queue); finished ones newest first.
-  const order = which === 'active' ? 'id ASC' : 'id DESC';
+  // Scheduled orders take their place by the time they are for.
+  const order = which === 'active' ? 'COALESCE(scheduled_for, created_at) ASC, id ASC' : 'id DESC';
   return withHistory(db.prepare(`SELECT * FROM orders ${filter} ORDER BY ${order} LIMIT 200`)
     .all(...params).map((o) => withLines(o)));
 }
@@ -866,7 +868,7 @@ module.exports = {
   parseOptions,
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
-  isShopOpen, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
+  isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
   closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage,
   quote, create, insertLines, get, list, counts, setStatus,
 };
