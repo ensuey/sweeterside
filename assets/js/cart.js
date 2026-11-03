@@ -933,7 +933,8 @@
   dialog.addEventListener('click', function (e) {
     if (e.target === dialog || e.target.closest('[data-close]')) { dialog.close(); return; }
 
-    var sug = e.target.closest('[data-suggest]');
+    // Only the strip's own buttons: <body> carries data-suggest too (the lists).
+    var sug = e.target.closest('button[data-suggest]');
     if (sug) {
       var sid = sug.dataset.suggest;
       if (catalog[sid] && catalog[sid].options) {
