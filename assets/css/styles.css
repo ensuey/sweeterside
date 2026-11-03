@@ -585,6 +585,22 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 }
 .foot a { color: var(--navy); }
 
+/* ---------- Visit us and questions (below the menu) ---------- */
+.visit, .faq { padding: var(--sp-7) 0; border-top: 1px solid var(--line); }
+.visit h2, .faq h2 { font-size: 1.5rem; margin-bottom: var(--sp-3); }
+.visit h3, .faq h3 { font-size: 1.0625rem; margin-bottom: var(--sp-1); }
+.visit__lead { max-width: 46rem; color: var(--ink-soft); margin-bottom: var(--sp-5); }
+.visit__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--sp-4); }
+.visit__grid > div {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4);
+}
+.visit address { font-style: normal; }
+.visit p, .visit address { margin: 0 0 var(--sp-2); }
+.visit a, .faq a { color: var(--navy); }
+.faq__item { max-width: 46rem; padding: var(--sp-3) 0; border-bottom: 1px solid var(--line); }
+.faq__item:last-child { border-bottom: 0; }
+.faq__item p { margin: 0; color: var(--ink-soft); }
+
 /* ---------- Motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

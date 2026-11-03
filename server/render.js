@@ -9,6 +9,7 @@ const menu = require('./menu');
 const categories = require('./categories');
 const orders = require('./orders');
 const cakes = require('./cakes');
+const seo = require('./seo');
 
 const TEMPLATE = path.join(ROOT, 'templates', 'menu.html');
 const CAKES_TEMPLATE = path.join(ROOT, 'templates', 'cakes.html');
@@ -109,15 +110,19 @@ function shopStatusHtml(open, note) {
   return `<p class="status status--closed"><span class="status__pill">Closed</span> ${esc(text)}</p>`;
 }
 
-function buildHtml(allItems = menu.list(), cats = categories.list()) {
-  const template = fs.readFileSync(TEMPLATE, 'utf8');
-  // Items marked not available are left off the menu entirely.
+/** The menu as customers see it: items marked not available are left off,
+    and empty categories get neither a section nor a filter chip. */
+function menuGroups(allItems = menu.list(), cats = categories.list()) {
   const items = allItems.filter((i) => i.availability !== 'unavailable');
-
-  // Empty categories get neither a section nor a filter chip.
   const groups = cats
     .map((category) => ({ category, items: items.filter((i) => i.category_id === category.id) }))
     .filter((g) => g.items.length > 0);
+  return { items, groups };
+}
+
+function buildHtml(allItems = menu.list(), cats = categories.list()) {
+  const template = fs.readFileSync(TEMPLATE, 'utf8');
+  const { items, groups } = menuGroups(allItems, cats);
 
   const sections = groups.map((g) => sectionHtml(g.category, g.items)).join('\n\n');
 
@@ -135,7 +140,11 @@ function buildHtml(allItems = menu.list(), cats = categories.list()) {
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
-    .replace('<!--SECTIONS-->', sections + empty);
+    .replace('<!--SECTIONS-->', sections + empty)
+    .replace('<!--LD_JSON-->', () => seo.homeLd(groups))
+    .replace('<!--VISIT-->', () => seo.visitHtml())
+    .replace('<!--FAQ-->', () => seo.faqHtml())
+    .replace('<!--FOOT_NAP-->', () => seo.footHtml());
 }
 
 /** Write index.html so plain static hosting keeps serving a current menu. */
@@ -172,7 +181,8 @@ function buildCakesHtml(now = new Date()) {
     .replace('<!--EARLIEST_TEXT-->', esc(cakes.niceDate(avail.earliest)))
     .replace('<!--LEAD_DAYS-->', `${avail.lead_days} day${avail.lead_days === 1 ? '' : 's'}`)
     .replace('<!--SIZES-->', sizes)
-    .replace('<!--FLAVOURS-->', flavours);
+    .replace('<!--FLAVOURS-->', flavours)
+    .replace('<!--LD_JSON-->', () => seo.cakesLd(s.sizes));
 }
 
-module.exports = { buildHtml, buildCakesHtml, writeStatic, esc, encPath, OUTPUT, TEMPLATE };
+module.exports = { buildHtml, buildCakesHtml, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
