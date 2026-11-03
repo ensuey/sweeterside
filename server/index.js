@@ -17,6 +17,7 @@ const vouchers = require('./vouchers');
 const cakes = require('./cakes');
 const checkout = require('./checkout');
 const push = require('./push');
+const seo = require('./seo');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
 const staff = require('./staff');
@@ -1145,6 +1146,15 @@ async function route(req, res) {
     const session = requireApiAuth(req, res, { csrf: true });
     if (!session) return;
     return handleUpload(req, res, session);
+  }
+
+  /* ---- for search engines and AI assistants (public facts only) ---- */
+  if ((pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt')
+      && (method === 'GET' || method === 'HEAD')) {
+    const [type, body] = pathname === '/robots.txt' ? ['text/plain; charset=utf-8', seo.robotsTxt()]
+      : pathname === '/sitemap.xml' ? ['application/xml; charset=utf-8', seo.sitemapXml()]
+      : ['text/markdown; charset=utf-8', seo.llmsTxt(render.menuGroups().groups)];
+    return send(res, 200, method === 'HEAD' ? '' : body, { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' });
   }
 
   /* The alerts service worker. It lives in /admin/ but covers /admin itself
