@@ -581,8 +581,10 @@ Order cards in the admin show the code used and the discount.
 Customers book a custom cake at **`/cakes`**, linked from the menu's header
 and footer. They choose:
 
-- a **size**, shown with its starting price ("from Php 1,200")
-- a **flavour**, or "Other" and say which in the notes
+- a **size**, shown with its starting price ("from ₱1,200")
+- a **flavour**, or "Other" and say which in the notes; some flavours can
+  cost extra. The form shows **"Estimated from ₱X. Dachel will confirm the
+  final price."** as they choose, and the booking keeps that estimate.
 - an optional occasion, message on the cake, design notes and one
   **reference photo** (JPEG, PNG or WebP, up to 5 MB)
 - the **day** they need it, and **pick-up or delivery** (with an address)
@@ -605,7 +607,25 @@ customer, then records on the booking:
   declined ones) it can't be picked. Blank means no limit. The server checks
   again when the request is sent, so two people can't take the last slot.
 - **Sizes and starting prices**, one per line as `Name | price`, and
-  **flavours**, one per line.
+  **flavours**, one per line; `Ube | 100` adds ₱100 for that flavour.
+- **Price and deposit** and **Pick-up or delivery**: the words under "Before
+  you book" on `/cakes` (blank for the default wording). The notice line
+  comes from Days of notice.
+
+**Above the form, `/cakes` shows** (plain HTML, so without JavaScript too):
+- the **Cake gallery** (Cakes page → Cake gallery: upload a photo, through the
+  usual pipeline with metadata removed, add a caption, order with ↑ ↓);
+- the sizes and starting prices as a table, and the flavours that cost more;
+- **Before you book**: notice, price and deposit, pick-up or delivery.
+Without JavaScript the form stays hidden and the page offers tap-to-call and
+"Message us on Facebook" instead.
+
+**Testimonials** (Settings → Testimonials): quotes from real customers with a
+name or initials and where they came from, switched on or off. They show on
+the menu (above Visit us) and on `/cakes`. An optional **rating line** ("4.9★
+on Facebook, 120 reviews") shows only when filled in. Nothing is seeded, and
+there is no Review or AggregateRating structured data: Google does not show
+review snippets for reviews a business publishes about itself.
 
 **Reference photos are private.** They are stored in `/data/cake-photos` on
 the volume, never under `/assets`, and only a signed-in admin can open them.
