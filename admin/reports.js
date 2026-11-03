@@ -103,6 +103,8 @@ async function loadSales() {
     card('Service charge (staff)', moneyC(t.service_charge)),
     card('Delivery fees', moneyC(t.delivery_fees)),
     card('Refunds', signed(-s.refunds.amount)),
+    // Added from the cart's "Goes well with" strip.
+    card('Added from suggestions', s.suggested && s.suggested.qty ? `${plural(s.suggested.qty, 'item')} · ${moneyC(s.suggested.net)}` : 'None'),
   ].join('');
 
   const discountRows = [

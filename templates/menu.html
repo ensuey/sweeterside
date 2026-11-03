@@ -30,7 +30,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="assets/css/styles.css">
 </head>
-<body data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery="<!--DELIVERY_AREAS-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
+<body data-suggest="<!--SUGGEST-->" data-shop-open="<!--SHOP_OPEN-->" data-switch-open="<!--SWITCH_OPEN-->" data-soon-minutes="<!--SOON_MINUTES-->" data-delivery="<!--DELIVERY_AREAS-->" data-order-types="<!--ORDER_TYPES-->" data-pickup-open="<!--PICKUP_OPEN-->" data-pickup-close="<!--PICKUP_CLOSE-->" data-call-minutes="<!--CALL_MINUTES-->" data-shop-tel="<!--SHOP_TEL-->" data-shop-phone="<!--SHOP_PHONE-->" data-facebook="<!--FACEBOOK_URL-->">
 <!--SOON_BAR-->
 
 <a class="skip" href="#menu">Skip to menu</a>
@@ -110,6 +110,12 @@
     <p class="cart__notice" id="cart-notice" role="status" hidden></p>
     <p class="cart__empty" id="cart-empty">Your cart is empty. Tap <strong>Add</strong> on anything you like.</p>
     <ul class="cart__lines" id="cart-lines"></ul>
+
+    <!-- "Goes well with": filled by cart.js from data-suggest, only while the cart has something. -->
+    <section class="suggest" id="cart-suggest" aria-labelledby="suggest-title" hidden>
+      <h3 class="suggest__title" id="suggest-title">Goes well with</h3>
+      <ul class="suggest__list" id="suggest-list"></ul>
+    </section>
 
     <dl class="cart__sum" id="cart-sum">
       <div><dt>Subtotal</dt><dd id="cart-subtotal">₱0</dd></div>

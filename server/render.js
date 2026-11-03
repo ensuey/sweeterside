@@ -13,6 +13,7 @@ const seo = require('./seo');
 const { BUSINESS } = require('./business');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
+const suggestions = require('./suggestions');
 
 // The options of the items on the page being built: { item_id: { price, sale_type, sale_value, groups } }.
 let pageOptions = {};
@@ -276,6 +277,7 @@ function buildHtml(allItems = menu.list(), cats = categories.list(), now = new D
     .replace('<!--SHOP_STATUS-->', () => shopStatusHtml(state, orders.closedNote()))
     .replace('<!--DELIVERY_AREAS-->', () => esc(JSON.stringify(deliveryData())))
     .replace('<!--AREA_OPTIONS-->', () => areaOptionsHtml())
+    .replace('<!--SUGGEST-->', () => esc(JSON.stringify(suggestions.forMenu())))
     .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))

@@ -128,6 +128,11 @@ function summary(input, now) {
     by_day: byDay,
     by_item: lines,
     by_option: [...options.values()].sort((a, b) => b.amount - a.amount || b.qty - a.qty),
+    // Lines added from the cart's "Goes well with" strip: units and what they came to.
+    suggested: { ...db.prepare(`
+      SELECT COALESCE(SUM(oi.qty - oi.voided_qty), 0) AS qty, COALESCE(SUM(oi.net_cents), 0) AS net
+      FROM order_items oi JOIN orders o ON o.id = oi.order_id
+      WHERE ${where} AND oi.qty > oi.voided_qty AND oi.source = 'suggested'`).get(...p) },
     by_category: [...categories.values()].sort((a, b) => b.net - a.net),
     by_type: group('o.order_type', 'order_type'),
     by_source: group('o.source', 'source'),

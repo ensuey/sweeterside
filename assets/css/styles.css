@@ -476,6 +476,24 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 }
 .cline:first-child { padding-top: 0; }
 
+/* "Goes well with": up to three suggestions under the cart lines. */
+.suggest { margin: var(--sp-4) 0 var(--sp-2); padding: var(--sp-3); border-radius: var(--r-md); background: var(--cream, #FFF8EC); }
+.suggest[hidden] { display: none; }
+.suggest__title { margin: 0 0 var(--sp-2); font-size: 1rem; }
+.suggest__list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.suggest__item { display: grid; grid-template-columns: 56px 1fr auto; gap: var(--sp-3); align-items: center; }
+.suggest__item .cline__thumb { grid-area: auto; align-self: center; }
+.suggest__main { display: flex; flex-direction: column; min-width: 0; }
+.suggest__name { font-weight: 700; overflow-wrap: anywhere; }
+.suggest__price { font-size: .875rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.suggest__add {
+  min-height: 44px; min-width: 44px; padding: 0 var(--sp-4); border-radius: var(--r-full);
+  border: 1.5px solid var(--coral-ink); background: #fff; color: var(--coral-ink);
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.suggest__add:hover { background: var(--coral-ink); color: #fff; }
+.suggest__add:focus-visible { outline: 3px solid var(--coral-ink); outline-offset: 2px; }
+
 /* A small square thumbnail: the card's photo (a sprite window or a whole
    photo), scaled to cover the square and centred. */
 .cline__thumb {

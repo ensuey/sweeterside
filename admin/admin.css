@@ -532,6 +532,10 @@ a { color: var(--navy); }
 .areas__on { display: inline-flex; align-items: center; gap: .35rem; min-height: 44px; }
 .areas__on input { width: 20px; height: 20px; }
 .areas__note { margin: .35rem 0 0; }
+.suggest-rows { display: grid; gap: .6rem; margin-bottom: .8rem; }
+.suggest-row { display: flex; flex-wrap: wrap; gap: .5rem; border: 1px solid var(--line); border-radius: 10px; padding: .5rem .75rem .7rem; margin: 0; }
+.suggest-row legend { font-weight: 700; padding: 0 .25rem; }
+.suggest-row select { flex: 1 1 10rem; min-width: 0; min-height: 44px; font-size: 16px; }
 .share { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; }
 .share__preview {
   width: min(100%, 20rem); height: auto; aspect-ratio: 1200 / 630; object-fit: cover;

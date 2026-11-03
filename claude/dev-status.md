@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 213 (`npm test`):
+**Tests:** 217 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -23,6 +23,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 12 in `test/cro.test.js`
 - 9 in `test/delivery.test.js`
 - 11 in `test/options.test.js`
+- 4 in `test/suggestions.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -387,6 +388,21 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser (and at about 360 px): picker, refusals, cart
     lines, a placed order, the Orders card, the Items page editor and the POS.
   - **Tests:** `test/options.test.js` (11).
+- **PR D: cart suggestions.**
+  - **Settings → Cart suggestions:** up to three items per category and three
+    for any order (`server/suggestions.js`, one setting, `/api/suggestions`).
+    Items removed from the menu drop out by themselves.
+  - **Cart:** a "Goes well with" strip under the lines (hidden when the cart
+    is empty): categories in the cart first, then any order; never what is in
+    the cart, sold out or off the menu; at most three. One-tap Add; items with
+    options say Choose and open the popup over the cart. Data ships in the
+    page (`data-suggest`), no extra request.
+  - **Tracking:** lines carry `source: 'suggested'` (`order_items.source`,
+    additive column; anything else the browser sends counts as the menu).
+    Reports → **Added from suggestions**: units and net for the dates.
+  - Checked in the browser (and at about 360 px): strip, one-tap add, Choose
+    with options, a placed order with the flags saved, the Settings section.
+  - **Tests:** `test/suggestions.test.js` (4).
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -454,6 +470,9 @@ After deploying (owner, once):
     opening hours setting is one pair of times for every day).
   - For `/about`: the year the shop opened, a few lines about Dachel, best
     sellers, and shop and cake photos.
+- After PR D (owner): Settings → **Cart suggestions**: e.g. with drinks →
+  brownies, cinnamon rolls; with pasta → fries; any order → a best-selling
+  frappe.
 - After PR C (owner): add descriptions and sizes (Menu health lists the
   items without). Make option groups (e.g. Size, Add-ons, Sugar level) and
   tick them on the items; rebuild "X only / X with Y" items as one item

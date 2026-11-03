@@ -285,6 +285,69 @@ async function saveFree(event) {
   }
 }
 
+/* ---------------------------- cart suggestions ---------------------------- */
+
+const SUGGEST_MAX = 3;
+
+/** One row: a label and three item pickers (blank for none). */
+function suggestRow(key, label, chosen, items) {
+  const row = document.createElement('fieldset');
+  row.className = 'suggest-row';
+  row.dataset.key = key;
+  const legend = document.createElement('legend');
+  legend.textContent = label;
+  row.append(legend);
+  for (let i = 0; i < SUGGEST_MAX; i++) {
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', `${label}: suggestion ${i + 1}`);
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '—';
+    select.append(none);
+    for (const item of items) {
+      const o = document.createElement('option');
+      o.value = String(item.id);
+      o.textContent = item.availability === 'unavailable' ? `${item.name} (not on the menu)` : item.name;
+      select.append(o);
+    }
+    select.value = chosen[i] !== undefined ? String(chosen[i]) : '';
+    row.append(select);
+  }
+  return row;
+}
+
+async function loadSuggestions() {
+  const [s, { items }, { categories }] = await Promise.all([
+    api('/api/suggestions'), api('/api/items'), api('/api/categories'),
+  ]);
+  const rows = [suggestRow('any', 'Any order', s.any, items)];
+  for (const c of categories) rows.push(suggestRow(String(c.id), `With ${c.name}`, s.categories[c.id] || [], items));
+  $('suggest-rows').replaceChildren(...rows);
+}
+
+async function saveSuggestions(event) {
+  event.preventDefault();
+  const err = $('suggest-err');
+  err.hidden = true;
+  $('suggest-save').disabled = true;
+  const body = { any: [], categories: {} };
+  for (const row of $('suggest-rows').querySelectorAll('.suggest-row')) {
+    const ids = [...row.querySelectorAll('select')].map((s) => s.value).filter(Boolean).map(Number);
+    if (row.dataset.key === 'any') body.any = ids;
+    else body.categories[row.dataset.key] = ids;
+  }
+  try {
+    await api('/api/suggestions', { method: 'PUT', body });
+    toast('Suggestions saved.');
+  } catch (e) {
+    err.textContent = errorText(e);
+    err.hidden = false;
+  } finally {
+    $('suggest-save').disabled = false;
+  }
+}
+
+$('suggest-form').addEventListener('submit', saveSuggestions);
 $('area-add').addEventListener('submit', addArea);
 $('free-form').addEventListener('submit', saveFree);
 $('trust-form').addEventListener('submit', saveTrust);
@@ -301,4 +364,5 @@ adminBoot(async () => {
   showShare(s);
   $('free-min').value = s.free_delivery_min ?? '';
   showAreas((await api('/api/delivery-areas')).areas);
+  await loadSuggestions();
 });
