@@ -135,7 +135,7 @@ and only that type's fields are shown. Every field shown is required.
 
 | Type | The customer gives | Pays |
 |---|---|---|
-| **Delivery** | name, phone, address, landmark / directions, cash they will pay with (optional: blank, or **Exact amount**, means no change) | cash on arrival, plus the delivery fee |
+| **Delivery** | name, phone, area, address, landmark / directions, cash they will pay with (optional: blank, or **Exact amount**, means no change) | cash on arrival, plus the area's delivery fee |
 | **Pick-up** | name, phone, pick-up time today | at the counter, no fee |
 | **Dine-in** | name, table number | at the counter, no fee |
 
@@ -162,7 +162,18 @@ Next to the orders list the admin sets:
 - **Taking orders for**: turn Delivery, Pick-up or Dine-in on or off. A type
   that is off disappears from checkout, and the server refuses it. With all
   three off the cart says online ordering is closed.
-- **Delivery fee**: charged on delivery orders only.
+- **Delivery areas** (Settings page): each area has a fee and a usual time
+  ("Usually 30–45 min"), and can be turned off. The customer picks an area at
+  checkout and the server charges that area's fee; an area with no fee yet is
+  not offered. **Other area** is always offered: the order comes in with no
+  fee, marked **Fee to confirm**, and the shop calls with the fee. Removing an
+  area keeps its name on past orders. The POS uses the same areas, and a
+  cashier can still change one order's fee with a reason.
+- **Free delivery from** (Settings page, optional): an order whose items come
+  to that much after discounts pays no fee (not for Other area). The cart
+  says "Add ₱X more for free delivery" until then.
+- The homepage Delivery section, the FAQ, the About page, `llms.txt` and the
+  structured data list the areas that are on, with fees and times.
 - **Opening hours** (Settings page): the same every day, on the quarter hour.
   Online ordering opens and closes with them and pick-up times are offered
   within them. In the last 30 minutes the menu shows "Closing soon" (a bar at
