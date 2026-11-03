@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 172 (`npm test`):
+**Tests:** 182 (`npm test`):
 - 60 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -18,7 +18,8 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/client-ip.test.js`
 - 6 in `test/imagemeta.test.js`
 - 9 in `test/push.test.js`
-- 5 in `test/seo.test.js`
+- 9 in `test/seo.test.js`
+- 6 in `test/hours.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -126,9 +127,9 @@ Fixes since the POS went live:
     owner-approved discount keeps the share it was approved at
     (`approved_bp`), and re-approvals are audited.
 
-## Since 2026-11-01: online orders at the POS, the domain, security, order alerts, phones, SEO (#21–#34)
+## Since 2026-11-01: online orders at the POS, the domain, security, order alerts, phones, SEO, hours (#21–#38)
 
-All merged and deployed (Fly v15–v26).
+All merged and deployed (Fly v15–v28).
 
 - **#21 (v15): the logo for items without a photo.**
   - New items start on the logo instead of the first image in `assets/` (the
@@ -249,6 +250,54 @@ All merged and deployed (Fly v15–v26).
   - **Crawler files:** `robots.txt` (admin and API out), `sitemap.xml`, and
     `llms.txt` (a summary with the menu and prices for AI assistants).
   - Live: the structured data reads 32 menu items with prices.
+- **#36 (v27): opening hours.**
+  - **Settings → Opening hours:** one pair of times, the same every day,
+    Manila time. Ordering follows them by itself:
+    - before opening: "Closed — we open at 10:00 AM today";
+    - open: "Open now — orders until 8:00 PM";
+    - last 30 minutes: **Closing soon** in the status line and a bar at the
+      top of the menu;
+    - after closing: "We're closed for today. We take orders again from
+      10:00 AM tomorrow".
+  - The server refuses orders and voucher checks outside the hours (409
+    `closed`), so a wrong phone clock changes nothing.
+  - An open menu page switches by itself (`assets/js/hours.js`, every 30 s).
+    At closing the Add buttons go, and the cart keeps its items and says why.
+    Before opening, the page reloads when ordering opens.
+  - **Pick-up follows the opening hours.** The separate pick-up hours on
+    Orders are gone. The saved values carried over: they are still stored
+    under `pickup_open`/`pickup_close`, shown in the API as
+    `open_at`/`close_at`.
+  - **The Open/Closed switch on Orders is an override** (holiday, closing
+    early). The top-bar pill and the Orders panel show what customers see:
+    open, closing soon or closed.
+  - The hours shown on the site, in the JSON-LD and in `llms.txt` come from
+    the setting. Closing can be `24:00` (open until midnight); the admin time
+    field cannot hold that.
+  - **Tests:** ordering follows the clock, so every test file that places
+    orders sets the hours to all day. The suite also passes with the default
+    hours forced to a closed window.
+- **#37 (v27): favicon and app icons**, cropped from the logo by
+  `scripts/make-icons.js` (Node built-ins only: PNG via `node:zlib`).
+  - The logo has a wide empty margin, so it was a pale speck in a tab.
+  - **Tab (16–48 px, `favicon.ico` at `/favicon.ico`):** the ice cream cup on
+    the logo's cream colour.
+  - **Home Screen, manifest and alerts (180/192/512 px):** the whole round
+    logo, on white.
+  - Run the script again only if the logo changes. Re-adding the Home
+    Screen app shows the new icon, and then needs order alerts turned on
+    again on that device.
+- **#38 (v28): About us page** (`/about`), from the shop's facts only.
+  - **Sections:** who we are, what we serve (today's menu with prices, up
+    to 8 per category), custom cakes (sizes "from" prices and days of
+    notice), how to order, quick facts, and visit us.
+  - **SEO:** a keyword title and description, canonical, one h1 and a
+    breadcrumb. JSON-LD: the business, an `AboutPage` and a
+    `BreadcrumbList`.
+  - **Indexable:** in `sitemap.xml` and `llms.txt`, and linked from the
+    menu and cakes footers.
+  - Waiting on the owner's own story: the year opened, Dachel, best sellers,
+    photos.
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -307,11 +356,17 @@ After deploying (owner, once):
     Cake shop and Bakery; website `https://sweeterside.ph`; the same hours,
     phone and address as the site; photos; reviews.
   - **Google Search Console:** add `sweeterside.ph`, submit
-    `https://sweeterside.ph/sitemap.xml`, and request indexing of `/` and
-    `/cakes`.
-  - Check `https://sweeterside.ph` in Google's Rich Results Test.
+    `https://sweeterside.ph/sitemap.xml`, and request indexing of `/`,
+    `/cakes` and `/about`.
+  - Check `https://sweeterside.ph` and `/about` in Google's Rich Results
+    Test.
   - Update the Facebook page website link.
-  - Confirm the hours are the same every day, or say which days differ.
+  - Confirm the hours are the same every day, or say which days differ (the
+    opening hours setting is one pair of times for every day).
+  - For `/about`: the year the shop opened, a few lines about Dachel, best
+    sellers, and shop and cake photos.
+- Re-add the Home Screen app on the iPhone for the new icon (#37), then
+  turn order alerts on again under Settings → Order alerts.
 - Check the admin layout on the iPhone after #31: no sideways scrolling, the
   link row swipes with the current page in view, no zoom when tapping a field,
   nothing under the clock or Dynamic Island.
