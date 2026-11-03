@@ -18,6 +18,8 @@ const menu = require('../server/menu');
 const render = require('../server/render');
 const { BUSINESS } = require('../server/business');
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 const { server } = require('../server/index');
 
 const ldBlocks = (html) => [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
@@ -43,7 +45,7 @@ test('the homepage names the place and the keywords, and shows the facts as text
   // Visible name, address, phone and hours, the same as the structured data.
   assert.ok(html.includes(BUSINESS.address.street) && html.includes(BUSINESS.address.postalCode));
   assert.ok(html.includes(`href="tel:${BUSINESS.phone.tel}"`) && html.includes(BUSINESS.phone.display));
-  assert.ok(html.includes(BUSINESS.hours.label));
+  assert.ok(html.includes(require('../server/seo').hours().label), 'the opening hours from Settings');
   for (const area of BUSINESS.deliveryAreas) assert.ok(html.includes(area), area);
   assert.ok(html.includes('id="visit"') && html.includes('id="faq"'));
   assert.ok(!/<!--[A-Z_]+-->/.test(html), 'every placeholder is filled');
@@ -62,7 +64,8 @@ test('the structured data is a café and bakery with the address, hours, map and
   assert.deepStrictEqual([biz.geo.latitude, biz.geo.longitude], [6.8340817, 126.0873542]);
   assert.strictEqual(biz.telephone, '+639327620367');
   const [hours] = biz.openingHoursSpecification;
-  assert.deepStrictEqual([hours.opens, hours.closes, hours.dayOfWeek.length], ['10:00', '20:00', 7]);
+  const set = require('../server/orders').openingHours();
+  assert.deepStrictEqual([hours.opens, hours.closes, hours.dayOfWeek.length], [set.open, set.close, 7], 'the hours from Settings');
   assert.ok(biz.sameAs.includes('https://www.facebook.com/SweeterSideByDachel'));
   assert.ok(biz.hasMap.startsWith('https://www.google.com/maps'));
 
@@ -130,4 +133,20 @@ test('robots.txt, sitemap.xml and llms.txt: public pages in, admin and POS out',
     const home = await fetch(`${url}/`);
     assert.match(home.headers.get('content-security-policy'), /script-src 'self'(;|$)/, 'the CSP stays strict');
   });
+});
+
+test('changing the opening hours in Settings changes the page, the data and llms.txt', () => {
+  const orders = require('../server/orders');
+  const seo = require('../server/seo');
+  orders.updateSettings({ open_at: '09:30', close_at: '21:00' });
+  try {
+    const html = render.buildHtml();
+    assert.ok(html.includes('Open daily, 9:30 AM to 9:00 PM'), 'visible hours');
+    const biz = ldBlocks(html)[0]['@graph'][0];
+    assert.deepStrictEqual([biz.openingHoursSpecification[0].opens, biz.openingHoursSpecification[0].closes], ['09:30', '21:00']);
+    assert.ok(seo.llmsTxt([]).includes('Open daily, 9:30 AM to 9:00 PM'));
+    assert.match(html, /<meta name="description" content="[^"]*Open daily, 9:30 AM to 9:00 PM\.">/);
+  } finally {
+    orders.updateSettings({ open_at: '00:00', close_at: '24:00' });
+  }
 });

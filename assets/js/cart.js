@@ -50,6 +50,14 @@
   var sending = false;
   var shopClosed = false; // set if the shop closes while this page is open
 
+  // Closing time came while the page was open (hours.js): stop taking the
+  // order and say why. Whatever is in the cart is kept for next time.
+  document.addEventListener('shop:closed', function (e) {
+    shopClosed = true;
+    $('cart-closed').textContent = e.detail && e.detail.message ? e.detail.message : $('cart-closed').textContent;
+    render();
+  });
+
   // Announces cart changes to screen readers without moving focus.
   var live = document.createElement('p');
   live.className = 'vh';

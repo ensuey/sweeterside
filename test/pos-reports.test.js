@@ -30,6 +30,8 @@ const { toCsv } = require('../server/csv');
 const { manilaDate } = require('../server/clock');
 
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 orders.saveSetting('max_open_orders', 1000);
 
 const owner = staff.create({ name: 'Dachel', role: 'owner', pin: '2580' }, null);

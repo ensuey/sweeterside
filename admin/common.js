@@ -86,12 +86,13 @@ function showCakeCount(n) {
   badge.setAttribute('aria-label', `${plural(n, 'new booking')}`);
 }
 
-/** "Shop open" / "Shop closed" in the top bar, linking to the switch. */
-function showShopPill(open) {
+/** "Shop open" / "Closing soon" / "Shop closed" in the top bar, linking to the
+    switch. It shows what customers see: the switch and the opening hours together. */
+function showShopPill(s) {
   const pill = $('shop-pill');
   if (!pill) return;
-  pill.textContent = open ? 'Shop open' : 'Shop closed';
-  pill.dataset.open = open ? '1' : '0';
+  pill.textContent = !s.open_now ? 'Shop closed' : s.closing_soon ? 'Closing soon' : 'Shop open';
+  pill.dataset.open = s.open_now ? '1' : '0';
   pill.hidden = false;
 }
 
@@ -102,7 +103,7 @@ async function adminBoot(load) {
     state.csrf = session.csrf;
     if ($('who')) $('who').textContent = session.email;
     api('/api/cakes/counts').then((c) => showCakeCount(c.new)).catch(() => {});
-    api('/api/settings').then((s) => showShopPill(s.shop_open)).catch(() => {});
+    api('/api/settings').then(showShopPill).catch(() => {});
     await load();
   } catch (err) {
     pageError(err.message);

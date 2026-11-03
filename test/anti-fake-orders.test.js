@@ -27,6 +27,8 @@ const checkout = require('../server/checkout');
 const { normalizePhPhone, displayPhPhone, PHONE_MESSAGE } = require('../server/phone');
 
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 
 const MATCHA = () => menu.list().find((i) => i.name === 'Matcha Frappe'); // Php 129
 

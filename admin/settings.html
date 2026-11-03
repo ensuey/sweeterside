@@ -45,9 +45,28 @@
   <div class="admin__head">
     <div>
       <h2 class="admin__title">Settings</h2>
-      <p class="admin__sub">Checkout protection and phone alerts. Ordering hours, the delivery fee and the shop switch are on the Orders page.</p>
+      <p class="admin__sub">Opening hours, checkout protection and phone alerts. The Open/Closed switch, the delivery fee and order types are on the Orders page.</p>
     </div>
   </div>
+
+  <!-- When online ordering is open. Pick-up times are offered within the same hours. -->
+  <section class="hours" aria-labelledby="hours-title">
+    <h2 class="admin__title" id="hours-title">Opening hours</h2>
+    <p class="admin__sub">The same every day, in Philippine time. Online ordering opens and closes with these hours, pick-up times are offered within them, and 30 minutes before closing the menu says "Closing soon". To close for a holiday or close early, set the shop to Closed on the <a href="/admin">Orders</a> page.</p>
+    <form class="hours__form" id="hours-form" novalidate>
+      <div class="field">
+        <label for="open-at">Opens</label>
+        <input id="open-at" type="time" step="900" required>
+      </div>
+      <div class="field">
+        <label for="close-at">Closes</label>
+        <input id="close-at" type="time" step="900" required>
+      </div>
+      <button class="btn btn--ghost" type="submit" id="hours-save">Save</button>
+    </form>
+    <p class="field__err" id="hours-err" hidden></p>
+    <p class="alerts__state" id="hours-now" role="status"></p>
+  </section>
 
   <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
   <section class="trust" aria-labelledby="trust-title">

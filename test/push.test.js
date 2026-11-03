@@ -24,6 +24,8 @@ const checkout = require('../server/checkout');
 const push = require('../server/push');
 const { manilaDate, addDays } = require('../server/clock');
 seedIfEmpty();
+// Ordering follows the opening hours. Open all day, so no test depends on the clock.
+require('../server/orders').updateSettings({ open_at: '00:00', close_at: '24:00' });
 
 const KEYS = push.generateKeys();
 const withKeys = () => { process.env.VAPID_PUBLIC_KEY = KEYS.publicKey; process.env.VAPID_PRIVATE_KEY = KEYS.privateKey; };
