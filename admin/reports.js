@@ -117,6 +117,12 @@ async function loadSales() {
       { label: 'Gross', get: (r) => moneyC(r.gross), num: true },
       { label: 'Net', get: (r) => moneyC(r.net), num: true },
     ], s.by_item),
+    table('Options chosen', [
+      { label: 'Option', get: (r) => `${esc(r.group)}: ${esc(r.name)}` },
+      { label: 'Units', get: (r) => r.qty, num: true },
+      { label: 'Added', get: (r) => moneyC(r.amount), num: true },
+    ], s.by_option || [], { empty: 'No options chosen in these dates.' })
+      + ((s.by_option || []).length ? '<p class="hint">What each option added at its price then, before discounts. It is already in the item sales above.</p>' : ''),
     table('By category', [
       { label: 'Category', get: (r) => esc(r.category) },
       { label: 'Sold', get: (r) => r.qty, num: true },

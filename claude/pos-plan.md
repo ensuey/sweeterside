@@ -107,6 +107,33 @@ discount, VAT exemption, SC/PWD discount, voucher, manual discount, net,
 service charge, delivery fee, total). It is saved as JSON on the order and
 printed on the receipt.
 
+### Options (sizes, add-ons)
+
+Options are priced before the engine runs (`server/options.js`), so the
+engine sees one price per line and every rule below follows from that:
+
+- **Line price** = the item's price + the price of each option chosen.
+  Option prices are whole pesos, 0 or more (never negative).
+- **Sale prices** apply to the whole line: % off is taken from item +
+  options (then rounded to the peso, R1), and ₱ off comes off the whole
+  line once per unit.
+- **SC/PWD 20%** applies to the whole line (item + options) when the item is
+  eligible.
+- **Vouchers and manual discounts** are unchanged: they work on the lines
+  as priced.
+- **Today's limit** (max per day) counts the item, whatever its options;
+  so does the "at most N of any one item" cap.
+- **Checks** (checkout and POS alike): every option must be on a group
+  attached to that item and be available; each group's least and most
+  must hold (a required group needs at least one). A repeated option id
+  counts once.
+- **Snapshot:** each line stores its options (`order_items.options`, JSON
+  of group, name and price in centavos) and `options_cents`. Editing or
+  removing an option never changes an old order. A POS tab line keeps its
+  price with options when more units are added later.
+- Engine lines carry `options_text` through to the saved breakdown, for
+  the receipt. It is text only; the price is already in the line.
+
 ## Roles, staff and PINs
 
 - **Roles:**

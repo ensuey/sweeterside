@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 202 (`npm test`):
+**Tests:** 213 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -22,6 +22,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/hours.test.js`
 - 12 in `test/cro.test.js`
 - 9 in `test/delivery.test.js`
+- 11 in `test/options.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -362,6 +363,30 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser: fees, times, Other area, free delivery at the
     threshold, a placed order, the Settings section and the POS dropdown.
   - **Tests:** `test/delivery.test.js` (9).
+- **PR C: descriptions, sizes and options.**
+  - **Items** gain `description` (≤120) and `size_label` (≤20), on the card
+    (one line, clamped) and in the popup. Menu health adds "No description"
+    and "No size".
+  - **Option groups** (`server/options.js`; tables `option_groups`,
+    `options`, `item_option_groups`): pick one or several, required or not,
+    least/most, options with a price (whole pesos) and on/off. Reusable
+    across items. Managed on the Items page (`/api/option-groups`).
+  - **Pricing:** line = item + options; sale and SC/PWD on the whole line;
+    vouchers unchanged; today's limit by item. Rules in `pos-plan.md`.
+  - **Customer:** Add on an item with options opens the popup (radios,
+    boxes, live price, errors per group). Cart lines keyed by item +
+    options. Options ship as an escaped `data-options` attribute on the
+    card, so the CSP is unchanged. Without JavaScript there is no cart
+    at all, so nothing else was needed for the static menu.
+  - **POS:** the same picker; lines show their options.
+  - **Orders** keep a copy (`order_items.options`, `options_cents`),
+    shown on the Orders card, the POS online detail, kitchen tickets and
+    receipts. Reports add **Options chosen**. Order alerts now say how many
+    items (no options, no customer data).
+  - Migration: additive columns and new tables only; no item or order changed.
+  - Checked in the browser (and at about 360 px): picker, refusals, cart
+    lines, a placed order, the Orders card, the Items page editor and the POS.
+  - **Tests:** `test/options.test.js` (11).
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -429,6 +454,10 @@ After deploying (owner, once):
     opening hours setting is one pair of times for every day).
   - For `/about`: the year the shop opened, a few lines about Dachel, best
     sellers, and shop and cake photos.
+- After PR C (owner): add descriptions and sizes (Menu health lists the
+  items without). Make option groups (e.g. Size, Add-ons, Sugar level) and
+  tick them on the items; rebuild "X only / X with Y" items as one item
+  with an option, then turn the old ones off.
 - After PR B (owner): Settings → **Delivery areas**: enter each area's fee
   and usual time. Until then delivery customers can only pick "Other area".
   Optionally set **Free delivery from**.

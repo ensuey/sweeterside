@@ -94,6 +94,26 @@ function summary(input, now) {
     categories.set(l.category, c);
   }
 
+  // Options chosen, from each line's copy of them: how many units had each
+  // option, and what the option added at its price then (before discounts).
+  // Sales by item stay by the item, whatever its options.
+  const options = new Map();
+  const optionRows = db.prepare(`
+    SELECT oi.options, oi.qty - oi.voided_qty AS qty
+    FROM order_items oi JOIN orders o ON o.id = oi.order_id
+    WHERE ${where} AND oi.qty > oi.voided_qty AND oi.options <> ''`).all(...p);
+  for (const row of optionRows) {
+    let chosen = [];
+    try { chosen = JSON.parse(row.options); } catch { chosen = []; }
+    for (const o of Array.isArray(chosen) ? chosen : []) {
+      const k = `${o.group}\u0000${o.name}`;
+      const x = options.get(k) || { group: String(o.group), name: String(o.name), qty: 0, amount: 0 };
+      x.qty += row.qty;
+      x.amount += (Number(o.price_cents) || 0) * row.qty;
+      options.set(k, x);
+    }
+  }
+
   const byStaff = db.prepare(`
     SELECT COALESCE(s.name, 'Online') AS staff, ${totalsSql}
     FROM orders o LEFT JOIN staff s ON s.id = o.staff_id
@@ -107,6 +127,7 @@ function summary(input, now) {
     from: r.from, to: r.to, totals, refunds: { count: refunds.n, amount: refunds.amount },
     by_day: byDay,
     by_item: lines,
+    by_option: [...options.values()].sort((a, b) => b.amount - a.amount || b.qty - a.qty),
     by_category: [...categories.values()].sort((a, b) => b.net - a.net),
     by_type: group('o.order_type', 'order_type'),
     by_source: group('o.source', 'source'),

@@ -4,7 +4,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs');
-const { db, LOGO_IMAGE } = require('./db');
+const { db, LOGO_IMAGE, transaction } = require('./db');
 const { ROOT, ASSETS_DIR, UPLOAD_DIR, UPLOAD_URL_PREFIX } = require('./paths');
 const imagesize = require('./imagesize');
 const { manilaDayStartSql } = require('./clock');
@@ -12,6 +12,8 @@ const { manilaDayStartSql } = require('./clock');
 const MAX_PRICE = 100000;
 const NAME_MAX = 80;
 const ALT_MAX = 300;
+const DESCRIPTION_MAX = 120;
+const SIZE_MAX = 20;
 const SALE_PERCENT_MAX = 90;
 // An item without a photo of its own shows the logo, not a menu poster.
 const DEFAULT_IMAGE = LOGO_IMAGE;
@@ -99,6 +101,12 @@ function validate(input) {
 
   const alt = String(input.alt ?? '').trim().slice(0, ALT_MAX);
 
+  // One short line on the card, in full in the item popup.
+  const description = String(input.description ?? '').trim().replace(/\s+/g, ' ');
+  if (description.length > DESCRIPTION_MAX) errors.description = `Keep the description under ${DESCRIPTION_MAX} characters.`;
+  const sizeLabel = String(input.size_label ?? '').trim().replace(/\s+/g, ' ');
+  if (sizeLabel.length > SIZE_MAX) errors.size_label = `Keep the size under ${SIZE_MAX} characters, e.g. 16 oz.`;
+
   // Crop is all-or-nothing: four numbers, or none at all.
   const cx = intOrNull(input.crop_x);
   const cy = intOrNull(input.crop_y);
@@ -152,7 +160,7 @@ function validate(input) {
     name, price, category_id: categoryId, image: image.rel, alt,
     crop_x: crop.x, crop_y: crop.y, crop_w: crop.w, crop_h: crop.h,
     best_seller: bestSeller ? 1 : 0, sale_type: saleType, sale_value: saleValue,
-    sc_eligible: scEligible ? 1 : 0,
+    sc_eligible: scEligible ? 1 : 0, description, size_label: sizeLabel,
   };
 }
 
@@ -228,7 +236,7 @@ function setStock(id, input) {
 const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
                        i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position,
                        i.availability, i.daily_limit, i.best_seller, i.sale_type, i.sale_value,
-                       i.sc_eligible
+                       i.sc_eligible, i.description, i.size_label
                 FROM items i`;
 
 /** Items in menu order: by category position, then item position. */
@@ -245,35 +253,50 @@ function get(id, { now } = {}) {
 
 function create(input) {
   const row = validate(input);
+  const groups = require('./options').parseItemGroups(input.option_groups);
   const { next } = db.prepare(
     'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM items WHERE category_id = ?'
   ).get(row.category_id);
 
-  const info = db.prepare(`
-    INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position,
-                       best_seller, sale_type, sale_value, sc_eligible)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-    row.name, row.price, row.category_id, row.image, row.alt,
-    row.crop_x, row.crop_y, row.crop_w, row.crop_h, next,
-    row.best_seller, row.sale_type, row.sale_value, row.sc_eligible);
+  const id = transaction(() => {
+    const info = db.prepare(`
+      INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position,
+                         best_seller, sale_type, sale_value, sc_eligible, description, size_label)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      row.name, row.price, row.category_id, row.image, row.alt,
+      row.crop_x, row.crop_y, row.crop_w, row.crop_h, next,
+      row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label);
+    if (groups) require('./options').setItemGroups(info.lastInsertRowid, groups);
+    return info.lastInsertRowid;
+  });
 
-  return get(info.lastInsertRowid);
+  return get(id);
 }
 
 function update(id, input) {
   const existing = get(id);
   if (!existing) return null;
   // A form without the SC/PWD switch keeps what the item had.
-  const row = validate('sc_eligible' in input ? input : { ...input, sc_eligible: existing.sc_eligible });
+  const row = validate({
+    ...input,
+    sc_eligible: 'sc_eligible' in input ? input.sc_eligible : existing.sc_eligible,
+    description: 'description' in input ? input.description : existing.description,
+    size_label: 'size_label' in input ? input.size_label : existing.size_label,
+  });
+  const groups = require('./options').parseItemGroups(input.option_groups);
 
-  db.prepare(`
-    UPDATE items SET name = ?, price = ?, category_id = ?, image = ?, alt = ?,
-      crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?,
-      best_seller = ?, sale_type = ?, sale_value = ?, sc_eligible = ?, updated_at = datetime('now')
-    WHERE id = ?`).run(
-    row.name, row.price, row.category_id, row.image, row.alt,
-    row.crop_x, row.crop_y, row.crop_w, row.crop_h,
-    row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, Number(id));
+  transaction(() => {
+    db.prepare(`
+      UPDATE items SET name = ?, price = ?, category_id = ?, image = ?, alt = ?,
+        crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?,
+        best_seller = ?, sale_type = ?, sale_value = ?, sc_eligible = ?, description = ?, size_label = ?,
+        updated_at = datetime('now')
+      WHERE id = ?`).run(
+      row.name, row.price, row.category_id, row.image, row.alt,
+      row.crop_x, row.crop_y, row.crop_w, row.crop_h,
+      row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label, Number(id));
+    if (groups) require('./options').setItemGroups(id, groups);
+  });
 
   return get(id);
 }
@@ -338,5 +361,5 @@ function availableImages() {
 module.exports = {
   ValidationError,
   AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice,
-  availableImages, resolveImage, validate, DEFAULT_IMAGE,
+  availableImages, resolveImage, validate, DEFAULT_IMAGE, DESCRIPTION_MAX, SIZE_MAX,
 };

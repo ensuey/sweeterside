@@ -12,6 +12,7 @@ const { getSetting, saveSetting } = require('./settings');
 const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 const delivery = require('./delivery');
+const itemOptions = require('./options');
 
 const { ValidationError } = menu;
 
@@ -431,19 +432,27 @@ function cartLines(rawItems) {
     throw new ValidationError({ items: 'That cart has too many lines.' });
   }
 
+  // The same item with the same options is one line; other options, another.
+  const byKey = new Map();
   const qtyById = new Map();
   for (const line of rawItems) {
     const id = Number(line && line.id);
     const qty = Number(line && line.qty);
-    if (!Number.isInteger(id) || !Number.isInteger(qty) || qty < 1) {
+    const opts = line && line.options;
+    if (!Number.isInteger(id) || !Number.isInteger(qty) || qty < 1
+      || (opts !== undefined && opts !== null && (!Array.isArray(opts) || opts.length > 50))) {
       throw new ValidationError({ items: 'One of the cart lines is not valid.' });
     }
+    const ids = [...new Set((opts || []).map(Number))].sort((a, b) => a - b);
+    const key = ids.length ? `${id}:${ids.join('.')}` : String(id);
+    const had = byKey.get(key);
+    byKey.set(key, { id, qty: (had ? had.qty : 0) + qty, options: ids });
     qtyById.set(id, (qtyById.get(id) || 0) + qty);
   }
   for (const qty of qtyById.values()) {
     if (qty > MAX_QTY) throw new ValidationError({ items: `Order at most ${MAX_QTY} of any one item.` });
   }
-  return [...qtyById].map(([id, qty]) => ({ id, qty }));
+  return [...byKey.values()];
 }
 
 /**
@@ -466,19 +475,27 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const unavailable = [];
   const short = [];
 
-  for (const { id, qty } of cartLines(rawItems)) {
+  const perItem = new Map(); // item_id -> qty over all its lines
+  for (const { id, qty, options } of cartLines(rawItems)) {
     const item = menu.get(id, { now });
     if (!item || item.availability === 'unavailable' || item.sold_out) {
-      unavailable.push(id);
+      if (!unavailable.includes(id)) unavailable.push(id);
       continue;
     }
+    // The options must be on this item, available, and fit each group.
+    const chosen = itemOptions.choose(item, options);
+    const prices = itemOptions.linePrices(item, chosen.options_cents);
+    perItem.set(item.id, { item, qty: (perItem.has(item.id) ? perItem.get(item.id).qty : 0) + qty });
+    lines.push({
+      item_id: item.id, name: item.name, price: prices.sale_cents / 100, regular: prices.unit_cents / 100,
+      sc_eligible: item.sc_eligible, qty, key: chosen.key, options: chosen.snapshot, options_cents: chosen.options_cents,
+    });
+  }
+  // Today's limit counts the item, whatever options each line has.
+  for (const { item, qty } of perItem.values()) {
     if (item.remaining !== null && qty > item.remaining) {
       short.push({ id: item.id, name: item.name, remaining: item.remaining });
     }
-    lines.push({
-      item_id: item.id, name: item.name, price: item.sale_price, regular: item.price,
-      sc_eligible: item.sc_eligible, qty,
-    });
   }
 
   let found = null;
@@ -500,6 +517,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
     lines: lines.map((l, i) => ({
       key: String(i), item_id: l.item_id, name: l.name, qty: l.qty,
       unit_cents: l.regular * 100, sale_cents: l.price * 100, sc_eligible: l.sc_eligible,
+      options_text: itemOptions.optionsText(l.options),
     })),
     voucher: found,
     delivery: { default_cents: fee * 100, free_over_cents: area ? area.free_over_cents : null },
@@ -523,7 +541,7 @@ function staleCart(message, q) {
     body: {
       error: message,
       quote: {
-        items: q.lines.map((l) => ({ id: l.item_id, name: l.name, price: l.price })),
+        items: q.lines.map((l) => ({ id: l.item_id, key: l.key, name: l.name, price: l.price })),
         unavailable: q.unavailable,
         limits: q.limits,
         voucher: q.voucher,
@@ -679,7 +697,7 @@ function create(input, { now = new Date() } = {}) {
       t.gross, t.subtotal, q.voucher ? q.voucher.code : '', t.voucher_discount,
       t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced),
       q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0);
-    insertLines(info.lastInsertRowid, q.priced.lines);
+    insertLines(info.lastInsertRowid, q.priced.lines, q.lines);
     return info.lastInsertRowid;
   });
 
@@ -687,11 +705,17 @@ function create(input, { now = new Date() } = {}) {
 }
 
 /** Save the engine's lines: unit price charged, regular price and net, in centavos. */
-function insertLines(orderId, lines) {
+function insertLines(orderId, lines, quoted = []) {
   const line = db.prepare(`
-    INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`);
-  lines.forEach((l) => line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty));
+    INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty,
+                             options, options_cents)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  // The engine's lines are keyed by their place in the quote.
+  lines.forEach((l) => {
+    const q = quoted[Number(l.key)] || {};
+    line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty,
+      q.options && q.options.length ? JSON.stringify(q.options) : '', q.options_cents || 0);
+  });
 }
 
 /* ---------------------------- queries ---------------------------- */
@@ -706,16 +730,30 @@ const PESO_FIELDS = ['subtotal', 'discount', 'delivery_fee', 'total', 'cash', 'c
  * numbers are masked (****1234) unless options.fullIds, which only the
  * owner's and cashier's screens ask for.
  */
+/** A line's saved options, or [] (lines from before options, or a bad row). */
+function parseOptions(raw) {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}
+
 function withLines(order, { fullIds = false } = {}) {
   if (!order) return null;
   for (const f of PESO_FIELDS) order[f] = order[`${f}_cents`] / 100;
   // qty is what is charged: a POS line's voided units are left out (and
   // shown as voided_qty). A line voided completely is left out altogether.
   order.items = db.prepare(`
-    SELECT item_id, name, price_cents, regular_price_cents, net_cents, qty, voided_qty, note
+    SELECT item_id, name, price_cents, regular_price_cents, net_cents, qty, voided_qty, note, options, options_cents
     FROM order_items WHERE order_id = ? ORDER BY id`).all(order.id)
     .filter((l) => l.qty > l.voided_qty)
-    .map((l) => ({ ...l, qty: l.qty - l.voided_qty, price: l.price_cents / 100 }));
+    .map((l) => {
+      const options = parseOptions(l.options);
+      return { ...l, qty: l.qty - l.voided_qty, price: l.price_cents / 100, options, options_text: itemOptions.optionsText(options) };
+    });
   order.pricing = order.pricing ? JSON.parse(order.pricing) : null;
   // pos_input is what the cashier typed, SC/PWD ID numbers in full; the POS
   // reads it from the database itself (pos.view masks it per role). Neither
@@ -821,6 +859,7 @@ function setStatus(id, status, { reason } = {}) {
 }
 
 module.exports = {
+  parseOptions,
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,

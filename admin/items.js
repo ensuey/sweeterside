@@ -1,9 +1,12 @@
 'use strict';
-/* Items page: menu items (with availability and daily limits) and categories. */
+/* Items page: menu items (with availability and daily limits), categories
+   and option groups. */
 
 Object.assign(state, {
   items: [],
   categories: [],
+  optionGroups: [],
+  editingGroupId: null,
   images: [],
   editingId: null,      // null = creating
   editingCategoryId: null,
@@ -155,13 +158,22 @@ function render() {
 
 /* ---------------------------- menu health ---------------------------- */
 
-// Checks for items that would sell better with a little more. More checks
-// (no description, no size label) come with those fields.
+// Checks for items that would sell better with a little more.
 const HEALTH_CHECKS = [
   {
     id: 'photo', title: 'No photo of its own',
     hint: 'These show the logo. A real photo helps people choose.',
     test: (item, logo) => item.image === logo,
+  },
+  {
+    id: 'description', title: 'No description',
+    hint: 'One short line on the card says what it is, e.g. what is in it.',
+    test: (item) => !item.description,
+  },
+  {
+    id: 'size', title: 'No size',
+    hint: 'A size such as 16 oz or 10 pcs tells people what they get. Skip it where it does not help.',
+    test: (item) => !item.size_label,
   },
 ];
 
@@ -285,6 +297,10 @@ function openEditor(item) {
   $('f-price').value = item ? item.price : '';
   fillCategoryOptions(item ? item.category_id : state.categories[0].id);
   $('f-alt').value = item ? item.alt : '';
+  $('f-desc').value = item ? item.description || '' : '';
+  $('f-size').value = item ? item.size_label || '' : '';
+  descCount();
+  fillGroupChoices(item ? item.option_groups || [] : []);
   // A new item starts on the logo until a photo is uploaded or chosen.
   const logo = state.images.find((i) => i.default);
   fillImageOptions(item ? item.image : (logo || state.images[0] || {}).path);
@@ -320,6 +336,9 @@ async function saveItem(event) {
     sc_eligible: $('f-sc').checked,
     sale_type: $('f-sale-type').value,
     sale_value: $('f-sale-type').value ? $('f-sale-value').value : '',
+    description: $('f-desc').value,
+    size_label: $('f-size').value,
+    option_groups: [...$('f-groups').querySelectorAll('input:checked')].map((i) => Number(i.value)),
   };
 
   const save = $('editor-save');
@@ -456,10 +475,10 @@ async function doDelete() {
   if (!pending) return;
   $('confirm-ok').disabled = true;
   try {
-    const base = pending.kind === 'item' ? '/api/items' : '/api/categories';
+    const base = { item: '/api/items', category: '/api/categories', group: '/api/option-groups' }[pending.kind];
     await api(`${base}/${pending.id}`, { method: 'DELETE' });
     confirmDialog.close();
-    toast(pending.kind === 'item' ? 'Item deleted.' : 'Category deleted.');
+    toast({ item: 'Item deleted.', category: 'Category deleted.', group: 'Option group deleted.' }[pending.kind]);
     await loadAll();
   } catch (err) {
     toast(err.message, 'error');
@@ -469,17 +488,182 @@ async function doDelete() {
   }
 }
 
+/* ---------------------------- option groups ---------------------------- */
+
+const ogEditor = $('og-editor');
+
+/** "Pick one, must choose" or "Pick 1 to 3". */
+function groupRule(g) {
+  if (g.kind === 'single') return g.required ? 'Pick one, must choose' : 'Pick one, optional';
+  if (!g.required) return `Pick up to ${g.max}, optional`;
+  return g.min === g.max ? `Pick ${g.min}` : `Pick ${g.min} to ${g.max}`;
+}
+
+function renderGroups() {
+  const list = state.optionGroups;
+  $('ogroups').innerHTML = list.map((g) => `
+    <li class="row-item" data-group-id="${g.id}">
+      <div class="row-item__main">
+        <span class="row-item__name">${esc(g.name)}</span>
+        <span class="row-item__meta">${esc(groupRule(g))} · ${esc(g.options.map((o) => (o.price ? `${o.name} +${money(o.price)}` : o.name) + (o.available ? '' : ' (off)')).join(', '))}</span>
+        <span class="row-item__meta">On ${plural(g.item_ids.length, 'item')}</span>
+      </div>
+      <div class="row-item__actions">
+        <button class="btn btn--ghost btn--sm" type="button" data-action="edit">Edit</button>
+        <button class="btn btn--danger-ghost btn--sm" type="button" data-action="delete">Delete</button>
+      </div>
+    </li>`).join('');
+  $('ogroups-empty').hidden = list.length > 0;
+}
+
+/** Group tick boxes in the item editor. */
+function fillGroupChoices(selected) {
+  const box = $('f-groups');
+  box.replaceChildren();
+  if (!state.optionGroups.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'No option groups yet. Add them under Option groups below.';
+    box.append(p);
+    return;
+  }
+  for (const g of state.optionGroups) {
+    const label = document.createElement('label');
+    label.className = 'promo__check';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = String(g.id);
+    input.checked = selected.includes(g.id);
+    const hint = document.createElement('span');
+    hint.className = 'hint';
+    hint.textContent = `(${groupRule(g).toLowerCase()})`;
+    label.append(input, ` ${g.name} `, hint);
+    box.append(label);
+  }
+}
+
+function descCount() {
+  const n = $('f-desc').value.length;
+  $('desc-count').textContent = n ? `${n} of 120` : '';
+}
+
+/** One editable option row: name, price, on/off, remove. */
+function optionRow(o = { name: '', price: 0, available: true }) {
+  const li = document.createElement('li');
+  li.className = 'og__opt';
+  if (o.id) li.dataset.id = String(o.id);
+  const n = document.createElement('input');
+  n.type = 'text';
+  n.maxLength = 40;
+  n.placeholder = 'e.g. Large';
+  n.value = o.name;
+  n.setAttribute('aria-label', 'Option name');
+  n.dataset.f = 'name';
+  const p = document.createElement('input');
+  p.type = 'number';
+  p.min = '0';
+  p.max = '10000';
+  p.step = '1';
+  p.inputMode = 'numeric';
+  p.value = String(o.price ?? 0);
+  p.setAttribute('aria-label', 'Extra price in pesos');
+  p.dataset.f = 'price';
+  const on = document.createElement('label');
+  on.className = 'og__on';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = o.available !== false;
+  box.dataset.f = 'available';
+  on.append(box, ' On');
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'btn btn--ghost btn--sm';
+  x.textContent = 'Remove';
+  x.addEventListener('click', () => li.remove());
+  const plus = document.createElement('span');
+  plus.className = 'og__plus';
+  plus.textContent = '+₱';
+  li.append(n, plus, p, on, x);
+  return li;
+}
+
+function showLimits() {
+  const several = $('og-kind').value === 'multiple';
+  $('og-limits').hidden = !several;
+  $('og-min').disabled = !$('og-required').checked;
+}
+
+function openGroupEditor(g) {
+  state.editingGroupId = g ? g.id : null;
+  clearFieldErrors(ogEditor);
+  $('og-editor-title').textContent = g ? 'Edit option group' : 'Add option group';
+  $('og-name').value = g ? g.name : '';
+  $('og-kind').value = g ? g.kind : 'single';
+  $('og-required').checked = g ? g.required : false;
+  $('og-min').value = g && g.kind === 'multiple' && g.required ? g.min : '';
+  $('og-max').value = g && g.kind === 'multiple' ? g.max : '';
+  $('og-opts').replaceChildren(...(g ? g.options : [undefined, undefined]).map((o) => optionRow(o)));
+  showLimits();
+  ogEditor.showModal();
+  $('og-name').focus();
+}
+
+async function saveGroup(event) {
+  event.preventDefault();
+  clearFieldErrors(ogEditor);
+  const body = {
+    name: $('og-name').value,
+    kind: $('og-kind').value,
+    required: $('og-required').checked,
+    min: $('og-min').value,
+    max: $('og-max').value,
+    // Blank rows are left out.
+    options: [...$('og-opts').children].map((li) => ({
+      id: li.dataset.id ? Number(li.dataset.id) : undefined,
+      name: li.querySelector('[data-f="name"]').value,
+      price: li.querySelector('[data-f="price"]').value,
+      available: li.querySelector('[data-f="available"]').checked,
+    })).filter((o) => o.name.trim() || o.id),
+  };
+  $('og-save').disabled = true;
+  try {
+    const path = state.editingGroupId === null ? '/api/option-groups' : `/api/option-groups/${state.editingGroupId}`;
+    const data = await api(path, { method: state.editingGroupId === null ? 'POST' : 'PATCH', body });
+    state.optionGroups = data.groups;
+    renderGroups();
+    ogEditor.close();
+    toast(`${data.group.name} saved.`);
+  } catch (err) {
+    if (err.fields) showFieldErrors(ogEditor, err.fields);
+    $('og-error').textContent = err.message;
+    $('og-error').hidden = false;
+  } finally {
+    $('og-save').disabled = false;
+  }
+}
+
+function askDeleteGroup(g) {
+  state.pendingDelete = { kind: 'group', id: g.id };
+  $('confirm-title').textContent = 'Delete this option group?';
+  $('confirm-text').textContent = g.item_ids.length
+    ? `“${g.name}” comes off ${plural(g.item_ids.length, 'item')} straight away. Past orders keep the options they had.`
+    : `“${g.name}” is not on any item.`;
+  confirmDialog.showModal();
+}
+
 /* ---------------------------- loading ---------------------------- */
 
 /** Items and categories change together (item counts), so reload both. */
 async function loadAll() {
-  const [{ items }, { categories }] = await Promise.all([
-    api('/api/items'), api('/api/categories'),
+  const [{ items }, { categories }, { groups: optionGroups }] = await Promise.all([
+    api('/api/items'), api('/api/categories'), api('/api/option-groups'),
   ]);
   state.items = items;
   state.categories = categories;
+  state.optionGroups = optionGroups;
   render();
   renderCategories();
+  renderGroups();
 }
 
 async function loadImages() {
@@ -546,6 +730,27 @@ $('add-category').addEventListener('click', () => openCategoryEditor(null));
 $('cat-form').addEventListener('submit', saveCategory);
 $('cat-close').addEventListener('click', () => catEditor.close());
 $('cat-cancel').addEventListener('click', () => catEditor.close());
+
+$('add-group').addEventListener('click', () => openGroupEditor(null));
+$('og-form').addEventListener('submit', saveGroup);
+$('og-close').addEventListener('click', () => ogEditor.close());
+$('og-cancel').addEventListener('click', () => ogEditor.close());
+$('og-kind').addEventListener('change', showLimits);
+$('og-required').addEventListener('change', showLimits);
+$('og-add-opt').addEventListener('click', () => {
+  const row = optionRow();
+  $('og-opts').append(row);
+  row.querySelector('input').focus();
+});
+$('ogroups').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const g = state.optionGroups.find((x) => x.id === Number(btn.closest('[data-group-id]').dataset.groupId));
+  if (!g) return;
+  if (btn.dataset.action === 'edit') openGroupEditor(g);
+  if (btn.dataset.action === 'delete') askDeleteGroup(g);
+});
+$('f-desc').addEventListener('input', descCount);
 
 $('editor-form').addEventListener('submit', saveItem);
 $('editor-close').addEventListener('click', () => editor.close());

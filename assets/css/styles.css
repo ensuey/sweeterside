@@ -244,6 +244,13 @@ main { padding-block: var(--sp-7) var(--sp-8); }
 
 .card__body { display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-4); flex: 1; }
 .card__name { font-size: 1.0625rem; font-weight: 600; }
+.card__size { font-size: .8125rem; font-weight: 500; color: var(--ink-soft); white-space: nowrap; }
+/* One line on the card; the popup shows it in full. */
+.card__desc {
+  margin: 0; font-size: .875rem; color: var(--ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.price__from { font-size: .8125rem; font-weight: 500; }
 .card__btn {
   position: absolute; inset: 0; width: 100%; height: 100%;
   background: none; border: 0; padding: 0; cursor: pointer;
@@ -289,6 +296,8 @@ body[data-empty="true"] .section { display: none; }
   width: min(100% - 2rem, 420px); padding: 0; border: 0;
   border-radius: var(--r-lg); background: var(--surface); color: var(--ink);
   box-shadow: var(--shadow-lg); overflow: hidden;
+  /* Items with options can be taller than a phone screen. */
+  max-height: calc(100dvh - 2rem); overflow-y: auto; overscroll-behavior: contain;
 }
 .sheet::backdrop { background: rgba(58, 40, 22, .5); backdrop-filter: blur(3px); }
 .sheet .shot { border-bottom: 1px solid var(--line); border-radius: 0; }
@@ -296,6 +305,23 @@ body[data-empty="true"] .section { display: none; }
 .sheet .shot--plain { width: 100%; max-height: 60vh; }
 .sheet__body { padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
 .sheet__name { font-size: 1.5rem; }
+.sheet__size { font-size: 1rem; font-weight: 500; color: var(--ink-soft); }
+.sheet__desc { margin: 0; color: var(--ink-soft); }
+.sheet__desc[hidden] { display: none; }
+/* Option groups in the popup. */
+.opts { display: grid; gap: var(--sp-3); margin: 0; }
+.opts:empty { display: none; }
+.opts__group { border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3) var(--sp-3); margin: 0; }
+.opts__group legend { font-weight: 700; padding: 0 var(--sp-1); }
+.opts__rule { font-weight: 500; font-size: .8125rem; color: var(--ink-soft); }
+.opts__opt { display: flex; align-items: center; gap: var(--sp-2); min-height: 44px; cursor: pointer; }
+.opts__opt input { width: 20px; height: 20px; margin: 0; accent-color: var(--coral); flex: none; }
+.opts__opt span:first-of-type { flex: 1; }
+.opts__price { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.opts__opt--off { color: var(--ink-soft); cursor: not-allowed; }
+.opts__err { margin: var(--sp-1) 0 0; color: var(--danger, #B3261E); font-weight: 600; font-size: .875rem; }
+.opts__err[hidden] { display: none; }
+.cline__opts { display: block; font-size: .8125rem; color: var(--ink-soft); }
 .sheet__row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
 .sheet__price { font-family: "Fredoka", sans-serif; font-weight: 600; font-size: 1.5rem; color: var(--coral-ink); }
 .sheet__close {
@@ -557,6 +583,7 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 .done__lines { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .done__lines li { display: flex; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
 .done__line-total { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.done__what .cline__opts { display: block; }
 .done__call { font-weight: 700; color: #2E7D52; }
 .done__call[hidden] { display: none; }
 .done__links { display: flex; flex-wrap: wrap; gap: var(--sp-2); }

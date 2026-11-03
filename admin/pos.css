@@ -144,6 +144,16 @@ body.pos {
 .tline__name { font-weight: 700; }
 .tline__meta { font-size: .8125rem; color: var(--ink-soft); }
 .tline__note { font-size: .8125rem; font-weight: 700; color: var(--navy); }
+.tline__opts { font-size: .8125rem; color: var(--ink-soft); }
+/* Option picker: one fieldset per group. */
+.opts { display: grid; gap: .75rem; }
+.opts__group { border: 1px solid var(--line); border-radius: var(--r-md); padding: .4rem .75rem .6rem; margin: 0; }
+.opts__group legend { font-weight: 700; padding: 0 .25rem; }
+.opts__opt { display: flex; align-items: center; gap: .6rem; min-height: 48px; cursor: pointer; font-size: 1rem; }
+.opts__opt input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--coral-ink); }
+.opts__opt span:first-of-type { flex: 1; }
+.opts__price { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.opts__opt--off { color: var(--ink-soft); cursor: not-allowed; }
 .tline__void { font-size: .8125rem; font-weight: 700; color: var(--danger); }
 .tline__total { grid-area: total; font-family: "Fredoka", sans-serif; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tline .stepper { grid-area: step; justify-self: start; display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: var(--r-full); }

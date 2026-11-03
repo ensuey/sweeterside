@@ -80,6 +80,19 @@
       No categories yet. Add one before adding menu items.
     </p>
   </section>
+
+  <!-- Option groups: made once, attached to any number of items. -->
+  <section class="admin__section" aria-labelledby="og-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="og-title">Option groups</h2>
+        <p class="admin__sub">Choices such as Size, Add-ons or Sugar level. Make a group once, then tick it on each item that has it. Each option adds its price to the item.</p>
+      </div>
+      <button class="btn btn--primary" type="button" id="add-group">Add option group</button>
+    </div>
+    <ul class="rows" id="ogroups"></ul>
+    <p class="empty-note" id="ogroups-empty" hidden>No option groups yet.</p>
+  </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -113,6 +126,25 @@
           <p class="field__err" data-err="category" hidden></p>
         </div>
       </div>
+
+      <div class="field">
+        <label for="f-desc">Short description <span class="hint">(one line on the card, up to 120 characters)</span></label>
+        <input id="f-desc" name="description" type="text" maxlength="120" placeholder="e.g. Iced matcha with cream and a Biscoff crumble">
+        <p class="hint" id="desc-count" aria-live="polite"></p>
+        <p class="field__err" data-err="description" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="f-size">Size <span class="hint">(optional, e.g. 16 oz or 10 pcs)</span></label>
+        <input id="f-size" name="size_label" type="text" maxlength="20">
+        <p class="field__err" data-err="size_label" hidden></p>
+      </div>
+
+      <fieldset class="crop">
+        <legend>Options <span class="hint">Choices the customer makes, e.g. size or add-ons. Groups are set up below the items.</span></legend>
+        <div class="optpick" id="f-groups"></div>
+        <p class="field__err" data-err="option_groups" hidden></p>
+      </fieldset>
 
       <div class="field">
         <label for="f-image">Photo</label>
@@ -227,6 +259,56 @@
     <div class="modal__foot">
       <button class="btn btn--ghost" type="button" id="cat-cancel">Cancel</button>
       <button class="btn btn--primary" type="submit" id="cat-save">Add category</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- Option group editor ---------- -->
+<dialog class="modal" id="og-editor" aria-labelledby="og-editor-title">
+  <form method="dialog" class="modal__form" id="og-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="og-editor-title">Add option group</h2>
+      <button class="icon-btn" type="button" id="og-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <p class="alert" id="og-error" role="alert" hidden></p>
+      <div class="field">
+        <label for="og-name">Group name <span class="hint">(e.g. Size, Add-ons, Sugar level)</span></label>
+        <input id="og-name" type="text" maxlength="40" required>
+        <p class="field__err" data-err="name" hidden></p>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="og-kind">The customer</label>
+          <select id="og-kind">
+            <option value="single">Picks one</option>
+            <option value="multiple">Picks several</option>
+          </select>
+        </div>
+        <label class="promo__check og__req"><input type="checkbox" id="og-required"> Must choose</label>
+      </div>
+      <div class="row" id="og-limits" hidden>
+        <div class="field">
+          <label for="og-min">At least</label>
+          <input id="og-min" type="number" min="1" max="30" step="1" inputmode="numeric">
+          <p class="field__err" data-err="min" hidden></p>
+        </div>
+        <div class="field">
+          <label for="og-max">At most <span class="hint">(blank: any)</span></label>
+          <input id="og-max" type="number" min="1" max="30" step="1" inputmode="numeric">
+          <p class="field__err" data-err="max" hidden></p>
+        </div>
+      </div>
+      <fieldset class="crop">
+        <legend>Options <span class="hint">Price is added to the item (0 for no extra)</span></legend>
+        <ul class="og__opts" id="og-opts"></ul>
+        <button class="btn btn--ghost btn--sm" type="button" id="og-add-opt">Add an option</button>
+        <p class="field__err" data-err="options" hidden></p>
+      </fieldset>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="og-cancel">Cancel</button>
+      <button class="btn btn--primary" type="submit" id="og-save">Save group</button>
     </div>
   </form>
 </dialog>

@@ -18,6 +18,7 @@ const cakes = require('./cakes');
 const checkout = require('./checkout');
 const push = require('./push');
 const delivery = require('./delivery');
+const itemOptions = require('./options');
 const seo = require('./seo');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
@@ -459,7 +460,31 @@ async function route(req, res) {
   /* ---- menu API (all authenticated) ---- */
   if (pathname === '/api/items' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
-    return sendJson(res, 200, { items: menu.list() });
+    // Each item with the ids of its option groups, for the item editor.
+    return sendJson(res, 200, { items: menu.list().map((i) => ({ ...i, option_groups: itemOptions.itemGroupIds(i.id) })) });
+  }
+
+  /* ---- option groups (Items page), all authenticated ---- */
+  if (pathname === '/api/option-groups' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { groups: itemOptions.listGroups() });
+  }
+  if (pathname === '/api/option-groups' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const group = itemOptions.createGroup(await readJson(req));
+    return afterMutation(res, 201, { group, groups: itemOptions.listGroups() });
+  }
+  const groupMatch = pathname.match(/^\/api\/option-groups\/(\d+)$/);
+  if (groupMatch && (method === 'PUT' || method === 'PATCH')) {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const group = itemOptions.updateGroup(Number(groupMatch[1]), await readJson(req));
+    if (!group) return sendJson(res, 404, { error: 'That option group no longer exists.' });
+    return afterMutation(res, 200, { group, groups: itemOptions.listGroups() });
+  }
+  if (groupMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!itemOptions.removeGroup(Number(groupMatch[1]))) return sendJson(res, 404, { error: 'That option group no longer exists.' });
+    return afterMutation(res, 200, { groups: itemOptions.listGroups() });
   }
 
   if (pathname === '/api/items' && method === 'POST') {
