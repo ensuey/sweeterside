@@ -34,6 +34,13 @@ const NOTE_MAX = 1000;
 const PRICE_MAX = 1000000;
 const SIZE_NAME_MAX = 40;
 const FLAVOUR_MAX = 40;
+const INFO_MAX = 400;
+// The booking info on /cakes. Plain words the owner can change in Cakes →
+// Booking settings; no amounts are promised here.
+const INFO_DEFAULTS = {
+  deposit_text: 'Dachel will call you to confirm the design, the final price and the deposit. Your cake is booked once the deposit is paid.',
+  handover_text: 'Pick it up at the shop on the day, or choose delivery and we will arrange the time and the fee when we call.',
+};
 
 const DEFAULTS = {
   lead_days: 3,
@@ -57,6 +64,23 @@ function readJsonSetting(key, fallback) {
   }
 }
 
+function readObjectSetting(key) {
+  try {
+    const value = JSON.parse(orders.getSetting(key, '{}'));
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+/** The estimate shown as the customer picks: the size's starting price plus
+    the flavour's extra, or null for a size that is not offered. */
+function estimate(sizeName, flavour, s = settings()) {
+  const size = s.sizes.find((x) => x.name === sizeName);
+  if (!size) return null;
+  return size.from_price + (Number(s.flavour_prices[flavour]) || 0);
+}
+
 function settings() {
   const max = orders.getSetting('cake_max_per_day', String(DEFAULTS.max_per_day));
   return {
@@ -64,6 +88,10 @@ function settings() {
     max_per_day: max === '' ? null : Number(max),
     sizes: readJsonSetting('cake_sizes', DEFAULTS.sizes),
     flavours: readJsonSetting('cake_flavours', DEFAULTS.flavours),
+    // Extra pesos for a flavour, e.g. { Ube: 100 }; none for the rest.
+    flavour_prices: readObjectSetting('cake_flavour_prices'),
+    deposit_text: orders.getSetting('cake_deposit_text', INFO_DEFAULTS.deposit_text) || INFO_DEFAULTS.deposit_text,
+    handover_text: orders.getSetting('cake_handover_text', INFO_DEFAULTS.handover_text) || INFO_DEFAULTS.handover_text,
   };
 }
 
@@ -102,20 +130,35 @@ function parseSizes(text, errors) {
   return sizes;
 }
 
-/** One flavour per line. */
+/** One flavour per line, with an optional extra price: "Ube | 100".
+    @returns { flavours: [names], prices: { name: extra } } */
 function parseFlavours(text, errors) {
   const flavours = [];
+  const prices = {};
   for (const raw of String(text ?? '').split(/\r?\n/)) {
-    const name = raw.trim();
-    if (!name) continue;
-    if (name.length > FLAVOUR_MAX) {
+    const line = raw.trim();
+    if (!line) continue;
+    const parts = line.split('|');
+    const name = (parts.length > 1 ? parts.slice(0, -1).join('|') : line).trim();
+    if (!name || name.length > FLAVOUR_MAX) {
       errors.flavours = `Keep each flavour under ${FLAVOUR_MAX} characters.`;
-      return [];
+      return { flavours: [], prices: {} };
     }
-    if (!flavours.some((f) => f.toLowerCase() === name.toLowerCase())) flavours.push(name);
+    let extra = 0;
+    if (parts.length > 1) {
+      extra = Number(String(parts[parts.length - 1]).replace(/[,\s+]/g, '').replace(/^(php|₱)/i, ''));
+      if (!Number.isInteger(extra) || extra < 0 || extra > PRICE_MAX) {
+        errors.flavours = `"${name}": the extra price must be a whole number of pesos (e.g. Ube | 100).`;
+        return { flavours: [], prices: {} };
+      }
+    }
+    if (!flavours.some((x) => x.toLowerCase() === name.toLowerCase())) {
+      flavours.push(name);
+      if (extra) prices[name] = extra;
+    }
   }
   if (flavours.length > 20) errors.flavours = 'Keep it to 20 flavours or fewer.';
-  return flavours;
+  return { flavours, prices };
 }
 
 /**
@@ -145,8 +188,18 @@ function updateSettings(input) {
     if (!errors.sizes) values.cake_sizes = JSON.stringify(sizes);
   }
   if ('flavours' in input) {
-    const flavours = parseFlavours(input.flavours, errors);
-    if (!errors.flavours) values.cake_flavours = JSON.stringify(flavours);
+    const { flavours, prices } = parseFlavours(input.flavours, errors);
+    if (!errors.flavours) {
+      values.cake_flavours = JSON.stringify(flavours);
+      values.cake_flavour_prices = JSON.stringify(prices);
+    }
+  }
+  for (const key of ['deposit_text', 'handover_text']) {
+    if (!(key in input)) continue;
+    const text = String(input[key] ?? '').trim().replace(/\s+/g, ' ');
+    // Blank goes back to the default wording.
+    if (text.length > INFO_MAX) errors[key] = `Keep it under ${INFO_MAX} characters.`;
+    else values[`cake_${key}`] = text;
   }
 
   if (Object.keys(errors).length) throw new ValidationError(errors);
@@ -298,10 +351,10 @@ function create(input, { now = new Date() } = {}) {
 
   const info = db.prepare(`
     INSERT INTO cake_bookings (customer_name, phone, phone_norm, size, size_from_price, flavour, occasion,
-                               cake_message, design_notes, photo, needed_on, handover, address)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                               cake_message, design_notes, photo, needed_on, handover, address, estimate_from)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     name, phone, phoneNorm, size.name, size.from_price, flavour, occasion,
-    cakeMessage, designNotes, photo, neededOn, handover, address);
+    cakeMessage, designNotes, photo, neededOn, handover, address, estimate(size.name, flavour, s));
   return get(info.lastInsertRowid);
 }
 
@@ -394,6 +447,7 @@ function update(id, input) {
 }
 
 module.exports = {
+  estimate, INFO_DEFAULTS,
   STATUSES, OTHER_FLAVOUR, settings, updateSettings, availability,
   savePhoto, photoPath, removeStrayPhotos,
   create, get, list, counts, update, niceDate,
