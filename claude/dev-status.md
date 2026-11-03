@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 167 (`npm test`):
+**Tests:** 172 (`npm test`):
 - 60 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -18,6 +18,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/client-ip.test.js`
 - 6 in `test/imagemeta.test.js`
 - 9 in `test/push.test.js`
+- 5 in `test/seo.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -125,9 +126,9 @@ Fixes since the POS went live:
     owner-approved discount keeps the share it was approved at
     (`approved_bp`), and re-approvals are audited.
 
-## Since 2026-11-01: online orders at the POS, the domain, security, order alerts, phones (#21–#32)
+## Since 2026-11-01: online orders at the POS, the domain, security, order alerts, phones, SEO (#21–#34)
 
-All merged and deployed (Fly v15–v25).
+All merged and deployed (Fly v15–v26).
 
 - **#21 (v15): the logo for items without a photo.**
   - New items start on the logo instead of the first image in `assets/` (the
@@ -230,6 +231,24 @@ All merged and deployed (Fly v15–v25).
   - The fake-order code moved from `orders.js` to `settings.js`, and
     `push.js` loads on Settings. It still saves through `/api/settings` and
     `/api/push`.
+- **#34 (v26): local SEO and AI search** for café, coffee shop, cake shop
+  and pastries in San Isidro, Davao Oriental.
+  - **One source for the facts:** `server/business.js` holds the name,
+    address (Unit 5, Lasaca Bldg, Public Market, Batobato, San Isidro, Davao
+    Oriental 8209), map position (6.8340817, 126.0873542), phone
+    (0932 762 0367), hours (daily 10:00–20:00, assumed every day), the
+    Google Maps and Facebook links, and delivery areas (Batobato, Manikling,
+    Baon, Bitaogan). It must match the Google Business Profile exactly.
+  - **Pages:** keyword titles and descriptions, canonical links, Open Graph,
+    geo tags. Below the menu: "Visit our café and cake shop in San Isidro"
+    and "Questions" (FAQ). The footer has the name, address and phone.
+  - **JSON-LD** (`server/seo.js`): `CafeOrCoffeeShop` + `Bakery`, the menu
+    with today's prices from the database, `WebSite` and `FAQPage`. The
+    cakes page describes custom cakes as a `Service`, from the lowest size
+    price. `<` is escaped, and the CSP is unchanged.
+  - **Crawler files:** `robots.txt` (admin and API out), `sitemap.xml`, and
+    `llms.txt` (a summary with the menu and prices for AI assistants).
+  - Live: the structured data reads 32 menu items with prices.
 
 After deploying (owner, once):
 1. Staff → create the owner PIN (needs the admin password), then add the
@@ -283,6 +302,16 @@ After deploying (owner, once):
 - POS order #12 (a takeout saved at the counter, never sent) is still open on
   the live site: send it, take payment, or void it.
 - Check the POS item photos on the counter iPad.
+- SEO after #34 (owner):
+  - **Google Business Profile:** primary category Café, plus Coffee shop,
+    Cake shop and Bakery; website `https://sweeterside.ph`; the same hours,
+    phone and address as the site; photos; reviews.
+  - **Google Search Console:** add `sweeterside.ph`, submit
+    `https://sweeterside.ph/sitemap.xml`, and request indexing of `/` and
+    `/cakes`.
+  - Check `https://sweeterside.ph` in Google's Rich Results Test.
+  - Update the Facebook page website link.
+  - Confirm the hours are the same every day, or say which days differ.
 - Check the admin layout on the iPhone after #31: no sideways scrolling, the
   link row swipes with the current page in view, no zoom when tapping a field,
   nothing under the clock or Dynamic Island.
