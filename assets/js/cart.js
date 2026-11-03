@@ -33,6 +33,7 @@
     var remaining = card.dataset.remaining;
     catalog[card.dataset.id] = {
       name: card.dataset.name,
+      cat: card.dataset.cat, // category slug, for suggestions
       price: Number(card.dataset.price),
       max: remaining === undefined ? MAX_QTY : Math.min(MAX_QTY, Number(remaining)),
       shot: card.querySelector('.shot'), // the card's photo, copied as the cart thumbnail
@@ -292,7 +293,7 @@
   /* Storage can be missing or blocked (private mode); the cart then simply
      lasts until the page is closed. */
   function save() {
-    var stored = lines.map(function (l) { return { id: l.id, qty: l.qty, opts: l.opts }; });
+    var stored = lines.map(function (l) { return { id: l.id, qty: l.qty, opts: l.opts, src: l.src }; });
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); } catch (e) { /* ignore */ }
     // A percentage voucher depends on what is in the cart.
     if (voucher) scheduleVoucherCheck();
@@ -329,7 +330,7 @@
         code: code,
         type: type || 'delivery',
         delivery_area: $('o-area') ? $('o-area').value : '',
-        items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [] }; }),
+        items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [], source: l.src || '' }; }),
       }),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (data) {
@@ -374,7 +375,7 @@
       if (optionProblem(catalog[id], opts)) { dropped++; return; }
       var key = keyOf(id, opts);
       var qty = Math.min(catalog[id].max - itemQty(id), Math.floor(Number(l && l.qty)));
-      if (qty > 0 && !find(key)) lines.push({ id: id, qty: qty, opts: opts, key: key });
+      if (qty > 0 && !find(key)) lines.push({ id: id, qty: qty, opts: opts, key: key, src: l.src === 'suggested' ? 'suggested' : '' });
     });
     if (dropped) {
       notice(plural(dropped, 'item') + ' in your saved cart ' +
@@ -392,7 +393,7 @@
 
   /* ---------------------------- cart actions ---------------------------- */
 
-  function add(id, opts) {
+  function add(id, opts, src) {
     if (!catalog[id]) return;
     opts = opts || [];
     var key = keyOf(id, opts);
@@ -405,7 +406,7 @@
       return;
     }
     if (line) line.qty += 1;
-    else lines.push({ id: id, qty: 1, opts: opts, key: key });
+    else lines.push({ id: id, qty: 1, opts: opts, key: key, src: src || '' });
     save();
     render();
     live.textContent = catalog[id].name + ' added. ' + plural(count(), 'item') + ' in your cart.';
@@ -476,6 +477,68 @@
     return li;
   }
 
+  /* ------------------------- goes well with ------------------------- */
+
+  // Up to three per category, and a list for any order, set in the admin.
+  var suggest = { any: [], by_cat: {} };
+  try { suggest = JSON.parse(document.body.dataset.suggest || '{}'); } catch (e) { /* none */ }
+  var SUGGEST_MAX = 3;
+  var fromSuggest = false; // the item popup was opened from the strip
+
+  /** What to suggest now: from the categories in the cart, then the list for
+      any order; never what is in the cart already or cannot be ordered. */
+  function suggestions() {
+    var picked = [];
+    var inCart = {};
+    lines.forEach(function (l) { inCart[l.id] = true; });
+    var lists = lines.map(function (l) { return (suggest.by_cat || {})[catalog[l.id].cat] || []; });
+    lists.push(suggest.any || []);
+    lists.forEach(function (ids) {
+      ids.forEach(function (raw) {
+        var id = String(raw);
+        var item = catalog[id];
+        if (picked.length >= SUGGEST_MAX || !item || inCart[id] || picked.indexOf(id) > -1) return;
+        if (itemQty(id) >= item.max) return;
+        picked.push(id);
+      });
+    });
+    return picked;
+  }
+
+  function renderSuggest() {
+    var box = $('cart-suggest');
+    if (!box) return;
+    var ids = count() ? suggestions() : [];
+    var list = $('suggest-list');
+    list.textContent = '';
+    box.hidden = ids.length === 0;
+    ids.forEach(function (id) {
+      var item = catalog[id];
+      var li = el('li', 'suggest__item');
+      var thumb = el('div', 'cline__thumb');
+      thumb.setAttribute('aria-hidden', 'true');
+      if (item.shot) {
+        var shot = item.shot.cloneNode(true);
+        var pic = shot.querySelector('img');
+        if (pic) { pic.alt = ''; pic.removeAttribute('loading'); }
+        thumb.appendChild(shot);
+      }
+      var main = el('div', 'suggest__main');
+      main.appendChild(el('span', 'suggest__name', item.name));
+      // An item with options says "from": the popup asks which ones.
+      var card = document.querySelector('.card[data-id="' + id + '"] .price');
+      main.appendChild(el('span', 'suggest__price', item.options && card ? card.textContent.trim() : money(item.price)));
+      var btn = el('button', 'suggest__add', item.options ? 'Choose' : 'Add');
+      btn.type = 'button';
+      btn.dataset.suggest = id;
+      btn.setAttribute('aria-label', (item.options ? 'Choose options for ' : 'Add ') + item.name);
+      li.appendChild(thumb);
+      li.appendChild(main);
+      li.appendChild(btn);
+      list.appendChild(li);
+    });
+  }
+
   function render() {
     var n = count();
 
@@ -489,6 +552,7 @@
     var list = $('cart-lines');
     list.textContent = '';
     lines.forEach(function (l) { list.appendChild(lineNode(l)); });
+    renderSuggest();
 
     $('cart-empty').hidden = n > 0;
     $('cart-sum').hidden = n === 0;
@@ -779,7 +843,7 @@
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
       voucher: voucher ? voucher.code : '',
-      items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [] }; }),
+      items: lines.map(function (l) { return { id: Number(l.id), qty: l.qty, options: l.opts || [], source: l.src || '' }; }),
       expected_total: total(),
       website: form.elements.website.value, // the honeypot: empty for people
     };
@@ -869,6 +933,21 @@
   dialog.addEventListener('click', function (e) {
     if (e.target === dialog || e.target.closest('[data-close]')) { dialog.close(); return; }
 
+    var sug = e.target.closest('[data-suggest]');
+    if (sug) {
+      var sid = sug.dataset.suggest;
+      if (catalog[sid] && catalog[sid].options) {
+        var cardBtn = document.querySelector('.card[data-id="' + sid + '"] .card__btn');
+        if (cardBtn) { fromSuggest = true; cardBtn.click(); }
+        return;
+      }
+      add(sid, [], 'suggested');
+      // Focus moves to the new line's stepper; the strip is redrawn without it.
+      var added = $('cart-lines').querySelector('.cline[data-key="' + sid + '"] [data-step="1"]');
+      if (added) added.focus();
+      return;
+    }
+
     var step = e.target.closest('[data-step]');
     if (step) {
       var key = step.closest('.cline').dataset.key;
@@ -938,6 +1017,7 @@
       sheetAdd.textContent = 'Add to cart · ' + money(each);
     };
     sheet.addEventListener('sheet:open', showSheetPrice);
+    sheet.addEventListener('close', function () { fromSuggest = false; });
     sheetOpts.addEventListener('change', function (e) {
       var set = e.target.closest('fieldset');
       if (set) set.querySelector('.opts__err').hidden = true;
@@ -961,7 +1041,7 @@
         if (problem && !first) first = set.querySelector('input:not(:disabled)');
       });
       if (first) { first.focus(); return; }
-      add(sheet.dataset.id, opts);
+      add(sheet.dataset.id, opts, fromSuggest ? 'suggested' : '');
       sheet.close();
     });
   }

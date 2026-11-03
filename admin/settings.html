@@ -94,6 +94,17 @@
     <p class="field__err" id="free-err" role="alert" hidden></p>
   </section>
 
+  <!-- "Goes well with" in the cart. -->
+  <section class="hours" aria-labelledby="suggest-title">
+    <h2 class="admin__title" id="suggest-title">Cart suggestions</h2>
+    <p class="admin__sub">The cart shows up to three "Goes well with" items, from the categories already in the cart, then the list for any order. Items already in the cart, sold out or off the menu are left out. Items with options open their choices.</p>
+    <form id="suggest-form" novalidate>
+      <div class="suggest-rows" id="suggest-rows"></div>
+      <button class="btn btn--ghost" type="submit" id="suggest-save">Save suggestions</button>
+    </form>
+    <p class="field__err" id="suggest-err" role="alert" hidden></p>
+  </section>
+
   <!-- What the customer sees right after ordering. -->
   <section class="hours" aria-labelledby="confirm-title">
     <h2 class="admin__title" id="confirm-title">Order confirmation</h2>
