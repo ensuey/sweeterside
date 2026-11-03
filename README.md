@@ -485,8 +485,34 @@ go past what is left, and the server checks again when the order is placed,
 so two customers cannot both take the last one: the second is told how many
 are left and their cart is cut down to that.
 
-**Menu health** (top of the Items page) lists the items on the menu that show
-the logo because they have no photo of their own, each with a link to edit it.
+**Menu health** (top of the Items page) lists the items on the menu with no
+photo of their own (they show the logo), no description or no size, each with
+a link to edit it.
+
+**Description and size:** each item can have a short description (up to 120
+characters, one line on the card and in full in the item popup) and a size
+("16 oz", "10 pcs") shown beside the name.
+
+**Options** (Items page → Option groups): groups such as Size, Add-ons or
+Sugar level are made once and ticked on each item that has them.
+- A group is **pick one** or **pick several** (with a least and a most), and
+  **must choose** or optional. An optional "pick one" starts on None.
+- Each option has a price added to the item (0 for none) and can be turned
+  off; an option that is off shows greyed out and cannot be chosen.
+- On the menu, **Add** on an item with options opens the popup to choose,
+  with the price as you choose. Items without options keep one-tap Add. A
+  card says "from ₱X" when the choice changes the price.
+- The cart keeps one line per item and set of options, with the options
+  under the name. The POS has the same picker.
+- The server checks every choice and prices it; see "Options" in
+  `claude/pos-plan.md` for how sales, SC/PWD and limits apply.
+- Orders keep a copy of the options chosen, shown on the order card, the
+  kitchen ticket and the receipt. Reports → **Options chosen** shows how
+  often each was picked and what it added. Order alerts give the number of
+  items only.
+- Menu items are never merged for you: to replace "Burger only" and
+  "Burger with fries", make one Burger with an option and turn the old
+  ones off.
 Prices on the menu and in the admin show the peso sign (₱).
 
 ## Promotions: best sellers, sale prices and vouchers
