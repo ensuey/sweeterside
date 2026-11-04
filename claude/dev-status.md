@@ -467,6 +467,54 @@ After deploying (owner, once):
    limit (10%), idle lock (5 min).
 5. POS → Shift → open with the starting cash before taking cash.
 
+## Menu regroup (2026-11-04, live data, no PR)
+
+Agreed with the owner, applied to the live database by a script run on the
+Fly machine (`node /tmp/regroup-menu.js --apply`, through the app's own
+modules and validation). Rehearsed first on a local copy of the live menu,
+then a dry run on the live site. The owner ran the apply step.
+
+- **Backup first:** `/data/app-backup-20261104-111345-before-menu-regroup.db`
+  (`VACUUM INTO`). Restore it to undo the whole regroup.
+- **Categories**, in this order (filter button in brackets):
+  - Frappes (Frappes): was Frappe Based Drinks; 7 items.
+  - Coffee & Matcha Lattes (Lattes): was Coffee Based Drinks; 7 items, with
+    Matcha Latte moved in.
+  - Cakes (Cakes): 1 item.
+  - Pastries & Sweets (Pastries): was Breads and Pastries; 5 items.
+  - Meals (Meals): was Foods; 5 items, with Burger moved in.
+  - Sides (Sides): was Burger; Fries and Chicken Nuggets.
+  - Matcha Drinks was emptied and removed. Slugs are unchanged.
+- **One item with options instead of several** (option groups from PR C).
+  The item kept is the original, so its photo, flags and sales history stay;
+  prices give the same totals as before:
+  - Matcha Latte (was Matcha Latte (Regular)), ₱139 + **Matcha grade**:
+    Regular +0 / Premium +60.
+  - Cinnamon Rolls Duo (was Cinnamon Rolls Double (Blueberr…), ₱165 +
+    **Cinnamon roll pair**: Blueberry & Classic / Biscoff & Classic.
+  - Chicken Franks Sandwich with fries, ₱130 + **Franks sandwich size**:
+    Single +0 / Double +100.
+  - Burger, ₱100 + **Make it a meal** (optional): Fries & nuggets +60.
+- **Set Not available** (not deleted; past orders and reports keep them):
+  Matcha Latte Premium, Cinnamon Rolls Double (Biscoff…), Chicken Franks
+  Sandwich Double with Fries, Burger Only, Burger with fries and nuggets.
+- **Renamed:** Caramel Machiatto → Caramel Macchiato.
+- **Cart suggestions:** any order → Matcha Frappe; with Frappes or Lattes →
+  Cinnamon Rolls Duo, Brownies, Macaroons; with Meals → Fries, Chicken
+  Nuggets, Matcha Frappe.
+- Checked on the live page: the six sections and filter buttons, the four
+  items open their choices at the old prices, the hidden items are gone,
+  the suggestions are set.
+- **Left for the owner:**
+  - The right names for "Korean Garlic" (Bread? Cream Cheese Bun?) and
+    "Macaroons Small box (10pcs)" (macaroons or macarons?).
+  - Three old empty categories, never shown to customers: Soda Drinks,
+    Drinks and "Matcha Latte (Premium)". Delete them on Items →
+    Categories (Claude Code was not allowed to write to the server).
+- Note: the Fly machine suspends when idle (`auto_stop` in `fly.toml`), and
+  `flyctl ssh console` then says "no started VMs". Any request wakes it in
+  about a second; the site is not down.
+
 ## Features shipped
 
 - Customer menu rendered from the database (works without JavaScript), with
@@ -516,6 +564,9 @@ After deploying (owner, once):
 ## Still to do
 
 - Dachel to replace the placeholder cake sizes, prices and flavours.
+- Dachel to name "Korean Garlic" and "Macaroons" properly, and delete the
+  empty categories Soda Drinks, Drinks and "Matcha Latte (Premium)" (menu
+  regroup above).
 - Dachel to set the real opening hours on Settings (still 10:00–20:00).
 - Owner notifications (Messenger / WhatsApp) were discussed and put on hold.
 - POS order #12 (a takeout saved at the counter, never sent) is still open on
