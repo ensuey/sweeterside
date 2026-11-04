@@ -305,13 +305,22 @@ All merged and deployed (Fly v15–v28).
   - Waiting on the owner's own story: the year opened, Dachel, best sellers,
     photos.
 
-## CRO and usability (six PRs, from the brief of 2026-11-03)
+## CRO and usability (six PRs, from the brief of 2026-11-03; #40–#46)
 
-One PR at a time, each from `main` after the last is merged: A quick fixes,
-B delivery areas and fees, C descriptions, sizes and options, D cart
-suggestions, E pre-orders, F cakes page and testimonials.
+One PR at a time, each from `main` after the last was merged. All merged and
+deployed (Fly v29–v35).
 
-- **PR A: quick fixes.**
+| PR | What | Branch | GitHub | Fly |
+|---|---|---|---|---|
+| A | Quick fixes | `cro-quick-fixes` | #40 | v29 |
+| B | Delivery areas, fees, times, free delivery | `delivery-areas` | #41 | v30 |
+| C | Descriptions, sizes and options | `item-options` | #42 | v31 |
+| D | Cart suggestions | `cart-suggestions` | #43 | v32 |
+| fix | Cart + and − buttons (broken by D) | `fix-cart-stepper` | #44 | v33 |
+| E | Pre-orders and scheduled orders | `pre-orders` | #45 | v34 |
+| F | Cakes page and testimonials | `cakes-social` | #46 | v35 |
+
+- **PR A (#40, v29): quick fixes.**
   - **Photos:** an item showing the logo has `alt=""`. Every photo has its
     own width and height and `decoding="async"`; all but the first four are
     `loading="lazy"`. Sizes are read once per path (`render.imageSize`).
@@ -344,7 +353,7 @@ suggestions, E pre-orders, F cakes page and testimonials.
     are 44 px touch targets. Checked at 360 px: no sideways scroll, 16 px
     inputs, and a real order placed with blank cash.
   - **Tests:** `test/cro.test.js` (12).
-- **PR B: delivery areas.**
+- **PR B (#41, v30): delivery areas.**
   - **Areas** (`server/delivery.js`, table `delivery_areas`): name, fee
     (blank = not set, so not offered), usual time from–to in minutes, on/off,
     order. Seeded once with Batobato, Manikling, Baon and Bitaogan, no fees.
@@ -366,7 +375,7 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser: fees, times, Other area, free delivery at the
     threshold, a placed order, the Settings section and the POS dropdown.
   - **Tests:** `test/delivery.test.js` (9).
-- **PR C: descriptions, sizes and options.**
+- **PR C (#42, v31): descriptions, sizes and options.**
   - **Items** gain `description` (≤120) and `size_label` (≤20), on the card
     (one line, clamped) and in the popup. Menu health adds "No description"
     and "No size".
@@ -390,7 +399,7 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser (and at about 360 px): picker, refusals, cart
     lines, a placed order, the Orders card, the Items page editor and the POS.
   - **Tests:** `test/options.test.js` (11).
-- **PR D: cart suggestions.**
+- **PR D (#43, v32): cart suggestions.**
   - **Settings → Cart suggestions:** up to three items per category and three
     for any order (`server/suggestions.js`, one setting, `/api/suggestions`).
     Items removed from the menu drop out by themselves.
@@ -405,10 +414,11 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser (and at about 360 px): strip, one-tap add, Choose
     with options, a placed order with the flags saved, the Settings section.
   - **Tests:** `test/suggestions.test.js` (4).
-  - **Fixed after (#44):** the cart's + and − did nothing, because `<body>`
-    carries `data-suggest` and the click handler matched it. Only the strip's
-    buttons match now; a test pins it.
-- **PR E: pre-orders and scheduled orders.**
+  - **Fixed in #44 (v33):** from v32 the cart's + and − did nothing, because
+    `<body>` carries `data-suggest` and the click handler matched it. Only the
+    strip's buttons match now; a test pins it. Found while testing PR E;
+    PR D's own checks only clicked the strip.
+- **PR E (#45, v34): pre-orders and scheduled orders.**
   - **Rules** in `server/schedule.js` (Manila time): pick-up on a day and a
     15-minute slot; delivery ASAP or a 30-minute window; dine-in now only.
     ASAP and dine-in need the shop open now; up to N days ahead (Settings →
@@ -426,7 +436,7 @@ suggestions, E pre-orders, F cakes page and testimonials.
   - Checked in the browser outside the hours: pre-order menu, days and
     times, per-day stock, two scheduled orders, the Orders page and the POS.
   - **Tests:** `test/preorders.test.js` (8).
-- **PR F: cakes page and social proof.**
+- **PR F (#46, v35): cakes page and social proof.**
   - **Gallery** (`server/gallery.js`, table `cake_gallery`): photos uploaded
     through `/api/images` (metadata stripped), caption, order; on `/cakes`.
   - **Prices:** size table on `/cakes`; flavour extras (`Ube | 100`,
@@ -463,9 +473,21 @@ After deploying (owner, once):
   search, category filters and an item popup with photos.
 - Admin with scrypt passwords, hashed session tokens, CSRF, login throttling
   and a strict CSP (no inline scripts).
-- Cart and checkout: Delivery (cash on delivery), Pick-up (time today) and
-  Dine-in (table number). Prices recomputed by the server, stale totals
-  refused, 5 orders per IP per 10 minutes.
+- Cart and checkout: Delivery (cash on delivery, optional exact cash), Pick-up
+  and Dine-in (table number). Prices recomputed by the server, stale totals
+  refused, 5 orders per IP per 10 minutes. Confirmation screen with the
+  lines, the time, tap to call and Facebook.
+- Delivery areas with a fee and a usual time each, "Other area" with the fee
+  to confirm, and an optional free-delivery threshold (#41).
+- Item descriptions and sizes; option groups (sizes, add-ons) in the cart
+  and the POS, priced on the server and kept on each order line (#42).
+- "Goes well with" suggestions in the cart, counted on Reports (#43).
+- Pre-orders: pick-up on a day and time, delivery ASAP or in a window, up to
+  N days ahead; outside the hours the menu takes orders for later; daily
+  limits by the scheduled day (#45).
+- `/cakes`: gallery, size and price table, flavour extras with a live
+  estimate, booking info; testimonials and a rating line on the menu and
+  `/cakes` (#46).
 - Items page: Available / Not available / Sold out, and a max per day.
 - Promotions: best seller badge, sale prices, voucher codes.
 - Custom cake bookings (`/cakes`) with notice period, cakes per day, a
