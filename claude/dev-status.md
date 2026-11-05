@@ -480,7 +480,8 @@ then a dry run on the live site. The owner ran the apply step.
   - Frappes (Frappes): was Frappe Based Drinks; 7 items.
   - Coffee & Matcha Lattes (Lattes): was Coffee Based Drinks; 7 items, with
     Matcha Latte moved in.
-  - Cakes (Cakes): 1 item.
+  - Whole Cakes (Whole Cakes): 1 item. Was Cakes; the owner renamed it after
+    the regroup.
   - Pastries & Sweets (Pastries): was Breads and Pastries; 5 items.
   - Meals (Meals): was Foods; 5 items, with Burger moved in.
   - Sides (Sides): was Burger; Fries and Chicken Nuggets.
