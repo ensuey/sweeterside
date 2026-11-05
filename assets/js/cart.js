@@ -645,6 +645,13 @@
     });
   }
 
+  // One line under the button, for the chosen type.
+  var NOTES = {
+    delivery: 'Cash on delivery. We will call to confirm.',
+    pickup: 'Pay at the counter when you pick up.',
+    dinein: 'Pay at the counter. We will bring it to your table.',
+  };
+
   function render() {
     var n = count();
 
@@ -661,17 +668,20 @@
     renderSuggest();
 
     $('cart-empty').hidden = n > 0;
+    $('cart-items').hidden = n === 0;
+    $('cart-items-n').textContent = plural(n, 'item');
+    $('cart-items-total').textContent = money(subtotal());
     $('cart-sum').hidden = n === 0;
     // No type open (all turned off, or only pick-up and it is past closing).
     $('cart-closed').hidden = n === 0 || (type !== null && !shopClosed);
     form.hidden = n === 0 || type === null || shopClosed;
+    $('cart-foot').hidden = form.hidden;
+    $('checkout-note').textContent = NOTES[type] || '';
 
     $('cart-subtotal').textContent = money(subtotal());
-    // The code box opens only after "I have a voucher code" is ticked; once a
-    // code is applied, the tick box gives way to the applied code.
-    if (voucher) $('v-have').checked = true;
-    $('v-have').closest('label').hidden = !!voucher;
-    $('voucher-entry').hidden = !!voucher || !$('v-have').checked;
+    // The code box opens only after "Have a voucher code?"; once a code is
+    // applied, the applied code takes its place.
+    $('v-more').hidden = !!voucher;
     $('voucher-applied').hidden = !voucher;
     $('cart-discount-row').hidden = !voucher;
     if (voucher) {
@@ -696,8 +706,10 @@
 
   function renderChange() {
     var out = $('o-change');
+    var sum = $('cash-sum'); // the folded row's short version
     var raw = $('o-cash').value.trim();
     out.classList.remove('is-short');
+    sum.textContent = 'Optional';
     if (!count()) { out.textContent = ''; return; }
     // Left blank: the customer pays the exact amount.
     if (raw === '') { out.textContent = 'Blank means the exact amount: no change needed.'; return; }
@@ -711,8 +723,10 @@
       out.classList.add('is-short');
     } else if (cash === due) {
       out.textContent = 'Exact amount. No change needed.';
+      sum.textContent = 'Exact amount';
     } else {
       out.textContent = 'Your change: ' + money(cash - due);
+      sum.textContent = money(cash) + ' · change ' + money(cash - due);
     }
   }
 
@@ -732,7 +746,12 @@
     var first = null;
     Object.keys(fields || {}).forEach(function (name) {
       var p = form.querySelector('[data-err="' + name + '"]');
-      if (p) { p.textContent = fields[name]; p.hidden = false; }
+      if (p) {
+        p.textContent = fields[name]; p.hidden = false;
+        // An error inside a folded section (the cash) opens it.
+        var fold = p.closest('details');
+        if (fold) fold.open = true;
+      }
       var input = form.elements[name];
       // The order type is a group of radios, which has no single element to mark.
       if (input && input.setAttribute) {
@@ -936,7 +955,7 @@
 
     var missing = checkFields();
     if (Object.keys(missing).length) {
-      formError('Please fill in every field before placing your order.');
+      formError('Please check the fields marked in red.');
       showErrors(missing);
       return;
     }
@@ -1026,11 +1045,15 @@
   /* ---------------------------- open / close ---------------------------- */
 
   var opener = null;
+  var ITEMS_OPEN_MAX = 4;
 
   function open() {
     opener = document.activeElement;
     view.hidden = false;
     done.hidden = true;
+    // A short cart shows its lines; a long one starts folded to its count, so
+    // the checkout is near the top.
+    $('cart-items').open = lines.length <= ITEMS_OPEN_MAX;
     refreshTypes(); // the page may have been open a while: recheck pick-up times
     freshToken();
     dialog.showModal();
@@ -1056,6 +1079,7 @@
         return;
       }
       add(sid, [], 'suggested');
+      $('cart-items').open = true; // show the line just added
       // Focus moves to the new line's stepper; the strip is redrawn without it.
       var added = $('cart-lines').querySelector('.cline[data-key="' + sid + '"] [data-step="1"]');
       if (added) added.focus();
@@ -1082,19 +1106,15 @@
     if (e.key === 'Enter') { e.preventDefault(); checkVoucher($('v-code').value); }
   });
   $('v-code').addEventListener('input', function () { voucherError(''); });
-  $('v-have').addEventListener('change', function () {
+  $('v-more').addEventListener('toggle', function () {
     voucherError('');
-    if (this.checked) {
-      render();
-      $('v-code').focus();
-    } else {
-      $('v-code').value = '';
-      render();
-    }
+    if (this.open) $('v-code').focus();
+    else $('v-code').value = '';
   });
   $('v-remove').addEventListener('click', function () {
     setVoucher(null);
     voucherError('');
+    $('v-more').open = true;
     $('v-code').focus();
   });
 

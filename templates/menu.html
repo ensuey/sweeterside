@@ -111,7 +111,15 @@
 
     <p class="cart__notice" id="cart-notice" role="status" hidden></p>
     <p class="cart__empty" id="cart-empty">Your cart is empty. Tap <strong>Add</strong> on anything you like.</p>
-    <ul class="cart__lines" id="cart-lines"></ul>
+    <!-- The lines fold away behind a one-line count; cart.js opens it for a short cart. -->
+    <details class="cart__items" id="cart-items" open>
+      <summary class="cart__items-sum">
+        <span id="cart-items-n">0 items</span>
+        <span class="cart__items-total" id="cart-items-total">₱0</span>
+        <svg class="more__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+      </summary>
+      <ul class="cart__lines" id="cart-lines"></ul>
+    </details>
 
     <!-- "Goes well with": filled by cart.js from data-suggest, only while the cart has something. -->
     <section class="suggest" id="cart-suggest" aria-labelledby="suggest-title" hidden>
@@ -143,8 +151,6 @@
         <p class="cfield__err" data-err="type" hidden></p>
       </fieldset>
 
-      <h3 class="checkout__title">Your details</h3>
-      <p class="checkout__req">All fields are required unless marked optional.</p>
       <p class="cart__alert" id="cart-error" role="alert" hidden></p>
 
       <div class="cfield">
@@ -156,7 +162,7 @@
       <div class="cfield" data-for="delivery pickup">
         <label for="o-phone">Phone number</label>
         <input id="o-phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" placeholder="0917 123 4567" aria-describedby="o-phone-hint" required>
-        <p class="cfield__hint cfield__hint--below" id="o-phone-hint">A PH mobile number. We call or text it to confirm your order.</p>
+        <p class="cfield__hint cfield__hint--below" id="o-phone-hint">We call or text this number to confirm.</p>
         <p class="cfield__err" data-err="phone" hidden></p>
       </div>
 
@@ -197,7 +203,7 @@
 
       <div class="cfield" data-for="delivery">
         <label for="o-address">Delivery address</label>
-        <textarea id="o-address" name="address" rows="3" autocomplete="street-address" maxlength="400" placeholder="House no., street, barangay, city" required></textarea>
+        <textarea id="o-address" name="address" rows="2" autocomplete="street-address" maxlength="400" placeholder="House no., street, barangay, city" required></textarea>
         <p class="cfield__err" data-err="address" hidden></p>
       </div>
 
@@ -207,33 +213,48 @@
         <p class="cfield__err" data-err="landmark" hidden></p>
       </div>
 
-      <div class="cfield" data-for="delivery">
-        <label for="o-cash">Cash you will pay with <span class="cfield__hint">optional, so we can bring your change</span></label>
-        <div class="cfield__money">
-          <span aria-hidden="true">₱</span>
-          <input id="o-cash" name="cash" type="number" inputmode="numeric" min="0" step="1" placeholder="Exact amount" aria-describedby="o-change">
-          <button class="cfield__exact" type="button" id="o-exact">Exact amount</button>
-        </div>
-        <p class="cfield__change" id="o-change" aria-live="polite"></p>
-        <p class="cfield__err" data-err="cash" hidden></p>
-      </div>
-
-      <!-- Voucher codes are checked by the server, which also works out the
-           discount. The code box only opens when the customer says they have one. -->
-      <div class="voucher" id="voucher">
-        <label class="voucher__have"><input type="checkbox" id="v-have" aria-controls="voucher-entry"> I have a voucher code</label>
-        <div class="voucher__entry" id="voucher-entry" hidden>
-          <label class="vh" for="v-code">Voucher code</label>
-          <div class="voucher__row">
-            <input id="v-code" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter your code, e.g. SWEET10">
-            <button class="voucher__apply" type="button" id="v-apply">Apply</button>
+      <!-- Optional extras, folded away: most customers need neither. -->
+      <div class="extras">
+        <details class="more" id="cash-more" data-for="delivery">
+          <summary>
+            <span class="more__label">Need change?</span>
+            <span class="more__sub" id="cash-sum">Optional</span>
+            <svg class="more__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+          </summary>
+          <div class="cfield more__body">
+            <label for="o-cash">Cash you will pay with <span class="cfield__hint">optional, so we can bring your change</span></label>
+            <div class="cfield__money">
+              <span aria-hidden="true">₱</span>
+              <input id="o-cash" name="cash" type="number" inputmode="numeric" min="0" step="1" placeholder="Exact amount" aria-describedby="o-change">
+              <button class="cfield__exact" type="button" id="o-exact">Exact amount</button>
+            </div>
+            <p class="cfield__change" id="o-change" aria-live="polite"></p>
+            <p class="cfield__err" data-err="cash" hidden></p>
           </div>
+        </details>
+
+        <!-- Voucher codes are checked by the server, which also works out the
+             discount. The code box only opens when the customer says they have one. -->
+        <div class="voucher" id="voucher">
+          <details class="more" id="v-more">
+            <summary>
+              <span class="more__label">Have a voucher code?</span>
+              <svg class="more__chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+            </summary>
+            <div class="voucher__entry more__body" id="voucher-entry">
+              <label class="vh" for="v-code">Voucher code</label>
+              <div class="voucher__row">
+                <input id="v-code" type="text" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="e.g. SWEET10">
+                <button class="voucher__apply" type="button" id="v-apply">Apply</button>
+              </div>
+            </div>
+          </details>
+          <p class="voucher__applied" id="voucher-applied" hidden>
+            <span id="voucher-label"></span>
+            <button class="voucher__remove" type="button" id="v-remove">Remove</button>
+          </p>
+          <p class="cfield__err" id="voucher-err" role="alert" hidden></p>
         </div>
-        <p class="voucher__applied" id="voucher-applied" hidden>
-          <span id="voucher-label"></span>
-          <button class="voucher__remove" type="button" id="v-remove">Remove</button>
-        </p>
-        <p class="cfield__err" id="voucher-err" role="alert" hidden></p>
       </div>
 
       <!-- Left empty by people, who never see it; bots that fill every field
@@ -244,11 +265,15 @@
       </div>
 
       <p class="cfield__err" data-err="items" hidden></p>
-      <button class="checkout__submit" type="submit" id="checkout-submit">Place order</button>
-      <p class="checkout__note" data-for="delivery">Pay in cash when your order arrives. We will call to confirm.</p>
-      <p class="checkout__note" data-for="pickup">Pay at the counter when you pick up.</p>
-      <p class="checkout__note" data-for="dinein">Pay at the counter. We will bring your order to your table.</p>
     </form>
+
+    <!-- Pinned to the bottom of the cart while it scrolls, so the total and
+         the button are always in view. It sits outside the form so it can
+         stay pinned from the top of the cart; form="checkout" still submits it. -->
+    <div class="cart__foot" id="cart-foot" hidden>
+      <button class="checkout__submit" type="submit" form="checkout" id="checkout-submit">Place order</button>
+      <p class="checkout__note" id="checkout-note"></p>
+    </div>
   </div>
 
   <div class="cart__done" id="cart-done" hidden>
