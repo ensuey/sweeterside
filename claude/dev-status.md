@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 237 (`npm test`):
+**Tests:** 232 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -26,7 +26,6 @@ npm dependencies, SQLite via `node:sqlite`.
 - 5 in `test/suggestions.test.js`
 - 8 in `test/preorders.test.js`
 - 6 in `test/cakes-page.test.js`
-- 5 in `test/cart-compact.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -543,12 +542,7 @@ then a dry run on the live site. The owner ran the apply step.
 - Custom cake bookings (`/cakes`) with notice period, cakes per day, a
   reference photo, quotes and deposits.
 - Shop open / closed switch with a closed note; cakes stay bookable.
-- Cart thumbnails and a voucher box behind "Have a voucher code?".
-- Compact checkout in the cart: a bottom sheet on phones; the total and
-  Place order pinned to the bottom; one-row cart lines that fold behind
-  "N items" (folded from 5 lines); "Goes well with" as a sideways strip;
-  "Need change?" and "Have a voucher code?" folded into one row each. No
-  required field is ever folded, and an error opens its row.
+- Cart thumbnails and a voucher box behind "I have a voucher code".
 - **Fake-order protection**
   - PH mobile numbers checked and stored as `+639XXXXXXXXX` (orders and cake
     bookings), older rows backfilled.
