@@ -224,6 +224,10 @@ test('the consent bar is one short line, with every tool named behind Details', 
   assert.match(js, /el\('button', 'consent__btn', 'Accept'\)/);
   const css = fs.readFileSync(path.join(ROOT, 'assets', 'css', 'styles.css'), 'utf8');
   assert.match(css, /body\.cart-open-bar \.consent \{ bottom:/, 'kept clear of the cart bar');
+  // Two columns on every screen: text left, buttons right, never wrapped below.
+  assert.match(css, /\.consent__row \{[^}]*display: grid; grid-template-columns: minmax\(0, 1fr\) auto;/);
+  assert.ok(!/\.consent__row \{[^}]*flex-wrap/.test(css), 'the buttons never drop below the text');
+  assert.match(js, /copy\.appendChild\(details\);/, 'the details stay in the left column');
 });
 
 test('the cart and cake events send ids, quantities and totals, never personal data', () => {

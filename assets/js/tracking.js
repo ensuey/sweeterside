@@ -185,7 +185,7 @@
   }
 
   // The one line the bar shows. bannerText() is behind "Details".
-  var SHORT_TEXT = 'We use cookies to see how the site is used and which ads work.';
+  var SHORT_TEXT = 'We use cookies to improve the site and our ads.';
 
   function bannerText() {
     var tools = [];
@@ -222,6 +222,7 @@
       more.addEventListener('click', function () {
         details.hidden = !details.hidden;
         more.setAttribute('aria-expanded', String(!details.hidden));
+        banner.classList.toggle('consent--open', !details.hidden);
       });
       text.appendChild(more);
       var actions = el('div', 'consent__actions');
@@ -233,10 +234,13 @@
       yes.addEventListener('click', function () { choose('yes'); });
       actions.appendChild(no);
       actions.appendChild(yes);
-      row.appendChild(text);
+      // Two columns: the text (and the details) left, the buttons right.
+      var copy = el('div', 'consent__copy');
+      copy.appendChild(text);
+      copy.appendChild(details);
+      row.appendChild(copy);
       row.appendChild(actions);
       banner.appendChild(row);
-      banner.appendChild(details);
       document.body.appendChild(banner);
     }
     banner.hidden = false;
