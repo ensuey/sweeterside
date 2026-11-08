@@ -28,6 +28,8 @@ Last checked against `server/index.js` on 2026-11-01 (after PR #23).
 - **Rate limits**: per client IP, sliding windows (`rateLimiter`). The IP is `Fly-Client-IP` on Fly and the socket address elsewhere, never `X-Forwarded-For` (F1, fixed).
 - **Headers** on every response:
   - CSP: `script-src 'self'`, no inline scripts. Inline style attributes are allowed.
+  - The Meta Pixel exception: only while a Pixel ID is saved (Settings, digits only), the customer pages `/`, `/cakes` and `/about` add `https://connect.facebook.net` to `script-src` and `https://www.facebook.com` to `img-src` and a new `connect-src`. Still no `unsafe-inline` or `unsafe-eval`. Admin, POS, API and static responses keep the strict CSP (`customerCsp` in `server/index.js`, tested in `test/meta-pixel.test.js`).
+  - `assets/js/pixel.js` asks for consent first and loads Meta's script only after Accept. Events carry item ids, quantities and totals: no names, phones, addresses or advanced matching. No new endpoint; the ID is saved through `PUT /api/settings` (S + CSRF).
   - `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
   - Fly forces HTTPS (`force_https`).
 

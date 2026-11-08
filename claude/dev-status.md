@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 232 (`npm test`):
+**Tests:** 238 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -26,6 +26,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 5 in `test/suggestions.test.js`
 - 8 in `test/preorders.test.js`
 - 6 in `test/cakes-page.test.js`
+- 6 in `test/meta-pixel.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -466,6 +467,20 @@ After deploying (owner, once):
 4. Staff → POS settings: service charge (off by default), cashier discount
    limit (10%), idle lock (5 min).
 5. POS → Shift → open with the starting cash before taking cash.
+
+## Meta Pixel (2026-11-08)
+
+- Settings → Meta Pixel: the owner pastes the Pixel ID (digits only). Blank
+  turns it off; with no ID nothing changes on the site.
+- With an ID, the menu, cakes and about pages load `assets/js/pixel.js`. It
+  shows a consent banner and loads Meta's script only after Accept. The
+  choice is kept in the browser (`sweeterside-pixel-consent`), and a
+  "Tracking choices" link in the footer changes it.
+- Events: `PageView`, `AddToCart`, `InitiateCheckout`, `Purchase` (the
+  server's order total, item ids and quantities, event id `order-<id>`) and
+  `Lead` for a cake request (`cake-<id>`). No personal data.
+- The CSP adds Meta's two origins on those pages only, and only while an ID
+  is set. Admin and POS pages never load the pixel.
 
 ## Menu regroup (2026-11-04, live data, no PR)
 

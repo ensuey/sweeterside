@@ -669,6 +669,9 @@ The login is real, not decorative:
   containment-checked, and the admin HTML cannot be fetched as a static file.
 - **Headers**: CSP (no inline scripts), `X-Content-Type-Options: nosniff`,
   `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`.
+- **Meta Pixel**: off until a Pixel ID is saved in Settings. Then the customer
+  pages ask for consent and load Meta's script only after Accept. Only those
+  pages add Meta's origins to the CSP.
 
 Cookies are marked `Secure` automatically behind an HTTPS proxy
 (`X-Forwarded-Proto: https`), or set `FORCE_SECURE_COOKIES=1`.
