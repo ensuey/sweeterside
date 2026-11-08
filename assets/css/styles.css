@@ -794,17 +794,25 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 }
 body.cart-open-bar .consent { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); padding-bottom: var(--sp-2); }
 .consent[hidden] { display: none; }
+/* Two columns on every screen: the text left, the buttons right, side by side. */
 .consent__row {
   max-width: 960px; margin: 0 auto;
-  display: flex; align-items: center; gap: var(--sp-2) var(--sp-3); flex-wrap: wrap;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--sp-3);
 }
-.consent__text { flex: 1 1 16rem; margin: 0; font-size: .8125rem; line-height: 1.4; color: var(--ink-soft); }
-.consent__details { max-width: 960px; margin: var(--sp-2) auto 0; font-size: .8125rem; line-height: 1.4; color: var(--ink-soft); }
+.consent__copy { min-width: 0; }
+.consent__text { margin: 0; font-size: .8125rem; line-height: 1.4; color: var(--ink-soft); }
+.consent__details { margin: var(--sp-2) 0 0; font-size: .8125rem; line-height: 1.4; color: var(--ink-soft); }
 .consent__details[hidden] { display: none; }
-.consent__actions { display: flex; gap: var(--sp-2); margin-left: auto; }
+.consent__actions { display: flex; gap: var(--sp-2); align-items: center; }
+.consent--open .consent__actions { align-self: start; } /* with Details open, the buttons stay at the top */
 .consent__btn {
   min-height: 36px; padding: 0 var(--sp-4); border-radius: var(--r-full); border: 1px solid var(--coral-ink);
   background: var(--coral-ink); color: #fff; font: 700 .8125rem/1 "Nunito", sans-serif; cursor: pointer;
+  white-space: nowrap;
+}
+@media (max-width: 380px) {
+  .consent__row { gap: var(--sp-2); }
+  .consent__btn { padding: 0 var(--sp-3); }
 }
 .consent__btn--quiet { background: transparent; color: var(--ink-soft); border-color: var(--line); }
 .consent__link {
