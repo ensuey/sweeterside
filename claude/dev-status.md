@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 238 (`npm test`):
+**Tests:** 240 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -26,7 +26,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 5 in `test/suggestions.test.js`
 - 8 in `test/preorders.test.js`
 - 6 in `test/cakes-page.test.js`
-- 6 in `test/meta-pixel.test.js`
+- 8 in `test/tracking.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -468,19 +468,34 @@ After deploying (owner, once):
    limit (10%), idle lock (5 min).
 5. POS → Shift → open with the starting cash before taking cash.
 
-## Meta Pixel (2026-11-08)
+## Tracking: Meta Pixel (#51), Google Analytics, Google Ads, Clarity (2026-11-08)
 
-- Settings → Meta Pixel: the owner pastes the Pixel ID (digits only). Blank
-  turns it off; with no ID nothing changes on the site.
-- With an ID, the menu, cakes and about pages load `assets/js/pixel.js`. It
-  shows a consent banner and loads Meta's script only after Accept. The
-  choice is kept in the browser (`sweeterside-pixel-consent`), and a
-  "Tracking choices" link in the footer changes it.
-- Events: `PageView`, `AddToCart`, `InitiateCheckout`, `Purchase` (the
-  server's order total, item ids and quantities, event id `order-<id>`) and
-  `Lead` for a cake request (`cake-<id>`). No personal data.
-- The CSP adds Meta's two origins on those pages only, and only while an ID
-  is set. Admin and POS pages never load the pixel.
+- Settings → Tracking: one field per tool. Each tool is off while its ID is
+  blank; with no IDs nothing changes on the site. Formats are strict:
+  `G-…`, `AW-…`, labels `[A-Za-z0-9_-]`, Clarity lowercase letters and
+  numbers, Pixel digits. Ads labels are used only with the Ads ID.
+- Meta Pixel `300448864172496` is saved on the live site. The Google and
+  Clarity IDs are still to be pasted in by the owner.
+- With any ID, the menu, cakes and about pages load `assets/js/tracking.js`
+  (it replaced `pixel.js`). It shows one consent banner naming the tools that
+  are on, and loads nothing until Accept. The choice is kept in the browser
+  (`sweeterside-tracking-consent`; a "no" to the old Meta-only banner is
+  kept). A "Tracking choices" link in the footer changes it, and No revokes
+  consent in every tool (Consent Mode for Google).
+- Google Analytics and Google Ads share one `gtag.js`. No Tag Manager: its
+  custom tags need `unsafe-eval`.
+- Events: `add_to_cart`, `begin_checkout`, `purchase` (the server's order
+  total, item ids and quantities, id `order-<id>`), `lead` for a cake
+  request (`cake-<id>`). Each goes to Meta (standard names), Analytics
+  (standard names), Ads (a conversion with the purchase or lead label) and
+  Clarity (a custom event name only). No personal data, no Meta advanced
+  matching, no Google enhanced conversions.
+- Clarity: the cart dialog (checkout and order-done screen), the cake form
+  and the cake request number carry `data-clarity-mask="true"`. The owner
+  should also set masking to Strict in Clarity.
+- The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
+  in `server/index.js`), on those pages only. Admin and POS pages never load
+  any of them.
 
 ## Menu regroup (2026-11-04, live data, no PR)
 
