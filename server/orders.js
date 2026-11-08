@@ -208,20 +208,39 @@ function parseFacebookUrl(input) {
   return url.toString();
 }
 
-/** The Meta (Facebook) Pixel ID, or '' when the pixel is off. Only digits,
-    so it can go into the page and the CSP without escaping surprises. */
-function metaPixelId() {
-  const id = getSetting('meta_pixel_id', '');
-  return /^\d{10,20}$/.test(id) ? id : '';
+/* Tracking: the Meta Pixel, Google Analytics, Google Ads and Microsoft
+   Clarity. Each is off while its ID is blank. Every ID has a strict format,
+   so it can go into the page and the CSP without escaping surprises. */
+const TRACKING = {
+  meta_pixel_id: { re: /^\d{10,20}$/, message: 'Paste the Pixel ID from Meta Events Manager: numbers only.' },
+  ga4_id: { re: /^G-[A-Z0-9]{4,15}$/, upper: true, message: 'Paste the Measurement ID from Google Analytics, e.g. G-AB12CD34EF.' },
+  gads_id: { re: /^AW-\d{6,15}$/, upper: true, message: 'Paste the Google Ads ID, e.g. AW-123456789.' },
+  gads_purchase_label: { re: /^[A-Za-z0-9_-]{4,40}$/, message: 'Paste the conversion label: letters, numbers, - and _ only.' },
+  gads_lead_label: { re: /^[A-Za-z0-9_-]{4,40}$/, message: 'Paste the conversion label: letters, numbers, - and _ only.' },
+  clarity_id: { re: /^[a-z0-9]{6,20}$/, lower: true, message: 'Paste the Project ID from Clarity: letters and numbers only.' },
+};
+
+/** Every tracking ID, '' for the ones that are off. Labels need the Ads ID. */
+function tracking() {
+  const t = {};
+  for (const [key, rule] of Object.entries(TRACKING)) {
+    const v = getSetting(key, '');
+    t[key] = rule.re.test(v) ? v : '';
+  }
+  if (!t.gads_id) t.gads_purchase_label = t.gads_lead_label = '';
+  return t;
 }
 
-function parseMetaPixelId(input) {
-  const raw = String(input ?? '').trim();
-  if (!raw) return '';
-  if (!/^\d{10,20}$/.test(raw)) {
-    throw new ValidationError({ meta_pixel_id: 'Paste the Pixel ID from Meta Events Manager: numbers only.' });
-  }
-  return raw;
+function parseTracking(key) {
+  const rule = TRACKING[key];
+  return (input) => {
+    let raw = String(input ?? '').trim();
+    if (!raw) return '';
+    if (rule.upper) raw = raw.toUpperCase();
+    if (rule.lower) raw = raw.toLowerCase();
+    if (!rule.re.test(raw)) throw new ValidationError({ [key]: rule.message });
+    return raw;
+  };
 }
 
 /** The image shown when the site is shared (Open Graph), or '' for the logo.
@@ -366,7 +385,7 @@ function settings() {
     confirm_call_minutes: callMinutes(),
     facebook_url: facebookUrl(),
     share_image: shareImage(),
-    meta_pixel_id: metaPixelId(),
+    ...tracking(),
     free_delivery_min: delivery.freeOver(),
     preorder_days: schedule.preorderDays(),
     require_confirm_delivery: requiresConfirmation('delivery'),
@@ -392,7 +411,7 @@ function updateSettings(input) {
     confirm_call_minutes: parseCount('confirm_call_minutes', 1, 120),
     facebook_url: parseFacebookUrl,
     share_image: parseShareImage,
-    meta_pixel_id: parseMetaPixelId,
+    ...Object.fromEntries(Object.keys(TRACKING).map((key) => [key, parseTracking(key)])),
     free_delivery_min: parseFreeMin,
     preorder_days: schedule.parseDays,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
@@ -887,6 +906,6 @@ module.exports = {
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
-  closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage, metaPixelId,
+  closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage, tracking,
   quote, create, insertLines, get, list, counts, setStatus,
 };

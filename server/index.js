@@ -65,18 +65,51 @@ const CSP = [
   "object-src 'none'",
 ].join('; ');
 
-/* The customer pages (menu, cakes, about) may load the Meta Pixel. Only then,
-   and only there, the CSP also allows Meta's script and its event endpoint.
-   Admin, POS and API responses keep the strict CSP above. */
-const META_SCRIPT = 'https://connect.facebook.net';
-const META_EVENTS = 'https://www.facebook.com';
+/* The customer pages (menu, cakes, about) may load the tracking tools whose
+   IDs are set in Settings. Only then, and only there, the CSP also allows
+   those tools' origins, from the list below. Admin, POS and API responses
+   keep the strict CSP above. */
+const TRACKING_ORIGINS = {
+  meta: {
+    script: ['https://connect.facebook.net'],
+    img: ['https://www.facebook.com'],
+    connect: ['https://www.facebook.com'],
+  },
+  google: { // Analytics or Ads: gtag.js
+    script: ['https://www.googletagmanager.com'],
+    img: ['https://*.google-analytics.com', 'https://*.googletagmanager.com'],
+    connect: ['https://*.google-analytics.com', 'https://*.analytics.google.com', 'https://*.googletagmanager.com'],
+  },
+  gads: {
+    script: ['https://www.googleadservices.com', 'https://googleads.g.doubleclick.net', 'https://www.google.com'],
+    img: ['https://googleads.g.doubleclick.net', 'https://www.google.com', 'https://www.google.com.ph'],
+    connect: ['https://www.google.com', 'https://google.com', 'https://googleads.g.doubleclick.net',
+      'https://pagead2.googlesyndication.com', 'https://www.googleadservices.com'],
+    frame: ['https://td.doubleclick.net', 'https://www.googletagmanager.com'],
+  },
+  clarity: {
+    script: ['https://www.clarity.ms', 'https://*.clarity.ms'],
+    img: ['https://*.clarity.ms', 'https://c.bing.com'],
+    connect: ['https://*.clarity.ms', 'https://c.bing.com'],
+  },
+};
 
 function customerCsp() {
-  if (!orders.metaPixelId()) return CSP;
-  return CSP
-    .replace("script-src 'self'", `script-src 'self' ${META_SCRIPT}`)
-    .replace("img-src 'self' data:", `img-src 'self' data: ${META_EVENTS}`)
-    .concat(`; connect-src 'self' ${META_EVENTS}`);
+  const t = orders.tracking();
+  const tools = [
+    t.meta_pixel_id && 'meta',
+    (t.ga4_id || t.gads_id) && 'google',
+    t.gads_id && 'gads',
+    t.clarity_id && 'clarity',
+  ].filter(Boolean);
+  if (!tools.length) return CSP;
+  const origins = (kind) => [...new Set(tools.flatMap((tool) => TRACKING_ORIGINS[tool][kind] || []))].join(' ');
+  let csp = CSP
+    .replace("script-src 'self'", `script-src 'self' ${origins('script')}`)
+    .replace("img-src 'self' data:", `img-src 'self' data: ${origins('img')}`)
+    .concat(`; connect-src 'self' ${origins('connect')}`);
+  if (origins('frame')) csp += `; frame-src 'self' ${origins('frame')}`;
+  return csp;
 }
 
 function customerHeaders() {
