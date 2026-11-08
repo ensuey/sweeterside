@@ -183,6 +183,20 @@
     </div>
   </section>
 
+  <!-- The Meta Pixel: off while blank. Customers are asked before it runs. -->
+  <section class="hours" aria-labelledby="pixel-title">
+    <h2 class="admin__title" id="pixel-title">Meta Pixel</h2>
+    <p class="admin__sub">Measures which Facebook and Instagram ads bring orders. Customers are asked first, and it runs only if they tap Accept. It is never on the admin or POS pages. Leave it blank to turn it off.</p>
+    <form class="hours__form" id="pixel-form" novalidate>
+      <div class="field field--wide">
+        <label for="pixel-id">Pixel ID <span class="hint">(from Meta Events Manager, numbers only)</span></label>
+        <input id="pixel-id" type="text" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="e.g. 123456789012345">
+      </div>
+      <button class="btn btn--ghost" type="submit" id="pixel-save">Save</button>
+    </form>
+    <p class="field__err" id="pixel-err" hidden></p>
+  </section>
+
   <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
   <section class="trust" aria-labelledby="trust-title">
     <h2 class="admin__title" id="trust-title">Fake-order protection</h2>
