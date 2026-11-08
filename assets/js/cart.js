@@ -516,6 +516,12 @@
     save();
     render();
     live.textContent = catalog[id].name + ' added. ' + plural(count(), 'item') + ' in your cart.';
+    track('AddToCart', { content_ids: [String(id)], content_type: 'product', value: catalog[id].price, currency: 'PHP' });
+  }
+
+  /** A Meta Pixel event, when the pixel is on and the customer said yes. */
+  function track(name, data, eventId) {
+    if (window.ssPixel) window.ssPixel.track(name, data, eventId);
   }
 
   function setQty(key, qty) {
@@ -884,6 +890,13 @@
     $('done-change-row').hidden = counter;
     $('done-cash').textContent = order.change_due === 0 ? 'Exact amount' : money(order.cash);
     $('done-change').textContent = order.change_due === 0 ? 'None (exact amount)' : money(order.change_due);
+    // The server's total and lines, with the order number so Meta counts it once.
+    track('Purchase', {
+      value: order.total,
+      currency: 'PHP',
+      content_type: 'product',
+      contents: (order.items || []).map(function (l) { return { id: String(l.item_id), quantity: l.qty }; }),
+    }, 'order-' + order.id);
 
     // What was ordered, as a short summary.
     var lines = $('done-lines');
@@ -1034,6 +1047,7 @@
     refreshTypes(); // the page may have been open a while: recheck pick-up times
     freshToken();
     dialog.showModal();
+    if (count()) track('InitiateCheckout', { value: total(), currency: 'PHP', num_items: count() });
   }
 
   dialog.addEventListener('close', function () {

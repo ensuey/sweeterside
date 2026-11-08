@@ -99,6 +99,29 @@ async function saveConfirm(event) {
   }
 }
 
+/* ---------------------------- Meta Pixel ---------------------------- */
+
+function showPixel(s) {
+  $('pixel-id').value = s.meta_pixel_id;
+}
+
+async function savePixel(event) {
+  event.preventDefault();
+  const err = $('pixel-err');
+  err.hidden = true;
+  $('pixel-save').disabled = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { meta_pixel_id: $('pixel-id').value } });
+    showPixel(s);
+    toast(s.meta_pixel_id ? 'Saved. The pixel is on.' : 'Saved. The pixel is off.');
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+  } finally {
+    $('pixel-save').disabled = false;
+  }
+}
+
 /* ---------------------------- share image ---------------------------- */
 
 const LOGO_SRC = '/assets/Sweeter%20Side%20-%20PNG.png';
@@ -464,6 +487,7 @@ $('free-form').addEventListener('submit', saveFree);
 $('trust-form').addEventListener('submit', saveTrust);
 $('hours-form').addEventListener('submit', saveHours);
 $('confirm-form').addEventListener('submit', saveConfirm);
+$('pixel-form').addEventListener('submit', savePixel);
 $('share-file').addEventListener('change', uploadShare);
 $('share-remove').addEventListener('click', removeShare);
 
@@ -473,6 +497,7 @@ adminBoot(async () => {
   showTrust(s);
   showConfirm(s);
   showShare(s);
+  showPixel(s);
   $('free-min').value = s.free_delivery_min ?? '';
   showAreas((await api('/api/delivery-areas')).areas);
   await loadSuggestions();
