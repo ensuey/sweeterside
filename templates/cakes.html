@@ -27,7 +27,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="/assets/css/styles.css">
-<!--PIXEL-->
+<!--TRACKING-->
 </head>
 <!-- The server fills in the bookable days: from today plus the notice period,
      leaving out days that are already full. cakes.js reads them. -->
@@ -57,7 +57,7 @@
       <a class="cakes__link" href="<!--FACEBOOK_URL-->" rel="noopener" target="_blank">Message us on Facebook</a></p>
   </div>
 
-  <form class="cake-form" id="cake-form" novalidate hidden>
+  <form class="cake-form" id="cake-form" novalidate hidden data-clarity-mask="true">
     <p class="cart__alert" id="cake-error" role="alert" hidden></p>
 
     <fieldset class="cake-step">
@@ -156,7 +156,7 @@
 
 <!--TESTIMONIALS-->
 
-  <section class="cake-done" id="cake-done" hidden>
+  <section class="cake-done" id="cake-done" hidden data-clarity-mask="true">
     <h2 class="cart__title" id="cake-done-title" tabindex="-1">Request received!</h2>
     <p id="cake-done-text"></p>
     <p>Dachel will call you to talk through the design and confirm the price and deposit.</p>

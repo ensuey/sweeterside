@@ -85,7 +85,7 @@ test('/cakes without JavaScript: gallery, prices, booking info and how to order'
   assert.match(before, /Pick up at the market &lt;stall 4&gt;\./);
   assert.match(before, /<a class="cakes__link" href="tel:\+639327620367">Call 0932 762 0367<\/a>/);
   assert.match(before, /<a class="cakes__link" href="https:\/\/[^"]*facebook[^"]*" rel="noopener" target="_blank">Message us on Facebook<\/a>/);
-  assert.match(html, /<form class="cake-form" id="cake-form" novalidate hidden>/);
+  assert.match(html, /<form class="cake-form" id="cake-form" novalidate hidden[ >]/);
   assert.ok(!/<script>/.test(html) && !/ on\w+="/.test(html), 'no inline scripts or handlers');
   assert.ok(errorsOf(() => cakes.updateSettings({ deposit_text: 'x'.repeat(401) })).deposit_text);
 });

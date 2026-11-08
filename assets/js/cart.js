@@ -516,12 +516,12 @@
     save();
     render();
     live.textContent = catalog[id].name + ' added. ' + plural(count(), 'item') + ' in your cart.';
-    track('AddToCart', { content_ids: [String(id)], content_type: 'product', value: catalog[id].price, currency: 'PHP' });
+    track('add_to_cart', { value: catalog[id].price, items: [{ id: id, quantity: 1 }] });
   }
 
-  /** A Meta Pixel event, when the pixel is on and the customer said yes. */
-  function track(name, data, eventId) {
-    if (window.ssPixel) window.ssPixel.track(name, data, eventId);
+  /** A tracking event (tracking.js), when a tool is on and the customer said yes. */
+  function track(name, data) {
+    if (window.ssTrack) window.ssTrack(name, data);
   }
 
   function setQty(key, qty) {
@@ -890,13 +890,12 @@
     $('done-change-row').hidden = counter;
     $('done-cash').textContent = order.change_due === 0 ? 'Exact amount' : money(order.cash);
     $('done-change').textContent = order.change_due === 0 ? 'None (exact amount)' : money(order.change_due);
-    // The server's total and lines, with the order number so Meta counts it once.
-    track('Purchase', {
+    // The server's total and lines, with the order number so each tool counts it once.
+    track('purchase', {
+      id: 'order-' + order.id,
       value: order.total,
-      currency: 'PHP',
-      content_type: 'product',
-      contents: (order.items || []).map(function (l) { return { id: String(l.item_id), quantity: l.qty }; }),
-    }, 'order-' + order.id);
+      items: (order.items || []).map(function (l) { return { id: l.item_id, quantity: l.qty }; }),
+    });
 
     // What was ordered, as a short summary.
     var lines = $('done-lines');
@@ -1047,7 +1046,7 @@
     refreshTypes(); // the page may have been open a while: recheck pick-up times
     freshToken();
     dialog.showModal();
-    if (count()) track('InitiateCheckout', { value: total(), currency: 'PHP', num_items: count() });
+    if (count()) track('begin_checkout', { value: total(), count: count() });
   }
 
   dialog.addEventListener('close', function () {

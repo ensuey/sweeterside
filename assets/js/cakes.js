@@ -208,8 +208,8 @@
     $('cake-done').hidden = false;
     $('cake-done-title').focus();
     if (photoUrl) URL.revokeObjectURL(photoUrl);
-    // A Meta Pixel lead, when the pixel is on and the customer said yes. No details go with it.
-    if (window.ssPixel) window.ssPixel.track('Lead', { content_name: 'Custom cake' }, 'cake-' + booking.id);
+    // A tracking lead (tracking.js), when a tool is on and the customer said yes. No details go with it.
+    if (window.ssTrack) window.ssTrack('lead', { id: 'cake-' + booking.id });
   }
 
   form.addEventListener('submit', function (event) {

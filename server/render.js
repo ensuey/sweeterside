@@ -299,13 +299,17 @@ function shareTagsHtml() {
     + '<meta name="twitter:card" content="summary_large_image">';
 }
 
-/** The Meta Pixel loader, or nothing when no Pixel ID is set. pixel.js asks
-    for consent first and loads Meta's script only after "Accept". */
-function pixelHtml() {
-  const id = orders.metaPixelId();
-  if (!id) return '';
-  return `<meta name="meta-pixel" content="${esc(id)}">\n`
-    + '<script src="/assets/js/pixel.js" defer></script>';
+/** The tracking loader, or nothing when no tracking ID is set. tracking.js
+    asks for consent first and loads the tools only after "Accept". */
+function trackingHtml() {
+  const t = orders.tracking();
+  const attrs = [
+    ['meta', t.meta_pixel_id], ['ga4', t.ga4_id], ['gads', t.gads_id],
+    ['gads-purchase', t.gads_purchase_label], ['gads-lead', t.gads_lead_label], ['clarity', t.clarity_id],
+  ].filter(([, v]) => v);
+  if (!attrs.some(([k]) => ['meta', 'ga4', 'gads', 'clarity'].includes(k))) return '';
+  return `<meta name="ss-tracking"${attrs.map(([k, v]) => ` data-${k}="${esc(v)}"`).join('')}>\n`
+    + '<script src="/assets/js/tracking.js" defer></script>';
 }
 
 function chipsHtml(groups, total) {
@@ -398,7 +402,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date()) 
     .replace('<!--BEST-->', () => best)
     .replace('<!--SECTIONS-->', () => sections + empty)
     .replace('<!--SHARE_TAGS-->', () => shareTagsHtml())
-    .replace('<!--PIXEL-->', () => pixelHtml())
+    .replace('<!--TRACKING-->', () => trackingHtml())
     .replace('<!--CALL_MINUTES-->', String(orders.callMinutes()))
     .replaceAll('<!--SHOP_TEL-->', () => esc(BUSINESS.phone.tel))
     .replaceAll('<!--SHOP_PHONE-->', () => esc(BUSINESS.phone.display))
@@ -454,7 +458,7 @@ function buildCakesHtml(now = new Date()) {
     .replace('<!--PRICES-->', () => cakePricesHtml(s))
     .replace('<!--INFO-->', () => cakeInfoHtml(s, avail))
     .replace('<!--TESTIMONIALS-->', () => testimonialsHtml())
-    .replace('<!--PIXEL-->', () => pixelHtml())
+    .replace('<!--TRACKING-->', () => trackingHtml())
     .replaceAll('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
     .replaceAll('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
     .replaceAll('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()));
@@ -474,7 +478,7 @@ function buildAboutHtml() {
     }))
     .replace('<!--VISIT-->', () => seo.visitHtml())
     .replace('<!--FOOT_NAP-->', () => seo.footHtml())
-    .replace('<!--PIXEL-->', () => pixelHtml());
+    .replace('<!--TRACKING-->', () => trackingHtml());
 }
 
 module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
