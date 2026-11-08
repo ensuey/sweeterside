@@ -184,6 +184,9 @@
     return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
   }
 
+  // The one line the bar shows. bannerText() is behind "Details".
+  var SHORT_TEXT = 'We use cookies to see how the site is used and which ads work.';
+
   function bannerText() {
     var tools = [];
     if (ids.ga4) tools.push('Google Analytics');
@@ -207,9 +210,22 @@
       banner = el('div', 'consent');
       banner.setAttribute('role', 'region');
       banner.setAttribute('aria-label', 'Tracking choices');
-      banner.appendChild(el('p', 'consent__text', bannerText()));
+      var row = el('div', 'consent__row');
+      var text = el('p', 'consent__text', SHORT_TEXT + ' ');
+      var more = el('button', 'consent__link', 'Details');
+      var details = el('p', 'consent__details', bannerText());
+      more.type = 'button';
+      more.setAttribute('aria-expanded', 'false');
+      details.id = 'consent-details';
+      details.hidden = true;
+      more.setAttribute('aria-controls', details.id);
+      more.addEventListener('click', function () {
+        details.hidden = !details.hidden;
+        more.setAttribute('aria-expanded', String(!details.hidden));
+      });
+      text.appendChild(more);
       var actions = el('div', 'consent__actions');
-      var no = el('button', 'consent__btn consent__btn--quiet', 'No thanks');
+      var no = el('button', 'consent__btn consent__btn--quiet', 'No');
       var yes = el('button', 'consent__btn', 'Accept');
       no.type = 'button';
       yes.type = 'button';
@@ -217,7 +233,10 @@
       yes.addEventListener('click', function () { choose('yes'); });
       actions.appendChild(no);
       actions.appendChild(yes);
-      banner.appendChild(actions);
+      row.appendChild(text);
+      row.appendChild(actions);
+      banner.appendChild(row);
+      banner.appendChild(details);
       document.body.appendChild(banner);
     }
     banner.hidden = false;
