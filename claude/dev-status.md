@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 240 (`npm test`):
+**Tests:** 241 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -26,7 +26,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 5 in `test/suggestions.test.js`
 - 8 in `test/preorders.test.js`
 - 6 in `test/cakes-page.test.js`
-- 8 in `test/tracking.test.js`
+- 9 in `test/tracking.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -477,8 +477,9 @@ After deploying (owner, once):
 - Meta Pixel `300448864172496` is saved on the live site. The Google and
   Clarity IDs are still to be pasted in by the owner.
 - With any ID, the menu, cakes and about pages load `assets/js/tracking.js`
-  (it replaced `pixel.js`). It shows one consent banner naming the tools that
-  are on, and loads nothing until Accept. The choice is kept in the browser
+  (it replaced `pixel.js`). It shows a slim one-line consent bar ("We use
+  cookies…", Details · No · Accept; Details names the tools that are on), and
+  loads nothing until Accept. The bar sits above the cart bar when that shows. The choice is kept in the browser
   (`sweeterside-tracking-consent`; a "no" to the old Meta-only banner is
   kept). A "Tracking choices" link in the footer changes it, and No revokes
   consent in every tool (Consent Mode for Google).

@@ -211,6 +211,21 @@ test('tracking.js loads the tools only after consent and builds the banner witho
   assert.ok(!/(?<!ad_)user_data|enhanced|\b(em|ph|fn|ln|zp|ct|db):|external_id|email|phone_number|street/.test(code), 'no customer data');
 });
 
+test('the consent bar is one short line, with every tool named behind Details', () => {
+  const js = fs.readFileSync(path.join(ROOT, 'assets', 'js', 'tracking.js'), 'utf8');
+  const short = js.match(/var SHORT_TEXT = '([^']*)';/);
+  assert.ok(short && short[1].length <= 80, 'a short line');
+  assert.match(js, /el\('button', 'consent__link', 'Details'\)/);
+  assert.match(js, /el\('p', 'consent__details', bannerText\(\)\)/, 'the details name the tools');
+  assert.match(js, /details\.hidden = true;/, 'folded at first');
+  assert.match(js, /more\.setAttribute\('aria-expanded'/);
+  // Both answers are equally easy: two buttons side by side.
+  assert.match(js, /el\('button', 'consent__btn consent__btn--quiet', 'No'\)/);
+  assert.match(js, /el\('button', 'consent__btn', 'Accept'\)/);
+  const css = fs.readFileSync(path.join(ROOT, 'assets', 'css', 'styles.css'), 'utf8');
+  assert.match(css, /body\.cart-open-bar \.consent \{ bottom:/, 'kept clear of the cart bar');
+});
+
 test('the cart and cake events send ids, quantities and totals, never personal data', () => {
   const cart = fs.readFileSync(path.join(ROOT, 'assets', 'js', 'cart.js'), 'utf8');
   const cakes = fs.readFileSync(path.join(ROOT, 'assets', 'js', 'cakes.js'), 'utf8');
