@@ -1,36 +1,64 @@
-/* Sweeter Side — Meta (Facebook) Pixel, with consent first.
-   The server adds this file only when the owner has saved a Pixel ID. Meta's
-   script is loaded only after the visitor taps Accept, and the choice is kept
-   in this browser. Events carry item ids, quantities and totals, never a
-   name, phone or address. cart.js and cakes.js call window.ssPixel.track(). */
+/* Sweeter Side — tracking, with consent first: the Meta Pixel, Google
+   Analytics, Google Ads and Microsoft Clarity. The server adds this file only
+   when the owner has saved at least one ID, and lists the IDs on the
+   <meta name="ss-tracking"> tag. Nothing loads until the visitor taps Accept,
+   and the choice is kept in this browser.
+   Events carry item ids, quantities, totals and the order number, never a
+   name, phone or address. Clarity is told to mask the cart and the cake form
+   (data-clarity-mask in the templates).
+   cart.js and cakes.js call window.ssTrack(name, data):
+     add_to_cart    { value, items: [{ id, quantity }] }
+     begin_checkout { value, count }
+     purchase       { id, value, items: [{ id, quantity }] }
+     lead           { id } */
 (function () {
   'use strict';
 
-  var CONSENT_KEY = 'sweeterside-pixel-consent'; // 'yes' or 'no'
-  var SCRIPT_URL = 'https://connect.facebook.net/en_US/fbevents.js';
+  var CONSENT_KEY = 'sweeterside-tracking-consent'; // 'yes' or 'no'
+  var OLD_KEY = 'sweeterside-pixel-consent'; // from the Meta-only banner
+  var CURRENCY = 'PHP';
 
-  var meta = document.querySelector('meta[name="meta-pixel"]');
-  var pixelId = meta ? meta.getAttribute('content') : '';
-  if (!/^\d{10,20}$/.test(pixelId || '')) return;
+  var tag = document.querySelector('meta[name="ss-tracking"]');
+  if (!tag) return;
+  var ids = {
+    meta: valid(tag.dataset.meta, /^\d{10,20}$/),
+    ga4: valid(tag.dataset.ga4, /^G-[A-Z0-9]{4,15}$/),
+    gads: valid(tag.dataset.gads, /^AW-\d{6,15}$/),
+    gadsPurchase: valid(tag.dataset.gadsPurchase, /^[A-Za-z0-9_-]{4,40}$/),
+    gadsLead: valid(tag.dataset.gadsLead, /^[A-Za-z0-9_-]{4,40}$/),
+    clarity: valid(tag.dataset.clarity, /^[a-z0-9]{6,20}$/),
+  };
+  if (!ids.meta && !ids.ga4 && !ids.gads && !ids.clarity) return;
 
   var loaded = false;
   var banner = null;
 
+  function valid(value, re) { return re.test(value || '') ? value : ''; }
+
   function readConsent() {
-    try { return localStorage.getItem(CONSENT_KEY); } catch (e) { return null; }
+    try {
+      var v = localStorage.getItem(CONSENT_KEY);
+      // Someone who said no to the Meta Pixel is not asked again. A yes was
+      // only for Meta, so they are asked about the other tools.
+      return v || (localStorage.getItem(OLD_KEY) === 'no' ? 'no' : null);
+    } catch (e) { return null; }
   }
 
   function writeConsent(value) {
     try { localStorage.setItem(CONSENT_KEY, value); } catch (e) { /* private mode: ask again next visit */ }
   }
 
+  function addScript(src) {
+    var script = document.createElement('script');
+    script.async = true;
+    script.src = src;
+    document.head.appendChild(script);
+  }
+
+  /* ---------------------------- the tools ---------------------------- */
+
   /** Meta's standard loader: a queue until fbevents.js arrives. */
-  function load() {
-    if (loaded) {
-      window.fbq('consent', 'grant');
-      return;
-    }
-    loaded = true;
+  function loadMeta() {
     var fbq = window.fbq = function () {
       if (fbq.callMethod) fbq.callMethod.apply(fbq, arguments);
       else fbq.queue.push(arguments);
@@ -40,13 +68,109 @@
     fbq.loaded = true;
     fbq.version = '2.0';
     fbq.queue = [];
-    var script = document.createElement('script');
-    script.async = true;
-    script.src = SCRIPT_URL;
-    document.head.appendChild(script);
-    fbq('init', pixelId);
+    addScript('https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', ids.meta);
     fbq('track', 'PageView');
   }
+
+  /** gtag.js serves both Analytics and Ads. It needs the arguments object itself. */
+  function loadGoogle() {
+    window.dataLayer = window.dataLayer || [];
+    window.gtag = function () { window.dataLayer.push(arguments); };
+    // Loaded only after Accept, so consent is granted from the start.
+    window.gtag('consent', 'default', {
+      ad_storage: 'granted', analytics_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted',
+    });
+    window.gtag('js', new Date());
+    if (ids.ga4) window.gtag('config', ids.ga4);
+    if (ids.gads) window.gtag('config', ids.gads);
+    addScript('https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(ids.ga4 || ids.gads));
+  }
+
+  /** Clarity's standard loader: a queue until the tag arrives. */
+  function loadClarity() {
+    window.clarity = window.clarity || function () {
+      (window.clarity.q = window.clarity.q || []).push(arguments);
+    };
+    addScript('https://www.clarity.ms/tag/' + encodeURIComponent(ids.clarity));
+    window.clarity('consent');
+  }
+
+  function load() {
+    if (loaded) {
+      if (window.fbq) window.fbq('consent', 'grant');
+      if (window.gtag) window.gtag('consent', 'update', {
+        ad_storage: 'granted', analytics_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted',
+      });
+      if (window.clarity) window.clarity('consent');
+      return;
+    }
+    loaded = true;
+    if (ids.meta) loadMeta();
+    if (ids.ga4 || ids.gads) loadGoogle();
+    if (ids.clarity) loadClarity();
+  }
+
+  function revoke() {
+    if (!loaded) return;
+    if (window.fbq) window.fbq('consent', 'revoke');
+    if (window.gtag) window.gtag('consent', 'update', {
+      ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+    });
+    if (window.clarity) window.clarity('consent', false);
+  }
+
+  /* ---------------------------- events ---------------------------- */
+
+  function googleItems(items) {
+    return (items || []).map(function (i) { return { item_id: String(i.id), quantity: i.quantity }; });
+  }
+
+  function adsConversion(label, data) {
+    if (!window.gtag || !ids.gads || !label) return;
+    var params = { send_to: ids.gads + '/' + label };
+    if (data.value != null) { params.value = data.value; params.currency = CURRENCY; }
+    if (data.id) params.transaction_id = data.id;
+    window.gtag('event', 'conversion', params);
+  }
+
+  var SEND = {
+    add_to_cart: function (d) {
+      if (window.fbq) window.fbq('track', 'AddToCart', {
+        content_ids: (d.items || []).map(function (i) { return String(i.id); }),
+        content_type: 'product', value: d.value, currency: CURRENCY,
+      });
+      if (window.gtag && ids.ga4) window.gtag('event', 'add_to_cart', { currency: CURRENCY, value: d.value, items: googleItems(d.items) });
+    },
+    begin_checkout: function (d) {
+      if (window.fbq) window.fbq('track', 'InitiateCheckout', { value: d.value, currency: CURRENCY, num_items: d.count });
+      if (window.gtag && ids.ga4) window.gtag('event', 'begin_checkout', { currency: CURRENCY, value: d.value });
+    },
+    purchase: function (d) {
+      if (window.fbq) window.fbq('track', 'Purchase', {
+        value: d.value, currency: CURRENCY, content_type: 'product',
+        contents: (d.items || []).map(function (i) { return { id: String(i.id), quantity: i.quantity }; }),
+      }, { eventID: d.id });
+      if (window.gtag && ids.ga4) window.gtag('event', 'purchase', {
+        transaction_id: d.id, currency: CURRENCY, value: d.value, items: googleItems(d.items),
+      });
+      adsConversion(ids.gadsPurchase, d);
+    },
+    lead: function (d) {
+      if (window.fbq) window.fbq('track', 'Lead', { content_name: 'Custom cake' }, { eventID: d.id });
+      if (window.gtag && ids.ga4) window.gtag('event', 'generate_lead', { lead_source: 'custom_cake' });
+      adsConversion(ids.gadsLead, { id: d.id });
+    },
+  };
+
+  /** Send one event to every tool that is on, only after consent. Never pass personal data. */
+  window.ssTrack = function (name, data) {
+    if (!loaded || readConsent() !== 'yes' || !SEND[name]) return;
+    SEND[name](data || {});
+    if (window.clarity) window.clarity('event', name);
+  };
+
+  /* ---------------------------- the banner ---------------------------- */
 
   function el(tag, cls, text) {
     var node = document.createElement(tag);
@@ -55,10 +179,26 @@
     return node;
   }
 
+  /** "A, B and C" */
+  function list(names) {
+    return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+  }
+
+  function bannerText() {
+    var tools = [];
+    if (ids.ga4) tools.push('Google Analytics');
+    if (ids.gads) tools.push('Google Ads');
+    if (ids.clarity) tools.push('Microsoft Clarity');
+    if (ids.meta) tools.push('the Meta Pixel');
+    var text = 'We use ' + list(tools) + ' to see how people use this site and which ads bring them here. ';
+    if (ids.clarity) text += 'Clarity records how the pages are used, with the order form hidden. ';
+    return text + 'They see the pages you visit and what you order, but never your name, phone or address. Is that okay?';
+  }
+
   function choose(value) {
     writeConsent(value);
     if (value === 'yes') load();
-    else if (loaded) window.fbq('consent', 'revoke');
+    else revoke();
     if (banner) banner.hidden = true;
   }
 
@@ -67,9 +207,7 @@
       banner = el('div', 'consent');
       banner.setAttribute('role', 'region');
       banner.setAttribute('aria-label', 'Tracking choices');
-      banner.appendChild(el('p', 'consent__text',
-        'We use the Meta Pixel to see which Facebook and Instagram ads bring people here. '
-        + 'It tells Meta which pages you visit and what you order, but never your name, phone or address. Is that okay?'));
+      banner.appendChild(el('p', 'consent__text', bannerText()));
       var actions = el('div', 'consent__actions');
       var no = el('button', 'consent__btn consent__btn--quiet', 'No thanks');
       var yes = el('button', 'consent__btn', 'Accept');
@@ -96,15 +234,6 @@
     p.appendChild(link);
     foot.appendChild(p);
   }
-
-  window.ssPixel = {
-    /** Send a standard event, only after consent. Never pass personal data. */
-    track: function (name, data, eventId) {
-      if (!loaded || readConsent() !== 'yes') return;
-      if (eventId) window.fbq('track', name, data || {}, { eventID: eventId });
-      else window.fbq('track', name, data || {});
-    },
-  };
 
   function start() {
     addFooterLink();

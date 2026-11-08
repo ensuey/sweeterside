@@ -99,26 +99,34 @@ async function saveConfirm(event) {
   }
 }
 
-/* ---------------------------- Meta Pixel ---------------------------- */
+/* ---------------------------- tracking ---------------------------- */
 
-function showPixel(s) {
-  $('pixel-id').value = s.meta_pixel_id;
+// Setting -> input id.
+const TRACKING_FIELDS = {
+  ga4_id: 'ga4-id', gads_id: 'gads-id', gads_purchase_label: 'gads-purchase',
+  gads_lead_label: 'gads-lead', clarity_id: 'clarity-id', meta_pixel_id: 'pixel-id',
+};
+
+function showTracking(s) {
+  for (const [key, id] of Object.entries(TRACKING_FIELDS)) $(id).value = s[key] || '';
 }
 
-async function savePixel(event) {
+async function saveTracking(event) {
   event.preventDefault();
-  const err = $('pixel-err');
+  const err = $('tracking-err');
   err.hidden = true;
-  $('pixel-save').disabled = true;
+  $('tracking-save').disabled = true;
   try {
-    const s = await api('/api/settings', { method: 'PUT', body: { meta_pixel_id: $('pixel-id').value } });
-    showPixel(s);
-    toast(s.meta_pixel_id ? 'Saved. The pixel is on.' : 'Saved. The pixel is off.');
+    const body = Object.fromEntries(Object.entries(TRACKING_FIELDS).map(([key, id]) => [key, $(id).value]));
+    const s = await api('/api/settings', { method: 'PUT', body });
+    showTracking(s);
+    const on = s.ga4_id || s.gads_id || s.clarity_id || s.meta_pixel_id;
+    toast(on ? 'Saved. Tracking is on.' : 'Saved. Tracking is off.');
   } catch (e) {
     err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
     err.hidden = false;
   } finally {
-    $('pixel-save').disabled = false;
+    $('tracking-save').disabled = false;
   }
 }
 
@@ -487,7 +495,7 @@ $('free-form').addEventListener('submit', saveFree);
 $('trust-form').addEventListener('submit', saveTrust);
 $('hours-form').addEventListener('submit', saveHours);
 $('confirm-form').addEventListener('submit', saveConfirm);
-$('pixel-form').addEventListener('submit', savePixel);
+$('tracking-form').addEventListener('submit', saveTracking);
 $('share-file').addEventListener('change', uploadShare);
 $('share-remove').addEventListener('click', removeShare);
 
@@ -497,7 +505,7 @@ adminBoot(async () => {
   showTrust(s);
   showConfirm(s);
   showShare(s);
-  showPixel(s);
+  showTracking(s);
   $('free-min').value = s.free_delivery_min ?? '';
   showAreas((await api('/api/delivery-areas')).areas);
   await loadSuggestions();

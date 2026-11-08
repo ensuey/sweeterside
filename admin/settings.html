@@ -183,18 +183,39 @@
     </div>
   </section>
 
-  <!-- The Meta Pixel: off while blank. Customers are asked before it runs. -->
-  <section class="hours" aria-labelledby="pixel-title">
-    <h2 class="admin__title" id="pixel-title">Meta Pixel</h2>
-    <p class="admin__sub">Measures which Facebook and Instagram ads bring orders. Customers are asked first, and it runs only if they tap Accept. It is never on the admin or POS pages. Leave it blank to turn it off.</p>
-    <form class="hours__form" id="pixel-form" novalidate>
+  <!-- Tracking: each tool is off while its ID is blank. Customers are asked before any of them runs. -->
+  <section class="hours" aria-labelledby="tracking-title">
+    <h2 class="admin__title" id="tracking-title">Tracking</h2>
+    <p class="admin__sub">Measures visits and which ads bring orders. Customers are asked first, and the tools run only if they tap Accept. They are never on the admin or POS pages. Leave an ID blank to turn that tool off.</p>
+    <form class="hours__form" id="tracking-form" novalidate>
       <div class="field field--wide">
-        <label for="pixel-id">Pixel ID <span class="hint">(from Meta Events Manager, numbers only)</span></label>
+        <label for="ga4-id">Google Analytics <span class="hint">(Measurement ID, e.g. G-AB12CD34EF)</span></label>
+        <input id="ga4-id" type="text" maxlength="17" autocomplete="off" autocapitalize="characters" placeholder="G-…">
+      </div>
+      <div class="field field--wide">
+        <label for="gads-id">Google Ads <span class="hint">(e.g. AW-123456789)</span></label>
+        <input id="gads-id" type="text" maxlength="18" autocomplete="off" autocapitalize="characters" placeholder="AW-…">
+      </div>
+      <div class="field field--wide">
+        <label for="gads-purchase">Google Ads purchase label <span class="hint">(the conversion label for orders)</span></label>
+        <input id="gads-purchase" type="text" maxlength="40" autocomplete="off" autocapitalize="off">
+      </div>
+      <div class="field field--wide">
+        <label for="gads-lead">Google Ads cake request label <span class="hint">(optional)</span></label>
+        <input id="gads-lead" type="text" maxlength="40" autocomplete="off" autocapitalize="off">
+      </div>
+      <div class="field field--wide">
+        <label for="clarity-id">Microsoft Clarity <span class="hint">(Project ID)</span></label>
+        <input id="clarity-id" type="text" maxlength="20" autocomplete="off" autocapitalize="off">
+      </div>
+      <div class="field field--wide">
+        <label for="pixel-id">Meta Pixel <span class="hint">(Pixel ID, numbers only)</span></label>
         <input id="pixel-id" type="text" inputmode="numeric" maxlength="20" autocomplete="off" placeholder="e.g. 123456789012345">
       </div>
-      <button class="btn btn--ghost" type="submit" id="pixel-save">Save</button>
+      <button class="btn btn--ghost" type="submit" id="tracking-save">Save</button>
     </form>
-    <p class="field__err" id="pixel-err" hidden></p>
+    <p class="hint">In Clarity, set Settings → Masking to <strong>Strict</strong>. The cart and the cake form are always hidden from recordings.</p>
+    <p class="field__err" id="tracking-err" hidden></p>
   </section>
 
   <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
