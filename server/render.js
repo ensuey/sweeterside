@@ -299,6 +299,15 @@ function shareTagsHtml() {
     + '<meta name="twitter:card" content="summary_large_image">';
 }
 
+/** The Meta Pixel loader, or nothing when no Pixel ID is set. pixel.js asks
+    for consent first and loads Meta's script only after "Accept". */
+function pixelHtml() {
+  const id = orders.metaPixelId();
+  if (!id) return '';
+  return `<meta name="meta-pixel" content="${esc(id)}">\n`
+    + '<script src="/assets/js/pixel.js" defer></script>';
+}
+
 function chipsHtml(groups, total) {
   const chip = (filter, label, n, pressed) =>
     `      <button class="chip" type="button" data-filter="${esc(filter)}" aria-pressed="${pressed}">${esc(label)} <span class="chip__n">${n}</span></button>`;
@@ -389,6 +398,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date()) 
     .replace('<!--BEST-->', () => best)
     .replace('<!--SECTIONS-->', () => sections + empty)
     .replace('<!--SHARE_TAGS-->', () => shareTagsHtml())
+    .replace('<!--PIXEL-->', () => pixelHtml())
     .replace('<!--CALL_MINUTES-->', String(orders.callMinutes()))
     .replaceAll('<!--SHOP_TEL-->', () => esc(BUSINESS.phone.tel))
     .replaceAll('<!--SHOP_PHONE-->', () => esc(BUSINESS.phone.display))
@@ -444,6 +454,7 @@ function buildCakesHtml(now = new Date()) {
     .replace('<!--PRICES-->', () => cakePricesHtml(s))
     .replace('<!--INFO-->', () => cakeInfoHtml(s, avail))
     .replace('<!--TESTIMONIALS-->', () => testimonialsHtml())
+    .replace('<!--PIXEL-->', () => pixelHtml())
     .replaceAll('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
     .replaceAll('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
     .replaceAll('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()));
@@ -462,7 +473,8 @@ function buildAboutHtml() {
       groups: menuGroups().groups, cakeSizes: s.sizes, leadDays: s.lead_days, orderTypes: orders.enabledTypes(),
     }))
     .replace('<!--VISIT-->', () => seo.visitHtml())
-    .replace('<!--FOOT_NAP-->', () => seo.footHtml());
+    .replace('<!--FOOT_NAP-->', () => seo.footHtml())
+    .replace('<!--PIXEL-->', () => pixelHtml());
 }
 
 module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };

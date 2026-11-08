@@ -65,6 +65,24 @@ const CSP = [
   "object-src 'none'",
 ].join('; ');
 
+/* The customer pages (menu, cakes, about) may load the Meta Pixel. Only then,
+   and only there, the CSP also allows Meta's script and its event endpoint.
+   Admin, POS and API responses keep the strict CSP above. */
+const META_SCRIPT = 'https://connect.facebook.net';
+const META_EVENTS = 'https://www.facebook.com';
+
+function customerCsp() {
+  if (!orders.metaPixelId()) return CSP;
+  return CSP
+    .replace("script-src 'self'", `script-src 'self' ${META_SCRIPT}`)
+    .replace("img-src 'self' data:", `img-src 'self' data: ${META_EVENTS}`)
+    .concat(`; connect-src 'self' ${META_EVENTS}`);
+}
+
+function customerHeaders() {
+  return { 'Cache-Control': 'no-cache', 'Content-Security-Policy': customerCsp() };
+}
+
 /* ---------------------------- helpers ---------------------------- */
 
 function isSecure(req) {
@@ -410,15 +428,15 @@ async function route(req, res) {
 
   /* ---- public menu ---- */
   if (pathname === '/' && (method === 'GET' || method === 'HEAD')) {
-    return sendHtml(res, 200, render.buildHtml(), { 'Cache-Control': 'no-cache' });
+    return sendHtml(res, 200, render.buildHtml(), customerHeaders());
   }
 
   if (pathname === '/cakes' && (method === 'GET' || method === 'HEAD')) {
-    return sendHtml(res, 200, render.buildCakesHtml(), { 'Cache-Control': 'no-cache' });
+    return sendHtml(res, 200, render.buildCakesHtml(), customerHeaders());
   }
 
   if (pathname === '/about' && (method === 'GET' || method === 'HEAD')) {
-    return sendHtml(res, 200, render.buildAboutHtml(), { 'Cache-Control': 'no-cache' });
+    return sendHtml(res, 200, render.buildAboutHtml(), customerHeaders());
   }
 
   /* ---- health check (for the hosting platform) ---- */

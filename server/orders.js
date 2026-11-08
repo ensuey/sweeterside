@@ -208,6 +208,22 @@ function parseFacebookUrl(input) {
   return url.toString();
 }
 
+/** The Meta (Facebook) Pixel ID, or '' when the pixel is off. Only digits,
+    so it can go into the page and the CSP without escaping surprises. */
+function metaPixelId() {
+  const id = getSetting('meta_pixel_id', '');
+  return /^\d{10,20}$/.test(id) ? id : '';
+}
+
+function parseMetaPixelId(input) {
+  const raw = String(input ?? '').trim();
+  if (!raw) return '';
+  if (!/^\d{10,20}$/.test(raw)) {
+    throw new ValidationError({ meta_pixel_id: 'Paste the Pixel ID from Meta Events Manager: numbers only.' });
+  }
+  return raw;
+}
+
 /** The image shown when the site is shared (Open Graph), or '' for the logo.
     Must be a photo uploaded through the admin (metadata already stripped). */
 function shareImage() {
@@ -350,6 +366,7 @@ function settings() {
     confirm_call_minutes: callMinutes(),
     facebook_url: facebookUrl(),
     share_image: shareImage(),
+    meta_pixel_id: metaPixelId(),
     free_delivery_min: delivery.freeOver(),
     preorder_days: schedule.preorderDays(),
     require_confirm_delivery: requiresConfirmation('delivery'),
@@ -375,6 +392,7 @@ function updateSettings(input) {
     confirm_call_minutes: parseCount('confirm_call_minutes', 1, 120),
     facebook_url: parseFacebookUrl,
     share_image: parseShareImage,
+    meta_pixel_id: parseMetaPixelId,
     free_delivery_min: parseFreeMin,
     preorder_days: schedule.parseDays,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
@@ -869,6 +887,6 @@ module.exports = {
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
-  closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage,
+  closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage, metaPixelId,
   quote, create, insertLines, get, list, counts, setStatus,
 };
