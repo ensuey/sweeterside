@@ -375,7 +375,11 @@ a { color: var(--navy); }
 
 /* ---------------- modals ---------------- */
 .modal {
-  position: relative; margin: auto; padding: 0; border: 0;
+  /* Fixed, not relative: a modal dialog given position: relative becomes
+     absolute in the top layer, so on a page scrolled down it opens at the top
+     of the document, out of view (seen on the iPad Pro). Fixed keeps it in the
+     middle of the screen and still anchors what is positioned inside it. */
+  position: fixed; margin: auto; padding: 0; border: 0;
   width: min(100% - 2rem, 560px); max-height: calc(100dvh - 3rem);
   border-radius: var(--r-lg); background: var(--surface); color: var(--ink);
   box-shadow: var(--shadow-lg); overflow: hidden;
