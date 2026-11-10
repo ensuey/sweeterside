@@ -93,6 +93,24 @@
     <ul class="rows" id="ogroups"></ul>
     <p class="empty-note" id="ogroups-empty" hidden>No option groups yet.</p>
   </section>
+
+  <!-- Ingredients: in stock or out. An item that needs one that is out is sold out. -->
+  <section class="admin__section" aria-labelledby="ing-title">
+    <div class="admin__head">
+      <div>
+        <h2 class="admin__title" id="ing-title">Ingredients</h2>
+        <p class="admin__sub">For drinks such as frappes. Mark one Out and every item that needs it shows Sold out until it is back. Tick each item's ingredients in its Edit form.</p>
+      </div>
+    </div>
+    <form class="ing-add" id="ing-add" novalidate>
+      <label class="vh" for="ing-name">New ingredient</label>
+      <input id="ing-name" type="text" maxlength="40" placeholder="e.g. Oreo, Matcha powder" autocomplete="off">
+      <button class="btn btn--primary" type="submit" id="ing-add-btn">Add</button>
+    </form>
+    <p class="field__err" id="ing-err" role="alert" hidden></p>
+    <ul class="rows" id="ingredients"></ul>
+    <p class="empty-note" id="ingredients-empty" hidden>No ingredients yet.</p>
+  </section>
 </main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
@@ -144,6 +162,12 @@
         <legend>Options <span class="hint">Choices the customer makes, e.g. size or add-ons. Groups are set up below the items.</span></legend>
         <div class="optpick" id="f-groups"></div>
         <p class="field__err" data-err="option_groups" hidden></p>
+      </fieldset>
+
+      <fieldset class="crop">
+        <legend>Ingredients <span class="hint">Tick what it needs, e.g. Oreo. When one is out, this item shows Sold out.</span></legend>
+        <div class="optpick" id="f-ingredients"></div>
+        <p class="field__err" data-err="ingredients" hidden></p>
       </fieldset>
 
       <div class="field">
@@ -311,6 +335,34 @@
       <button class="btn btn--primary" type="submit" id="og-save">Save group</button>
     </div>
   </form>
+</dialog>
+
+<!-- ---------- Stock of a counted item ---------- -->
+<dialog class="modal modal--sm" id="stock-dialog" aria-labelledby="stock-title">
+  <div class="modal__head">
+    <h2 class="modal__title" id="stock-title">Stock</h2>
+    <button class="icon-btn" type="button" id="stock-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal__body stock">
+    <p class="alert" id="stock-error" role="alert" hidden></p>
+    <p class="stock__now" id="stock-now"></p>
+    <form class="stock__block" id="stock-add-form" novalidate>
+      <label for="stock-add">Add a batch <span class="hint">(just baked or delivered)</span></label>
+      <div class="stock__row">
+        <input id="stock-add" type="number" min="1" max="9999" step="1" inputmode="numeric" placeholder="e.g. 12">
+        <button class="btn btn--primary" type="submit">Add</button>
+      </div>
+    </form>
+    <form class="stock__block" id="stock-count-form" novalidate>
+      <label for="stock-count" id="stock-count-label">Stock take</label>
+      <p class="hint" id="stock-count-hint">Count everything in the shop, including orders set aside for pick-up.</p>
+      <div class="stock__row">
+        <input id="stock-count" type="number" min="0" max="9999" step="1" inputmode="numeric">
+        <button class="btn btn--ghost" type="submit" id="stock-count-btn">Save count</button>
+      </div>
+    </form>
+    <button class="link-quiet stock__off" type="button" id="stock-off">Stop counting this item</button>
+  </div>
 </dialog>
 
 <!-- ---------- Delete confirmation (items and categories) ---------- -->

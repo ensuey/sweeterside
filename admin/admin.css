@@ -306,13 +306,55 @@ a { color: var(--navy); }
 .row-item[data-availability="unavailable"] { opacity: .6; }
 .row-item[data-availability="sold_out"] { background: #FFF7F5; border-color: #F0D2CC; }
 
+/* The count of a counted item; opens the stock dialog. */
+.stock__btn {
+  min-height: 38px; min-width: 7rem; padding: .3rem .6rem; font: inherit; font-size: .875rem; font-weight: 700;
+  color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-sm);
+  font-variant-numeric: tabular-nums; cursor: pointer; text-align: left;
+}
+.stock__btn:hover { border-color: var(--navy); }
+.stock__btn.is-off { color: var(--ink-soft); font-weight: 600; border-style: dashed; }
+.stock__btn.is-out { color: var(--danger); border-color: #F0D2CC; background: #FFF7F5; }
+.row-item__out { font-size: .8125rem; font-weight: 700; color: var(--danger); }
+
 @media (max-width: 720px) {
   .row-item { flex-wrap: wrap; }
-  .row-item__stock { width: 100%; }
-  .stock__field { flex: 1; }
-  .stock__field input { width: 100%; }
+  .row-item__stock { width: 100%; flex-wrap: wrap; }
+  .stock__field { flex: 1 1 6rem; }
+  .stock__field input, .stock__btn { width: 100%; min-width: 0; }
   .row-item__actions { width: 100%; justify-content: flex-end; }
 }
+
+/* The stock dialog: what is left, add a batch, a stock take. */
+.stock { display: flex; flex-direction: column; gap: 1rem; }
+.stock__now { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stock__block { display: flex; flex-direction: column; gap: .35rem; }
+.stock__block[hidden] { display: none; }
+.stock__block label { font-weight: 700; }
+.stock__block .hint { margin: 0; }
+.stock__row { display: flex; gap: .5rem; }
+.stock__row input {
+  flex: 1; min-width: 0; min-height: 44px; padding: .4rem .7rem; font: inherit; font-size: 16px;
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+}
+.stock__row input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(62,94,126,.16); }
+.stock__off { align-self: flex-start; }
+.stock__off[hidden] { display: none; }
+
+/* Ingredients: in stock or out, one tap. */
+.ing-add { display: flex; gap: .5rem; margin-bottom: .6rem; }
+.ing-add input, .ing__rename input {
+  flex: 1; min-width: 0; min-height: 44px; padding: .4rem .7rem; font: inherit; font-size: 16px;
+  border: 1.5px solid var(--line); border-radius: var(--r-sm); background: var(--surface);
+}
+.ing__rename { display: flex; flex-wrap: wrap; gap: .4rem; }
+.ing__toggle {
+  min-height: 38px; min-width: 6.5rem; padding: 0 .9rem; border-radius: var(--r-full);
+  font: 700 .875rem "Nunito", sans-serif; cursor: pointer; border: 1.5px solid;
+}
+.ing__toggle.is-in { color: var(--ok); background: #EEF7F1; border-color: #BFDDC9; }
+.ing__toggle.is-out { color: #fff; background: var(--danger); border-color: var(--danger); }
+.row-item.ing.is-out { background: #FFF7F5; border-color: #F0D2CC; }
 
 /* ---------------- sprite window (mirrors the customer menu) ---------------- */
 .shot {

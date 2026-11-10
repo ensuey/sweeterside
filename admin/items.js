@@ -1,11 +1,12 @@
 'use strict';
-/* Items page: menu items (with availability and daily limits), categories
-   and option groups. */
+/* Items page: menu items (with availability, daily limits and stock counts),
+   categories, option groups and ingredients. */
 
 Object.assign(state, {
   items: [],
   categories: [],
   optionGroups: [],
+  ingredients: [],
   editingGroupId: null,
   images: [],
   editingId: null,      // null = creating
@@ -58,12 +59,19 @@ function editorSalePrice() {
   return value >= price ? null : price - value;
 }
 
+/** The Stock button: "12 left", "0 left" or "Not counted". */
+function stockLabel(item) {
+  return item.stock ? `${Math.max(0, item.stock.left)} left` : 'Not counted';
+}
+
 function rowHtml(item) {
   const { cls, style } = shotStyle(item);
   const options = Object.entries(AVAILABILITY_LABEL)
     .map(([value, label]) => `<option value="${value}"${value === item.availability ? ' selected' : ''}>${label}</option>`)
     .join('');
   const limitReached = item.daily_limit !== null && item.remaining === 0;
+  const stockOut = item.stock && item.stock.left <= 0;
+  const missing = item.missing_ingredients || [];
   return `
     <li class="row-item" data-id="${item.id}" data-availability="${esc(item.availability)}">
       <div class="${cls} row-item__shot" style="${style}">
@@ -74,6 +82,7 @@ function rowHtml(item) {
         <span class="row-item__meta">₱${item.price}</span>
         <span class="row-item__chips">${promoChips(item)}</span>
         <span class="row-item__today${limitReached ? ' is-full' : ''}">${todayText(item)}</span>
+        ${missing.length ? `<span class="row-item__out">Sold out: ${esc(missing.join(', '))} ${missing.length === 1 ? 'is' : 'are'} out</span>` : ''}
       </div>
       <div class="row-item__stock">
         <label class="stock__field">
@@ -85,6 +94,10 @@ function rowHtml(item) {
           <input data-stock="daily_limit" type="number" min="1" max="9999" step="1" inputmode="numeric"
             placeholder="No limit" value="${item.daily_limit ?? ''}">
         </label>
+        <div class="stock__field">
+          <span>In stock</span>
+          <button class="stock__btn${stockOut ? ' is-out' : ''}${item.stock ? '' : ' is-off'}" type="button" data-action="stock">${stockLabel(item)}</button>
+        </div>
       </div>
       <div class="row-item__actions">
         <button class="btn btn--ghost btn--sm" type="button" data-action="edit">Edit</button>
@@ -120,9 +133,10 @@ async function saveStock(row) {
   }
 }
 
-/** Refresh today's counts, unless someone is typing in a row. */
+/** Refresh today's counts, unless someone is typing in a row or changing stock. */
 async function refreshItems() {
-  if (document.activeElement && document.activeElement.matches('[data-stock]')) return;
+  if (document.activeElement && document.activeElement.matches('[data-stock], .ing__rename input')) return;
+  if ($('stock-dialog').open) return;
   try { await loadAll(); } catch { /* the next refresh will try again */ }
 }
 
@@ -301,6 +315,7 @@ function openEditor(item) {
   $('f-size').value = item ? item.size_label || '' : '';
   descCount();
   fillGroupChoices(item ? item.option_groups || [] : []);
+  fillIngredientChoices(item ? item.ingredients || [] : []);
   // A new item starts on the logo until a photo is uploaded or chosen.
   const logo = state.images.find((i) => i.default);
   fillImageOptions(item ? item.image : (logo || state.images[0] || {}).path);
@@ -339,6 +354,7 @@ async function saveItem(event) {
     description: $('f-desc').value,
     size_label: $('f-size').value,
     option_groups: [...$('f-groups').querySelectorAll('input:checked')].map((i) => Number(i.value)),
+    ingredients: [...$('f-ingredients').querySelectorAll('input:checked')].map((i) => Number(i.value)),
   };
 
   const save = $('editor-save');
@@ -475,10 +491,14 @@ async function doDelete() {
   if (!pending) return;
   $('confirm-ok').disabled = true;
   try {
-    const base = { item: '/api/items', category: '/api/categories', group: '/api/option-groups' }[pending.kind];
+    const base = {
+      item: '/api/items', category: '/api/categories', group: '/api/option-groups', ingredient: '/api/ingredients',
+    }[pending.kind];
     await api(`${base}/${pending.id}`, { method: 'DELETE' });
     confirmDialog.close();
-    toast({ item: 'Item deleted.', category: 'Category deleted.', group: 'Option group deleted.' }[pending.kind]);
+    toast({
+      item: 'Item deleted.', category: 'Category deleted.', group: 'Option group deleted.', ingredient: 'Ingredient deleted.',
+    }[pending.kind]);
     await loadAll();
   } catch (err) {
     toast(err.message, 'error');
@@ -651,19 +671,247 @@ function askDeleteGroup(g) {
   confirmDialog.showModal();
 }
 
+/* ---------------------------- counted stock ---------------------------- */
+
+const stockDialog = $('stock-dialog');
+let stockItemId = null;
+
+/** A fresh key per change, so a retried request adds its batch once. */
+function requestKey() {
+  return crypto.randomUUID().replace(/-/g, '');
+}
+
+function openStock(item) {
+  stockItemId = item.id;
+  $('stock-error').hidden = true;
+  $('stock-title').textContent = item.name;
+  const counted = !!item.stock;
+  $('stock-add-form').hidden = !counted;
+  $('stock-off').hidden = !counted;
+  $('stock-add').value = '';
+  $('stock-count').value = '';
+  if (counted) {
+    const left = Math.max(0, item.stock.left);
+    const held = item.stock.held ? ` · ${item.stock.held} set aside on open orders` : '';
+    $('stock-now').textContent = `${left} free to sell${held}.`;
+    $('stock-count-label').textContent = 'Stock take';
+    $('stock-count-hint').textContent = 'Count everything in the shop, including orders set aside for pick-up.';
+    $('stock-count-btn').textContent = 'Save count';
+  } else {
+    $('stock-now').textContent = 'Not counted. Count it, and the website stops taking orders for it when it runs out.';
+    $('stock-count-label').textContent = 'How many are in the shop now?';
+    $('stock-count-hint').textContent = 'Include any set aside for orders.';
+    $('stock-count-btn').textContent = 'Start counting';
+  }
+  if (!stockDialog.open) stockDialog.showModal();
+  (counted ? $('stock-add') : $('stock-count')).focus();
+}
+
+async function changeStock(body, done) {
+  $('stock-error').hidden = true;
+  stockDialog.querySelectorAll('button, input').forEach((el) => { el.disabled = true; });
+  try {
+    const data = await api(`/api/items/${stockItemId}/count`, { method: 'POST', body: { ...body, request_key: requestKey() } });
+    await loadAll();
+    toast(done(data));
+    const item = state.items.find((i) => i.id === stockItemId);
+    if (body.action === 'off' || !item) stockDialog.close();
+    else openStock(item);
+  } catch (err) {
+    $('stock-error').textContent = err.fields ? Object.values(err.fields).join(' ') : err.message;
+    $('stock-error').hidden = false;
+  } finally {
+    stockDialog.querySelectorAll('button, input').forEach((el) => { el.disabled = false; });
+  }
+}
+
+$('stock-add-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const qty = $('stock-add').value.trim();
+  changeStock({ action: 'add', qty }, (d) => `Added ${qty}. ${Math.max(0, d.level.left)} left.`);
+});
+$('stock-count-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  changeStock({ action: 'count', qty: $('stock-count').value.trim() },
+    (d) => `Counted. ${Math.max(0, d.level.left)} free to sell.`);
+});
+$('stock-off').addEventListener('click', () => {
+  changeStock({ action: 'off' }, () => 'No longer counted. Only availability and the daily limit apply.');
+});
+$('stock-close').addEventListener('click', () => stockDialog.close());
+
+/* ---------------------------- ingredients ---------------------------- */
+
+function renderIngredients() {
+  const list = state.ingredients;
+  const box = $('ingredients');
+  box.replaceChildren(...list.map((g) => {
+    const li = document.createElement('li');
+    li.className = `row-item ing${g.in_stock ? '' : ' is-out'}`;
+    li.dataset.ingId = String(g.id);
+    const main = document.createElement('div');
+    main.className = 'row-item__main';
+    const name = document.createElement('span');
+    name.className = 'row-item__name';
+    name.textContent = g.name;
+    const meta = document.createElement('span');
+    meta.className = 'row-item__meta';
+    const n = g.item_ids.length;
+    meta.textContent = !n ? 'Not ticked on any item yet'
+      : g.in_stock ? `Used in ${plural(n, 'item')}` : `${plural(n, 'item')} sold out`;
+    main.append(name, meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'row-item__actions';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = `ing__toggle ${g.in_stock ? 'is-in' : 'is-out'}`;
+    toggle.dataset.action = 'toggle';
+    toggle.setAttribute('aria-label', `${g.name}: ${g.in_stock ? 'in stock. Tap to mark out.' : 'out. Tap to mark in stock.'}`);
+    toggle.textContent = g.in_stock ? 'In stock' : 'Out';
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.className = 'btn btn--ghost btn--sm';
+    rename.dataset.action = 'rename';
+    rename.textContent = 'Rename';
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'btn btn--danger-ghost btn--sm';
+    del.dataset.action = 'delete';
+    del.textContent = 'Delete';
+    actions.append(toggle, rename, del);
+    li.append(main, actions);
+    return li;
+  }));
+  $('ingredients-empty').hidden = list.length > 0;
+}
+
+function ingError(message) {
+  $('ing-err').textContent = message || '';
+  $('ing-err').hidden = !message;
+}
+
+async function ingredientCall(path, method, body, message) {
+  ingError('');
+  try {
+    const data = await api(path, { method, body });
+    state.ingredients = data.ingredients;
+    renderIngredients();
+    // In or out changes which items are sold out.
+    await loadAll();
+    if (message) toast(message(data));
+    return true;
+  } catch (err) {
+    ingError(err.fields ? Object.values(err.fields).join(' ') : err.message);
+    return false;
+  }
+}
+
+$('ing-add').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = $('ing-name').value;
+  $('ing-add-btn').disabled = true;
+  if (await ingredientCall('/api/ingredients', 'POST', { name }, (d) => `${d.ingredient.name} added. Tick it on the items that need it.`)) {
+    $('ing-name').value = '';
+  }
+  $('ing-add-btn').disabled = false;
+});
+
+/** Rename in place: the name becomes a field with Save and Cancel. */
+function startRename(li, g) {
+  const main = li.querySelector('.row-item__main');
+  const form = document.createElement('form');
+  form.className = 'ing__rename';
+  form.noValidate = true;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.maxLength = 40;
+  input.value = g.name;
+  input.setAttribute('aria-label', `New name for ${g.name}`);
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'btn btn--primary btn--sm';
+  save.textContent = 'Save';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn btn--ghost btn--sm';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', renderIngredients);
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    ingredientCall(`/api/ingredients/${g.id}`, 'PATCH', { name: input.value }, (d) => `Renamed to ${d.ingredient.name}.`);
+  });
+  form.append(input, save, cancel);
+  main.replaceChildren(form);
+  input.focus();
+}
+
+$('ingredients').addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-action]');
+  if (!btn) return;
+  const li = btn.closest('[data-ing-id]');
+  const g = state.ingredients.find((x) => x.id === Number(li.dataset.ingId));
+  if (!g) return;
+  if (btn.dataset.action === 'toggle') {
+    btn.disabled = true;
+    ingredientCall(`/api/ingredients/${g.id}`, 'PATCH', { in_stock: !g.in_stock },
+      (d) => (d.ingredient.in_stock ? `${g.name} is back in stock.` : `${g.name} is out. Items that need it show Sold out.`));
+  }
+  if (btn.dataset.action === 'rename') startRename(li, g);
+  if (btn.dataset.action === 'delete') {
+    state.pendingDelete = { kind: 'ingredient', id: g.id };
+    $('confirm-title').textContent = 'Delete this ingredient?';
+    $('confirm-text').textContent = g.item_ids.length
+      ? `“${g.name}” comes off ${plural(g.item_ids.length, 'item')}.${g.in_stock ? '' : ' They are no longer sold out because of it.'}`
+      : `“${g.name}” is not on any item.`;
+    confirmDialog.showModal();
+  }
+});
+
+/** Ingredient tick boxes in the item editor. */
+function fillIngredientChoices(selected) {
+  const box = $('f-ingredients');
+  box.replaceChildren();
+  if (!state.ingredients.length) {
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'No ingredients yet. Add them under Ingredients below the items.';
+    box.append(p);
+    return;
+  }
+  for (const g of state.ingredients) {
+    const label = document.createElement('label');
+    label.className = 'promo__check';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = String(g.id);
+    input.checked = selected.includes(g.id);
+    label.append(input, ` ${g.name}`);
+    if (!g.in_stock) {
+      const hint = document.createElement('span');
+      hint.className = 'hint';
+      hint.textContent = ' (out now)';
+      label.append(hint);
+    }
+    box.append(label);
+  }
+}
+
 /* ---------------------------- loading ---------------------------- */
 
 /** Items and categories change together (item counts), so reload both. */
 async function loadAll() {
-  const [{ items }, { categories }, { groups: optionGroups }] = await Promise.all([
-    api('/api/items'), api('/api/categories'), api('/api/option-groups'),
+  const [{ items }, { categories }, { groups: optionGroups }, { ingredients }] = await Promise.all([
+    api('/api/items'), api('/api/categories'), api('/api/option-groups'), api('/api/ingredients'),
   ]);
   state.items = items;
   state.categories = categories;
   state.optionGroups = optionGroups;
+  state.ingredients = ingredients;
   render();
   renderCategories();
   renderGroups();
+  renderIngredients();
 }
 
 async function loadImages() {
@@ -712,6 +960,7 @@ groups.addEventListener('click', (event) => {
   if (!item) return;
   if (btn.dataset.action === 'edit') openEditor(item);
   if (btn.dataset.action === 'delete') askDelete(item);
+  if (btn.dataset.action === 'stock') openStock(item);
 });
 
 cats.addEventListener('click', (event) => {
