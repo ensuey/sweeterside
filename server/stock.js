@@ -137,6 +137,23 @@ function change(itemId, { action, qty: input, request_key: rawKey } = {}, by = n
   });
 }
 
+/**
+ * Before a handed-over order is deleted (orders.remove): its units leave
+ * "handed over in all", which would put them back on the count. A counted
+ * item keeps the count it has, so each gets a move that takes them off again.
+ * Call inside the delete's transaction. An open order needs nothing: deleting
+ * it frees what it held, like cancelling it.
+ */
+function keepCountsOnDelete(orderId, by = null) {
+  const counted = levels();
+  const lines = db.prepare(`
+    SELECT item_id, SUM(qty - voided_qty) AS n FROM order_items
+    WHERE order_id = ? AND item_id IS NOT NULL GROUP BY item_id`).all(Number(orderId));
+  for (const l of lines) {
+    if (counted.has(l.item_id) && l.n > 0) move(l.item_id, 'add', -l.n, by, null);
+  }
+}
+
 /* ---------------------------- ingredients ---------------------------- */
 
 /** Every ingredient with the items that need it (ids). */
@@ -240,7 +257,7 @@ function setItemIngredients(itemId, ids) {
 }
 
 module.exports = {
-  QTY_MAX, levels, level, change, missing,
+  QTY_MAX, levels, level, change, missing, keepCountsOnDelete,
   listIngredients, getIngredient, createIngredient, renameIngredient, setIngredientStock, removeIngredient,
   itemIngredientIds, parseItemIngredients, setItemIngredients,
 };

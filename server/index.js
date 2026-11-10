@@ -805,6 +805,34 @@ async function route(req, res) {
     return sendJson(res, 200, { order });
   }
 
+  // Delete a (test) order for good. The owner's PIN every time, throttled like
+  // the POS unlock; confirm must repeat the order number, so a stale screen
+  // cannot delete the wrong one.
+  const deleteMatch = pathname.match(/^\/api\/orders\/(\d+)\/delete$/);
+  if (deleteMatch && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const ip = clientIp(req);
+    if (pinLimiter.limited(ip)) {
+      return sendJson(res, 429, { error: 'Too many wrong PINs from this device. Wait a few minutes.' });
+    }
+    const id = Number(deleteMatch[1]);
+    const body = await readJson(req);
+    if (Number(body.confirm) !== id) {
+      return sendJson(res, 422, { error: 'Reload the page and try again.', fields: { confirm: 'The order number does not match.' } });
+    }
+    if (!orders.get(id)) return sendJson(res, 404, { error: 'That order no longer exists.' });
+    let approver;
+    try {
+      ({ approver } = staff.authorise(null, 'delete_orders', body.override || {}));
+    } catch (err) {
+      if ((err.body && err.body.wrong_pin) || err.status === 429) pinLimiter.record(ip);
+      throw err;
+    }
+    const removed = orders.remove(id, approver);
+    console.log(`[orders] #${id} deleted by staff ${approver.id}`);
+    return sendJson(res, 200, { deleted: removed });
+  }
+
   /* ---- blocked numbers (all authenticated) ---- */
   if (pathname === '/api/blocked' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
