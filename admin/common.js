@@ -36,8 +36,9 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function plural(n, word) {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
+/** "1 item" / "3 items"; words like category pass their plural. */
+function plural(n, word, many = `${word}s`) {
+  return `${n} ${n === 1 ? word : many}`;
 }
 
 async function api(path, { method = 'GET', body } = {}) {

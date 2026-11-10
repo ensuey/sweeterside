@@ -226,7 +226,7 @@ function renderCategories() {
   cats.innerHTML = list.map((cat, i) => categoryRowHtml(cat, i, list.length)).join('');
   $('cats-summary').textContent = list.length === 0
     ? 'No categories yet.'
-    : `${plural(list.length, 'category')}. Empty ones are hidden from customers.`;
+    : `${plural(list.length, 'category', 'categories')}. Empty ones are hidden from customers.`;
   $('cats-empty').hidden = list.length > 0;
 }
 
