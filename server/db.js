@@ -651,6 +651,43 @@ CREATE TABLE IF NOT EXISTS testimonials (
    surcharge, when it was booked. Dachel confirms the final price. */
 addMissingColumns('cake_bookings', { estimate_from: 'INTEGER' });
 
+/* Inventory. Counted items (baked goods) have a real count: a stock take
+   ('count') sets it, a batch from the oven ('add') adds to it, and orders take
+   from it (see stock.js). Items with no move are not counted. The moves are
+   never changed or deleted, so the count can always be explained. at is UTC,
+   like datetime('now'). handed is, for a stock take, how many of the item
+   had been handed over on orders in all, so later hand-overs are the
+   difference: no clocks to compare. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS stock_moves (
+  id         INTEGER PRIMARY KEY,
+  item_id    INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  kind       TEXT    NOT NULL CHECK (kind IN ('count', 'add', 'off')),
+  qty        INTEGER NOT NULL DEFAULT 0,
+  handed     INTEGER,
+  at       TEXT    NOT NULL DEFAULT (datetime('now')),
+  staff_id   INTEGER REFERENCES staff(id),
+  staff_name TEXT    NOT NULL DEFAULT '',
+  -- A retried request (a double tap, a lost reply) adds its batch only once.
+  request_key TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_stock_moves_item ON stock_moves(item_id, id);
+
+/* Ingredients for drinks such as frappes: each is in stock or out. An item
+   that needs an ingredient that is out shows as sold out. No quantities. */
+CREATE TABLE IF NOT EXISTS ingredients (
+  id       INTEGER PRIMARY KEY,
+  name     TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+  in_stock INTEGER NOT NULL DEFAULT 1,
+  position INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS item_ingredients (
+  item_id       INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+  ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+  PRIMARY KEY (item_id, ingredient_id)
+);
+CREATE INDEX IF NOT EXISTS idx_item_ingredients_ingredient ON item_ingredients(ingredient_id);`);
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

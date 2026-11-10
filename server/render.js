@@ -140,7 +140,7 @@ function encPath(p) {
   return String(p).split('/').map(encodeURIComponent).join('/');
 }
 
-// Below this many left today, customers are told how many remain.
+// Below this many left, customers are told how many remain.
 const FEW_LEFT = 5;
 // The first few photos are on screen at once; the rest load as you scroll.
 const EAGER_IMAGES = 4;
@@ -182,15 +182,16 @@ function cardHtml(item, category, { eager = false } = {}) {
     ? ` class="shot" style="--x:${item.crop_x}; --y:${item.crop_y}; --w:${item.crop_w}; --h:${item.crop_h}"`
     : ' class="shot shot--plain"';
 
-  // Sold out (by hand, or today's limit is used up): shown, but cannot be added.
-  // Otherwise data-remaining tells the cart how many it may take today.
+  // Sold out (by hand, today's limit used up, none left in stock or an
+  // ingredient out): shown, but cannot be added. Otherwise data-remaining
+  // tells the cart how many it may take.
   const stockAttr = item.sold_out ? ' data-soldout'
     : item.remaining !== null ? ` data-remaining="${item.remaining}"` : '';
   const action = item.sold_out
     ? '<span class="card__soldout">Sold out</span>'
     : `<button class="card__add" type="button" data-add>Add<span class="vh"> ${esc(item.name)} to cart</span></button>`;
   const fewLeft = !item.sold_out && item.remaining !== null && item.remaining <= FEW_LEFT
-    ? `\n          <p class="card__left">Only ${item.remaining} left today</p>`
+    ? `\n          <p class="card__left">Only ${item.remaining} ${menu.leftText(item)}</p>`
     : '';
 
   // data-price is what the cart charges, so on sale it is the sale price;

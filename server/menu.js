@@ -196,18 +196,39 @@ function soldToday(now = new Date(), date = manilaDate(now)) {
   return new Map(rows.map((r) => [r.item_id, r.qty]));
 }
 
+/** What withStock needs besides the item: today's sales, counts, ingredients out. */
+function stockState(now, date) {
+  const stock = require('./stock');
+  return { sold: soldToday(now, date), levels: stock.levels(), missing: stock.missing() };
+}
+
 /**
  * Adds sold_today, remaining (null when unlimited) and sold_out, which is
- * true when marked sold out or when today's limit is used up. The limit
- * comes back by itself at midnight because tomorrow's count starts at zero.
+ * true when marked sold out, when today's limit is used up, when a counted
+ * item has none left, or when an ingredient it needs is out. The daily limit
+ * comes back by itself at midnight because tomorrow's count starts at zero;
+ * a count only changes with orders, stock takes and batches (stock.js).
+ * stock_left is the count (null when not counted), and left_by says which
+ * of the two set remaining: 'stock' or 'day'.
  */
-function withStock(item, sold) {
+function withStock(item, { sold, levels, missing }) {
   const sold_today = sold.get(item.id) || 0;
-  const remaining = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
+  const dayLeft = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
+  const level = levels.get(item.id);
+  const stock_left = level ? Math.max(0, level.left) : null;
+  const remaining = dayLeft === null ? stock_left : stock_left === null ? dayLeft : Math.min(dayLeft, stock_left);
+  const missing_ingredients = missing.get(item.id) || [];
   return {
     ...item, best_seller: item.best_seller === 1, sc_eligible: item.sc_eligible !== 0, sale_price: salePrice(item),
-    sold_today, remaining, sold_out: item.availability === 'sold_out' || remaining === 0,
+    sold_today, remaining, stock_left, left_by: remaining !== null && remaining === stock_left ? 'stock' : 'day',
+    missing_ingredients,
+    sold_out: item.availability === 'sold_out' || remaining === 0 || missing_ingredients.length > 0,
   };
+}
+
+/** "left today" for a daily limit, "left" for a count. */
+function leftText(item) {
+  return item.left_by === 'stock' ? 'left' : 'left today';
 }
 
 /** @returns { availability, daily_limit } or throws ValidationError */
@@ -245,19 +266,20 @@ const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
 /** Items in menu order: by category position, then item position. */
 /** date: the Manila day to count stock for (default today). */
 function list({ now, date } = {}) {
-  const sold = soldToday(now, date);
+  const state = stockState(now, date);
   return db.prepare(`${SELECT} JOIN categories c ON c.id = i.category_id
-    ORDER BY c.position, c.id, i.position, i.id`).all().map((item) => withStock(item, sold));
+    ORDER BY c.position, c.id, i.position, i.id`).all().map((item) => withStock(item, state));
 }
 
 function get(id, { now, date } = {}) {
   const item = db.prepare(`${SELECT} WHERE i.id = ?`).get(Number(id));
-  return item ? withStock(item, soldToday(now, date)) : null;
+  return item ? withStock(item, stockState(now, date)) : null;
 }
 
 function create(input) {
   const row = validate(input);
   const groups = require('./options').parseItemGroups(input.option_groups);
+  const ingredients = require('./stock').parseItemIngredients(input.ingredients);
   const { next } = db.prepare(
     'SELECT COALESCE(MAX(position), -1) + 1 AS next FROM items WHERE category_id = ?'
   ).get(row.category_id);
@@ -271,6 +293,7 @@ function create(input) {
       row.crop_x, row.crop_y, row.crop_w, row.crop_h, next,
       row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label);
     if (groups) require('./options').setItemGroups(info.lastInsertRowid, groups);
+    if (ingredients) require('./stock').setItemIngredients(info.lastInsertRowid, ingredients);
     return info.lastInsertRowid;
   });
 
@@ -288,6 +311,7 @@ function update(id, input) {
     size_label: 'size_label' in input ? input.size_label : existing.size_label,
   });
   const groups = require('./options').parseItemGroups(input.option_groups);
+  const ingredients = require('./stock').parseItemIngredients(input.ingredients);
 
   transaction(() => {
     db.prepare(`
@@ -300,6 +324,7 @@ function update(id, input) {
       row.crop_x, row.crop_y, row.crop_w, row.crop_h,
       row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label, Number(id));
     if (groups) require('./options').setItemGroups(id, groups);
+    if (ingredients) require('./stock').setItemIngredients(id, ingredients);
   });
 
   return get(id);
@@ -364,6 +389,6 @@ function availableImages() {
 
 module.exports = {
   ValidationError,
-  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice,
+  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice, leftText,
   availableImages, resolveImage, validate, DEFAULT_IMAGE, DESCRIPTION_MAX, SIZE_MAX,
 };
