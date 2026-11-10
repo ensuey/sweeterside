@@ -136,6 +136,10 @@ function posMenu() {
     id: i.id, name: i.name, category_id: i.category_id, image: i.image, alt: i.alt,
     crop_x: i.crop_x, crop_y: i.crop_y, crop_w: i.crop_w, crop_h: i.crop_h,
     price: i.price, sale_price: i.sale_price, sold_out: i.sold_out, remaining: i.remaining,
+    // The count (null when not counted) and any ingredient that is out, so
+    // the counter sees why an item is sold out and can fix the count.
+    counted: i.stock_left !== null, stock_left: i.stock_left, missing_ingredients: i.missing_ingredients,
+    marked_sold_out: i.availability === 'sold_out',
     sc_eligible: i.sc_eligible, best_seller: i.best_seller, size_label: i.size_label,
     sale_type: i.sale_type, sale_value: i.sale_value,
     option_groups: opts[i.id] ? opts[i.id].groups : [],
@@ -481,7 +485,7 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
     const item = menu.get(itemId, { now });
     if (!item || item.sold_out) errors.lines = `${item ? item.name : 'An item'} is sold out.`;
     else if (item.remaining !== null && extra > item.remaining) {
-      errors.lines = `Only ${item.remaining} ${item.name} left today.`;
+      errors.lines = `Only ${item.remaining} ${item.name} ${menu.leftText(item)}.`;
     }
   }
 

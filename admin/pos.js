@@ -167,13 +167,139 @@ function renderGrid() {
     const onSale = i.sale_price < i.price;
     const left = !i.sold_out && i.remaining !== null && i.remaining <= FEW_LEFT
       ? `<span class="item__left">${i.remaining} left</span>` : '';
-    return `<li><button type="button" class="item" data-id="${i.id}" ${i.sold_out ? 'disabled aria-disabled="true"' : ''}>
+    // Sold out because the count is 0 or an ingredient is out: someone who
+    // manages stock taps it to fix that. Anything else stays disabled.
+    const fix = stockFix(i);
+    const out = !fix ? 'Sold out' : fix === 'count' ? 'Sold out · add stock' : `${i.missing_ingredients[0]} out`;
+    const state = !i.sold_out ? '' : fix ? `data-fix="${fix}"` : 'disabled aria-disabled="true"';
+    return `<li><button type="button" class="item${fix ? ' item--fix' : ''}" data-id="${i.id}" ${state}>
       ${shotHtml(i)}
       <span class="item__name">${esc(i.name)}</span>
       <span class="item__price">${onSale ? `<s>${money(i.price)}</s> ` : ''}${money(i.sale_price)}</span>
-      ${i.sold_out ? '<span class="item__out">Sold out</span>' : left}
+      ${i.sold_out ? `<span class="item__out">${esc(out)}</span>` : left}
     </button></li>`;
   }).join('') || '<li class="grid__empty">No items match.</li>';
+}
+
+/* ---------------------------- stock ---------------------------- */
+
+/** Why a sold-out item is out, when this staff member can fix it at the
+    counter: 'ingredient' or 'count'. null: not sold out, marked sold out by
+    hand, today's limit used up, or not allowed. */
+function stockFix(i) {
+  if (!i.sold_out || i.marked_sold_out || !staffGate.can('manage_stock')) return null;
+  if ((i.missing_ingredients || []).length) return 'ingredient';
+  if (i.counted && i.stock_left === 0) return 'count';
+  return null;
+}
+
+function stockError(message) {
+  $('stock-error').textContent = message || '';
+  $('stock-error').hidden = !message;
+}
+
+function el(tag, cls, text) {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function renderStock() {
+  const counted = P.menu.filter((i) => i.counted);
+  $('stock-none').hidden = counted.length > 0;
+  $('stock-items').replaceChildren(...counted.map((i) => {
+    const li = el('li', `srow${i.stock_left === 0 ? ' is-out' : ''}`);
+    li.dataset.item = String(i.id);
+    const head = el('div', 'srow__head');
+    head.append(el('span', 'srow__name', i.name), el('span', 'srow__left', `${i.stock_left} left`));
+    const act = el('div', 'srow__act');
+    const input = el('input');
+    input.type = 'number';
+    input.min = '0';
+    input.max = '9999';
+    input.step = '1';
+    input.inputMode = 'numeric';
+    input.placeholder = 'How many';
+    input.setAttribute('aria-label', `How many ${i.name}`);
+    const add = el('button', 'btn btn--primary btn--sm', 'Add');
+    add.type = 'button';
+    add.dataset.do = 'add';
+    const count = el('button', 'btn btn--ghost btn--sm', 'Set count');
+    count.type = 'button';
+    count.dataset.do = 'count';
+    act.append(input, add, count);
+    li.append(head, act);
+    return li;
+  }));
+
+  const ings = P.settings.ingredients || [];
+  $('ing-none').hidden = ings.length > 0;
+  $('stock-ings').replaceChildren(...ings.map((g) => {
+    const li = el('li', `srow srow--ing${g.in_stock ? '' : ' is-out'}`);
+    li.dataset.ingRow = String(g.id);
+    const toggle = el('button', `ing__toggle ${g.in_stock ? 'is-in' : 'is-out'}`, g.in_stock ? 'In stock' : 'Out');
+    toggle.type = 'button';
+    toggle.dataset.ing = String(g.id);
+    toggle.setAttribute('aria-label', `${g.name}: ${g.in_stock ? 'in stock. Tap to mark out.' : 'out. Tap to mark in stock.'}`);
+    li.append(el('span', 'srow__name', g.name), toggle);
+    return li;
+  }));
+}
+
+/** Open the stock list; from a sold-out tile, at the row that fixes it. */
+function openStock(itemId) {
+  stockError('');
+  renderStock();
+  if (!$('stock-dialog').open) $('stock-dialog').showModal();
+  const item = itemId ? P.menu.find((i) => i.id === itemId) : null;
+  if (!item) return;
+  const fix = stockFix(item);
+  const row = fix === 'count'
+    ? $('stock-items').querySelector(`[data-item="${item.id}"]`)
+    : [...$('stock-ings').querySelectorAll('[data-ing-row]')]
+      .find((r) => r.querySelector('.srow__name').textContent === item.missing_ingredients[0]);
+  if (!row) return;
+  row.classList.add('is-target');
+  row.scrollIntoView({ block: 'center' });
+  (row.querySelector('input') || row.querySelector('button')).focus();
+}
+
+async function changeStock(row, action) {
+  const id = Number(row.dataset.item);
+  const qty = row.querySelector('input').value.trim();
+  const item = P.menu.find((i) => i.id === id);
+  stockError('');
+  row.querySelectorAll('button, input').forEach((x) => { x.disabled = true; });
+  try {
+    const data = await staffGate.call('/api/pos/stock', {
+      method: 'POST', body: { item_id: id, action, qty, request_key: newKey() },
+    });
+    P.menu = data.items;
+    renderGrid();
+    renderStock();
+    const left = Math.max(0, data.level.left);
+    toast(action === 'add' ? `Added ${qty} ${item.name}. ${left} left.` : `${item.name} counted. ${left} free to sell.`);
+  } catch (e) {
+    stockError(e.fields ? Object.values(e.fields).join(' ') : e.message);
+    row.querySelectorAll('button, input').forEach((x) => { x.disabled = false; });
+  }
+}
+
+async function toggleIngredient(id) {
+  const g = (P.settings.ingredients || []).find((x) => x.id === id);
+  if (!g) return;
+  stockError('');
+  try {
+    const data = await staffGate.call(`/api/pos/ingredients/${id}`, { method: 'POST', body: { in_stock: !g.in_stock } });
+    g.in_stock = data.ingredient.in_stock;
+    P.menu = data.items;
+    renderGrid();
+    renderStock();
+    toast(g.in_stock ? `${g.name} is back in stock.` : `${g.name} is out. Items that need it show Sold out.`);
+  } catch (e) {
+    stockError(e.message);
+  }
 }
 
 /* ---------------------------- adding and changing lines ---------------------------- */
@@ -931,7 +1057,19 @@ function bind() {
   $('search').addEventListener('input', (e) => { P.q = e.target.value; renderGrid(); });
   $('grid').addEventListener('click', (e) => {
     const b = e.target.closest('.item');
-    if (b && !b.disabled) addItem(b.dataset.id);
+    if (!b || b.disabled) return;
+    if (b.dataset.fix) openStock(Number(b.dataset.id));
+    else addItem(b.dataset.id);
+  });
+  $('stock-btn').addEventListener('click', () => openStock(null));
+  $('stock-close').addEventListener('click', () => $('stock-dialog').close());
+  $('stock-items').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-do]');
+    if (b) changeStock(b.closest('[data-item]'), b.dataset.do);
+  });
+  $('stock-ings').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ing]');
+    if (b) toggleIngredient(Number(b.dataset.ing));
   });
 
   $('types').addEventListener('click', (e) => {
@@ -1120,7 +1258,9 @@ function bind() {
   window.addEventListener('offline', () => setOnline(false));
   staffGate.onChange((s) => {
     $('who-staff').textContent = s ? `${s.staff.name} · ${staffGate.ROLE[s.staff.role]}` : '';
+    $('stock-btn').hidden = !(s && staffGate.can('manage_stock'));
     if (s) {
+      if (P.menu.length) renderGrid(); // who may fix a sold-out item changes with the staff member
       renderTicket();
       loadShift().catch(() => {});
     }

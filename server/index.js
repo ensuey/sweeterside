@@ -32,6 +32,7 @@ const payments = require('./payments');
 const shifts = require('./shifts');
 const reports = require('./reports');
 const audit = require('./audit');
+const stock = require('./stock');
 const render = require('./render');
 const imagesize = require('./imagesize');
 const imagemeta = require('./imagemeta');
@@ -514,8 +515,15 @@ async function route(req, res) {
   /* ---- menu API (all authenticated) ---- */
   if (pathname === '/api/items' && method === 'GET') {
     if (!requireApiAuth(req, res)) return;
-    // Each item with the ids of its option groups, for the item editor.
-    return sendJson(res, 200, { items: menu.list().map((i) => ({ ...i, option_groups: itemOptions.itemGroupIds(i.id) })) });
+    // Each item with the ids of its option groups and ingredients, for the
+    // item editor, and its stock count in full, for the Stock column.
+    const levels = stock.levels();
+    return sendJson(res, 200, {
+      items: menu.list().map((i) => ({
+        ...i, option_groups: itemOptions.itemGroupIds(i.id), ingredients: stock.itemIngredientIds(i.id),
+        stock: levels.get(i.id) || null,
+      })),
+    });
   }
 
   /* ---- cart suggestions (Settings), all authenticated ---- */
@@ -573,6 +581,46 @@ async function route(req, res) {
     const item = menu.setStock(Number(stockMatch[1]), await readJson(req));
     if (!item) return sendJson(res, 404, { error: 'That item no longer exists.' });
     return afterMutation(res, 200, { item });
+  }
+
+  // A counted item's stock: a stock take, a batch added, or stop counting.
+  const countMatch = pathname.match(/^\/api\/items\/(\d+)\/count$/);
+  if (countMatch && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const level = stock.change(Number(countMatch[1]), await readJson(req));
+    if (level === undefined) return sendJson(res, 404, { error: 'That item no longer exists.' });
+    return afterMutation(res, 200, { item: menu.get(Number(countMatch[1])), level });
+  }
+
+  /* ---- ingredients (Items page), all authenticated ---- */
+  if (pathname === '/api/ingredients' && method === 'GET') {
+    if (!requireApiAuth(req, res)) return;
+    return sendJson(res, 200, { ingredients: stock.listIngredients() });
+  }
+  if (pathname === '/api/ingredients' && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const ingredient = stock.createIngredient(await readJson(req));
+    return sendJson(res, 201, { ingredient, ingredients: stock.listIngredients() });
+  }
+  const ingredientMatch = pathname.match(/^\/api\/ingredients\/(\d+)$/);
+  if (ingredientMatch && method === 'PATCH') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const id = Number(ingredientMatch[1]);
+    const body = await readJson(req);
+    if (!stock.getIngredient(id)) return sendJson(res, 404, { error: 'That ingredient no longer exists.' });
+    // Checked first, so a bad in_stock does not leave a half-saved rename.
+    if ('in_stock' in body && typeof body.in_stock !== 'boolean') {
+      throw new menu.ValidationError({ in_stock: 'Choose in stock or out.' });
+    }
+    if ('name' in body) stock.renameIngredient(id, body);
+    if ('in_stock' in body) stock.setIngredientStock(id, body.in_stock);
+    // In or out changes what the menu can sell, so rebuild it.
+    return afterMutation(res, 200, { ingredient: stock.getIngredient(id), ingredients: stock.listIngredients() });
+  }
+  if (ingredientMatch && method === 'DELETE') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    if (!stock.removeIngredient(Number(ingredientMatch[1]))) return sendJson(res, 404, { error: 'That ingredient no longer exists.' });
+    return afterMutation(res, 200, { ingredients: stock.listIngredients() });
   }
 
   const itemMatch = pathname.match(/^\/api\/items\/(\d+)$/);
@@ -842,7 +890,29 @@ async function route(req, res) {
       delivery_areas: delivery.selectable(), free_delivery_min: delivery.freeOver(), service_charge: s.service_charge,
       vat_registered: s.vat_registered, cashier_discount_limit_bp: s.cashier_discount_limit_bp,
       lock_minutes: s.pos_lock_minutes,
+      ingredients: stock.listIngredients().map((g) => ({ id: g.id, name: g.name, in_stock: g.in_stock })),
     });
+  }
+
+  /* ---- stock at the counter: a batch from the oven, a recount, an ingredient in or out ---- */
+  if (pathname === '/api/pos/stock' && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true, permission: 'manage_stock' });
+    if (!who) return;
+    const body = await readJson(req);
+    if (!['add', 'count'].includes(body.action)) {
+      throw new menu.ValidationError({ action: 'Choose add stock or a stock take.' });
+    }
+    const level = stock.change(Number(body.item_id), body, who.staff);
+    if (level === undefined) return sendJson(res, 404, { error: 'That item no longer exists.' });
+    return afterMutation(res, 200, { level, items: pos.posMenu() });
+  }
+  const posIngredientMatch = pathname.match(/^\/api\/pos\/ingredients\/(\d+)$/);
+  if (posIngredientMatch && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true, permission: 'manage_stock' });
+    if (!who) return;
+    const ingredient = stock.setIngredientStock(Number(posIngredientMatch[1]), (await readJson(req)).in_stock, who.staff);
+    if (!ingredient) return sendJson(res, 404, { error: 'That ingredient no longer exists.' });
+    return afterMutation(res, 200, { ingredient, items: pos.posMenu() });
   }
 
   if (pathname === '/api/pos/open' && method === 'GET') {

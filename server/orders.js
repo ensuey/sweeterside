@@ -529,7 +529,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   // Today's limit counts the item, whatever options each line has.
   for (const { item, qty } of perItem.values()) {
     if (item.remaining !== null && qty > item.remaining) {
-      short.push({ id: item.id, name: item.name, remaining: item.remaining });
+      short.push({ id: item.id, name: item.name, remaining: item.remaining, left: menu.leftText(item) });
     }
   }
 
@@ -705,8 +705,8 @@ function create(input, { now = new Date() } = {}) {
   }
   if (q.short.length) {
     const message = q.short.length === 1
-      ? `Only ${q.short[0].remaining} ${q.short[0].name} left today. Your cart has been updated.`
-      : 'Some items have only a few left today. Your cart has been updated.';
+      ? `Only ${q.short[0].remaining} ${q.short[0].name} ${q.short[0].left}. Your cart has been updated.`
+      : 'Some items have only a few left. Your cart has been updated.';
     throw staleCart(message, q);
   }
   // The code worked when applied but not now (expired, or turned off since):

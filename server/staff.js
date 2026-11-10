@@ -42,6 +42,8 @@ const PERMISSIONS = {
   manage_shift: ['owner', 'cashier'],
   cash_movement: ['owner', 'cashier'],
   see_id_numbers: ['owner', 'cashier'],
+  // Stock takes, batches from the oven and ingredients in or out.
+  manage_stock: ['owner', 'cashier'],
   void: ['owner'],
   refund: ['owner'],
   price_override: ['owner'],

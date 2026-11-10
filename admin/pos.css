@@ -94,6 +94,31 @@ body.pos {
   font-size: .75rem; font-weight: 700; background: var(--butter); color: var(--ink);
 }
 .item__out { background: var(--ink); color: #fff; }
+/* Sold out, but the counter can fix it (add stock, an ingredient back in): tappable. */
+.item--fix .shot img { filter: grayscale(1); opacity: .5; }
+.item--fix .item__out { background: var(--coral-ink); }
+
+/* ---------------- stock dialog ---------------- */
+.stock__h { margin: .25rem 0 0; font-size: 1rem; }
+.stock__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.srow {
+  display: grid; gap: .5rem; padding: .6rem .7rem;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-md);
+}
+.srow.is-out { background: #FFF7F5; border-color: #F0D2CC; }
+.srow.is-target { border-color: var(--coral-ink); box-shadow: 0 0 0 3px rgba(210,64,44,.15); }
+.srow__head { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; }
+.srow__name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+.srow__left { flex: none; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.srow.is-out .srow__left { color: var(--danger); }
+.srow__act { display: flex; gap: .4rem; }
+.srow__act input {
+  flex: 1; min-width: 0; min-height: 44px; padding: .4rem .7rem; font: inherit; font-size: 16px;
+  border: 1.5px solid var(--line); border-radius: var(--r-sm);
+}
+.srow__act .btn { flex: none; }
+.srow--ing { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.srow--ing .ing__toggle { min-height: 44px; }
 
 /* The item photo: a sprite window onto a menu poster, or a whole photo,
    shown as a square (the middle of a tall photo). The square comes from

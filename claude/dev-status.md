@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 241 (`npm test`):
+**Tests:** 253 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -27,6 +27,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 8 in `test/preorders.test.js`
 - 6 in `test/cakes-page.test.js`
 - 9 in `test/tracking.test.js`
+- 12 in `test/inventory.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -497,6 +498,29 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Inventory: stock counts and ingredients (2026-11-10)
+
+- Counted items (baked goods): a stock take sets the count, batches add to
+  it, orders take from it. At 0 the item is sold out online and at the POS.
+  The count is derived (`server/stock.js`): last stock take + batches since
+  − units handed over since − units on open orders. Handed over = completed
+  or paid. A stock take stores how many units had been handed over in all
+  (`stock_moves.handed`), so "since" is a difference, not a clock (a
+  same-second payment was double-counted when comparing timestamps).
+- Pre-orders for a later day hold units from the same count. A daily limit
+  and a count together: the lower applies; "left" vs "left today".
+- Ingredients (frappes): in stock or out, ticked per item. Any out = sold out.
+  No quantities.
+- Items page: In stock button per row (dialog: add a batch, stock take, stop
+  counting); Ingredients section; ingredient tick boxes in the item editor.
+- POS: Stock button (owner, cashier: `manage_stock`); sold-out tiles that
+  the counter can fix are tappable. Waiters unchanged.
+- New tables `stock_moves`, `ingredients`, `item_ingredients` (additive).
+  Audit actions `stock_count`, `stock_add`, `stock_off`,
+  `ingredient_change`.
+- Owner to do after deploy: start counting the baked goods (Items → In
+  stock), add the frappe ingredients and tick them on each frappe.
 
 ## Menu regroup (2026-11-04, live data, no PR)
 

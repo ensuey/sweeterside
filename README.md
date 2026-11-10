@@ -510,6 +510,41 @@ go past what is left, and the server checks again when the order is placed,
 so two customers cannot both take the last one: the second is told how many
 are left and their cart is cut down to that.
 
+### Inventory: stock counts and ingredients
+
+Two kinds of items, two ways to run out (`server/stock.js`):
+
+| Kind | How it runs out | Where |
+|---|---|---|
+| **Counted items** (baked goods) | A real count: when it reaches 0 the item is sold out online and at the POS. | **In stock** on each item row, or **Stock** in the POS |
+| **Drinks** (frappes) | An **ingredient** marked Out makes every item that needs it sold out. No quantities. | **Ingredients** on the Items page, or **Stock** in the POS |
+
+**Counted items.** Tap **In stock** on a row ("Not counted" at first) and
+enter how many are in the shop: from then on the item is counted.
+- **Add a batch** when more come out of the oven.
+- **Stock take**: count everything in the shop, including orders set aside
+  for pick-up, to correct the count.
+- **Stop counting** makes it unlimited again (availability and the daily
+  limit still apply).
+
+The count is worked out from the orders, never kept by hand:
+*last stock take + batches since − units handed over since − units on open
+orders*. An order is handed over once it is completed or fully paid; open
+orders hold their units; cancelled orders and voided units give them back.
+Pre-orders for a later day hold units from the same count. With a daily
+limit as well, the lower of the two applies; customers see "Only 3 left"
+for a count and "Only 3 left today" for a daily limit.
+
+**Ingredients.** Add them under **Ingredients** (e.g. Oreo, Matcha powder),
+tick them on each item in its Edit form, and tap **In stock / Out**. A row on
+the Items page says which ingredient made an item sold out.
+
+**At the counter.** The owner and cashiers have a **Stock** button in the
+POS: counted items with **Add** and **Set count**, and the ingredients with
+**In stock / Out**. A tile that is sold out because its count is 0 or an
+ingredient is out can be tapped to fix it. Waiters see it as sold out.
+Every change is in the audit log with who made it.
+
 **Menu health** (top of the Items page) lists the items on the menu with no
 photo of their own (they show the logo), no description or no size, each with
 a link to edit it.
