@@ -32,6 +32,7 @@
   <button class="btn btn--ghost btn--sm sound-hint" type="button" id="sound-hint" hidden>Tap to turn on sound</button>
   <button class="btn btn--ghost btn--sm" type="button" id="new-btn">New ticket</button>
   <button class="btn btn--ghost btn--sm" type="button" id="receipts-btn">Receipts</button>
+  <button class="btn btn--ghost btn--sm" type="button" id="stock-btn" hidden>Stock</button>
   <button class="btn btn--ghost btn--sm shift-btn" type="button" id="shift-btn" data-open="0">Shift</button>
   <div class="pos-bar__spacer"></div>
   <span class="net" id="net" role="status" hidden>Offline</span>
@@ -164,6 +165,23 @@
       <button class="btn btn--primary" type="submit">Done</button>
     </div>
   </form>
+</dialog>
+
+<!-- Stock: a batch from the oven, a recount, an ingredient in or out -->
+<dialog class="modal" id="stock-dialog" aria-labelledby="stock-title">
+  <div class="modal__head">
+    <h2 class="modal__title" id="stock-title">Stock</h2>
+    <button class="icon-btn" type="button" id="stock-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal__body stock">
+    <p class="alert" id="stock-error" role="alert" hidden></p>
+    <h3 class="stock__h">Counted items</h3>
+    <p class="hint" id="stock-none" hidden>No items are counted yet. Start counting one on the Items page.</p>
+    <ul class="stock__list" id="stock-items"></ul>
+    <h3 class="stock__h">Ingredients</h3>
+    <p class="hint" id="ing-none" hidden>No ingredients yet. Add them on the Items page.</p>
+    <ul class="stock__list" id="stock-ings"></ul>
+  </div>
 </dialog>
 
 <!-- Options for an item: size, add-ons… -->
