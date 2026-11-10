@@ -266,6 +266,21 @@ test('SC/PWD, vouchers, service charge and the delivery fee through the POS', ()
   const far = pos.save(null, { ...d, request_key: key(), discounts: { delivery_fee: 80, fee_reason: 'Next town' } }, cashier).order;
   assert.strictEqual(far.total, 209);
   assert.strictEqual(audit.list({ action: 'delivery_fee_changed' })[0].reason, 'Next town');
+  assert.strictEqual(audit.list({ action: 'delivery_fee_changed' })[0].details.waived, false);
+
+  // Waiving: the fee set to nothing, with a reason, and marked as waived in the audit log.
+  assert.ok(errorOf(() => pos.save(null, { ...d, request_key: key(), discounts: { delivery_fee: 0 } }, cashier)).errors.delivery_fee,
+    'a reason is needed');
+  const waived = pos.save(null, { ...d, request_key: key(), discounts: { delivery_fee: 0, fee_reason: 'Regular customer' } }, cashier).order;
+  assert.deepStrictEqual([waived.delivery_fee, waived.total], [0, 129]);
+  assert.deepStrictEqual([waived.pricing.delivery.amount, waived.pricing.delivery.default_cents, waived.pricing.delivery.reason],
+    [0, 5000, 'Regular customer'], 'the receipt can say it was waived');
+  const entry = audit.list({ action: 'delivery_fee_changed' })[0];
+  assert.deepStrictEqual([entry.staff_name, entry.amount_cents, entry.reason, entry.details], ['Ana', 0, 'Regular customer', { default_cents: 5000, waived: true }]);
+  // Charging it again: back to the area's fee.
+  const charged = pos.save(waived.id, { ...ticketOf(waived), type: 'delivery', delivery_area: TEST_AREA.id, phone: '+63 917 555 0101',
+    address: '2 Rizal St', landmark: 'Blue gate by the chapel', discounts: { delivery_fee: null, fee_reason: '' } }, cashier).order;
+  assert.deepStrictEqual([charged.delivery_fee, charged.total], [50, 179]);
   setTestFee(0);
 });
 

@@ -449,7 +449,11 @@ only at the points listed at the top of `server/pricing.js`.
 - **Service charge** is off by default. When on, it is 10% for dine-in,
   charged on the amount after discounts, at the counter only (online orders
   never get it). It is reported apart from sales.
-- **The delivery fee** can be changed for one order, with a reason.
+- **The delivery fee** can be changed for one order, with a reason. On a POS
+  delivery ticket, **Waive fee…** (Discounts) sets it to nothing in one tap,
+  with a reason; the ticket and the receipt say "Delivery fee waived", and
+  **Charge the fee** puts the area's fee back. Owner and cashier; the audit log
+  marks it as waived. Online orders keep the fee the customer was shown.
 
 ### Tax status
 

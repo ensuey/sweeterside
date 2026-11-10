@@ -715,7 +715,7 @@ function save(id, body, actor, now = new Date()) {
     }
     if (p.changed.fee && priced.delivery.reason) {
       audit.record({ ...by, action: 'delivery_fee_changed', amount_cents: priced.delivery.amount, reason: priced.delivery.reason,
-        details: { default_cents: priced.delivery.default_cents } });
+        details: { default_cents: priced.delivery.default_cents, waived: priced.delivery.amount === 0 } });
     }
     if (approver) {
       audit.record({ ...by, action: 'override', details: { permissions: [...p.needs] } });

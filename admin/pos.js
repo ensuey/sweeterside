@@ -121,6 +121,11 @@ function renderAreas() {
   if (P.t) select.value = P.t.delivery_area || '';
 }
 
+/** The fee was set to nothing by hand, with a reason. */
+function feeWaived(d) {
+  return d.delivery_fee === 0 && !!d.fee_reason;
+}
+
 /** The fee the chosen area charges, before free delivery: the placeholder for the fee field. */
 function areaFee(t) {
   const a = (P.settings.delivery_areas || []).find((x) => String(x.id) === t.delivery_area);
@@ -569,6 +574,12 @@ function renderDiscounts() {
     $('svc-toggle').hidden = !staffGate.can('remove_service_charge');
   }
   $('row-fee').hidden = t.type !== 'delivery';
+  // Waiving: one tap and a reason. The fee field below stays for another amount.
+  const waived = feeWaived(d);
+  $('row-waive').hidden = t.type !== 'delivery' || (!waived && !Number(areaFee(t)));
+  $('fee-text').textContent = waived ? `Delivery fee waived: ${d.fee_reason}` : `Delivery fee ${money(Number(areaFee(t)) || 0)}`;
+  $('fee-waive').textContent = waived ? 'Charge the fee' : 'Waive fee…';
+  $('fee-waive').hidden = !staffGate.can('change_delivery_fee');
   if (document.activeElement !== $('fee')) $('fee').value = d.delivery_fee ?? '';
   $('fee').placeholder = String(areaFee(P.t));
   if (document.activeElement !== $('fee-reason')) $('fee-reason').value = d.fee_reason;
@@ -596,6 +607,7 @@ function renderSummary() {
     if (q.manual) rows.push([`Discount (${q.manual.reason})`, -q.manual.discount]);
     if (q.service.applies && !q.service.removed_reason) rows.push([`Service charge ${q.service.rate_bp / 100}%`, q.service.amount]);
     if (t.delivery_fee) rows.push(['Delivery fee', t.delivery_fee]);
+    else if (q.delivery && q.delivery.reason && q.delivery.default_cents) rows.push(['Delivery fee waived', 0]);
     rows.push(['Total', t.total, true]);
   }
   $('tsum').innerHTML = rows.map(([label, cents, total]) => `
@@ -1197,6 +1209,19 @@ function bind() {
   };
   $('fee').addEventListener('change', feeChanged);
   $('fee-reason').addEventListener('change', feeChanged);
+  $('fee-waive').addEventListener('click', async () => {
+    const d = P.t.discounts;
+    if (feeWaived(d)) {
+      d.delivery_fee = null;
+      d.fee_reason = '';
+    } else {
+      const reason = await ask({ title: 'Waive the delivery fee', label: 'Reason, e.g. regular customer', ok: 'Waive' });
+      if (reason === null) return;
+      d.delivery_fee = 0;
+      d.fee_reason = reason;
+    }
+    changed({ discounts: true });
+  });
 
   // Actions
   $('save-btn').addEventListener('click', () => submit(false));
