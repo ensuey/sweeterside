@@ -125,7 +125,68 @@ function actionsHtml(o) {
   if (o.phone_norm && !o.blocked) {
     actions.push(`<button class="link-quiet" type="button" data-block>Block number</button>`);
   }
-  return actions.length ? `<div class="order__actions">${actions.join('')}</div>` : '';
+  actions.push('<button class="link-quiet order__delete" type="button" data-delete>Delete…</button>');
+  return `<div class="order__actions">${actions.join('')}</div>`;
+}
+
+/* ---------------------------- deleting test orders ---------------------------- */
+
+let deleting = null; // the order in the delete dialog
+
+async function openDelete(id) {
+  const o = state.orders.find((x) => x.id === id);
+  if (!o) return;
+  deleting = o;
+  $('delete-err').hidden = true;
+  $('delete-pin').value = '';
+  $('delete-text').textContent = `Order #${o.id}${o.customer_name ? ` for ${o.customer_name}` : ''} (${money(o.total)}) and everything on it is erased: it leaves the orders, reports and customer history.`;
+  const paid = o.paid_at || o.source === 'online' && o.status === 'completed';
+  $('delete-paid').hidden = !paid;
+  $('delete-paid').textContent = paid
+    ? 'It was paid or completed, so it comes off the sales reports and the shift total too.' : '';
+  // The owner's name to go with the PIN.
+  const select = $('delete-owner');
+  try {
+    const { staff } = await api('/api/pos/staff');
+    const owners = staff.filter((s) => s.role === 'owner');
+    select.replaceChildren(...owners.map((s) => {
+      const opt = document.createElement('option');
+      opt.value = String(s.id);
+      opt.textContent = s.name;
+      return opt;
+    }));
+    if (!owners.length) throw new Error('Add an owner with a PIN on the Staff page first.');
+  } catch (err) {
+    $('delete-err').textContent = err.message;
+    $('delete-err').hidden = false;
+  }
+  $('delete-dialog').showModal();
+  $('delete-pin').focus();
+}
+
+async function submitDelete(event) {
+  event.preventDefault();
+  if (!deleting) return;
+  const err = $('delete-err');
+  err.hidden = true;
+  $('delete-ok').disabled = true;
+  try {
+    await api(`/api/orders/${deleting.id}/delete`, {
+      method: 'POST',
+      body: { confirm: deleting.id, override: { staff_id: Number($('delete-owner').value), pin: $('delete-pin').value } },
+    });
+    $('delete-dialog').close();
+    toast(`Order #${deleting.id} deleted.`);
+    deleting = null;
+    await loadOrders();
+  } catch (e) {
+    err.textContent = e.message;
+    err.hidden = false;
+    $('delete-pin').value = '';
+    $('delete-pin').focus();
+  } finally {
+    $('delete-ok').disabled = false;
+  }
 }
 
 // Every field below was typed by a customer on the public menu: escape all of it.
@@ -412,10 +473,11 @@ $('orders').addEventListener('change', (event) => {
 });
 
 $('orders').addEventListener('click', async (event) => {
-  const btn = event.target.closest('[data-confirm], [data-block]');
+  const btn = event.target.closest('[data-confirm], [data-block], [data-delete]');
   if (!btn) return;
   const id = Number(btn.closest('.order').dataset.orderId);
   if (btn.matches('[data-block]')) { openBlock(id); return; }
+  if (btn.matches('[data-delete]')) { openDelete(id); return; }
   btn.disabled = true;
   if (!(await saveStatus(id, 'confirmed'))) btn.disabled = false;
 });
@@ -424,6 +486,8 @@ $('cancel-form').addEventListener('submit', submitCancel);
 $('cancel-back').addEventListener('click', () => $('cancel-dialog').close());
 $('block-form').addEventListener('submit', submitBlock);
 $('block-back').addEventListener('click', () => $('block-dialog').close());
+$('delete-form').addEventListener('submit', submitDelete);
+$('delete-back').addEventListener('click', () => $('delete-dialog').close());
 
 document.querySelectorAll('.tab[data-show]').forEach((tab) => {
   tab.addEventListener('click', async () => {

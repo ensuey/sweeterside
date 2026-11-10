@@ -97,6 +97,7 @@ Legend:
 | Route | Auth | CSRF | Limit | Notes |
 |---|---|---|---|---|
 | `GET /api/orders` | S | | | Queue with history and blocked flags. `pos_input` and request keys are never sent (`withLines`). |
+| `POST /api/orders/:id/delete` | S + owner PIN | ✓ | PIN throttle (30 / 10 min per IP, plus the per-staff lock) | Test orders: erases the order, lines, payments and refunds in one transaction (`orders.remove`). Needs `delete_orders` (owner only) through `staff.authorise` with the owner's PIN in the body, and `confirm` equal to the order id. Wrong PIN is 403 `wrong_pin`, never 401. One `order_delete` audit line with the id, total, paid and refunded amounts and who approved it; no customer data. Counted items keep their count. Log: ids only. |
 | `PATCH|PUT /api/orders/:id` | S | ✓ | | Status through `orders.setStatus`: Confirm first where required; cancel reasons; **cancel refused while money is paid and not refunded** (409). |
 | `GET /api/blocked`, `POST /api/blocked`, `DELETE /api/blocked/:id` | S | ✓ (writes) | | Block by number or from an order, optionally cancelling it as fake. `created_by` is the admin's email. |
 | `GET /api/cakes`, `GET /api/cakes/counts` | S | | | |

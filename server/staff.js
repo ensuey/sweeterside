@@ -51,6 +51,8 @@ const PERMISSIONS = {
   reports: ['owner'],
   audit: ['owner'],
   manage_staff: ['owner'],
+  // Erase an order for good (test orders). Always the owner's PIN.
+  delete_orders: ['owner'],
   tax_settings: ['owner'],
 };
 

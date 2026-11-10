@@ -137,6 +137,33 @@
   </form>
 </dialog>
 
+<!-- ---------- Delete a test order for good (owner PIN) ---------- -->
+<dialog class="modal modal--sm" id="delete-dialog" aria-labelledby="delete-title">
+  <form method="dialog" class="modal__form" id="delete-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="delete-title">Delete this order for good?</h2>
+    </div>
+    <div class="modal__body">
+      <p id="delete-text"></p>
+      <p class="alert" id="delete-paid" hidden></p>
+      <p class="hint">For test orders only. It cannot be undone. A real order that did not happen should be cancelled instead.</p>
+      <div class="field">
+        <label for="delete-owner">Owner</label>
+        <select id="delete-owner"></select>
+      </div>
+      <div class="field">
+        <label for="delete-pin">Owner PIN</label>
+        <input id="delete-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off">
+      </div>
+      <p class="field__err" id="delete-err" role="alert" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="delete-back">Keep order</button>
+      <button class="btn btn--danger" type="submit" id="delete-ok">Delete for good</button>
+    </div>
+  </form>
+</dialog>
+
 <script src="/admin/common.js" defer></script>
 <script src="/admin/orders.js" defer></script>
 </body>

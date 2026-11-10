@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 255 (`npm test`):
+**Tests:** 259 (`npm test`):
 - 59 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -29,6 +29,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 9 in `test/tracking.test.js`
 - 12 in `test/inventory.test.js`
 - 2 in `test/admin-common.test.js`
+- 4 in `test/orders-delete.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -499,6 +500,14 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Delete test orders (2026-11-10)
+
+- Orders page → **Delete…** on any order, owner name + PIN every time.
+  Erases the order, its lines, payments and refunds (`orders.remove`), so
+  reports, the open shift and customer history no longer see it. One
+  `order_delete` audit line stays. Closed shifts keep their stored Z report.
+  Counted items keep their count (`stock.keepCountsOnDelete`).
 
 ## Inventory: stock counts and ingredients (2026-11-10)
 

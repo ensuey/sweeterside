@@ -901,8 +901,37 @@ function setStatus(id, status, { reason } = {}) {
   return get(id);
 }
 
+/**
+ * Delete an order for good, for test orders. Its lines, payments and refunds
+ * go with it, so it leaves the order lists, the reports, the shift totals and
+ * the customer history, and any name or phone typed on it is gone. The owner
+ * approves it (the caller checks the PIN). One audit line keeps the order
+ * number, total and what was paid, never the customer; earlier audit lines
+ * about the order stay, as the log never changes. Counted items keep their
+ * count (stock.keepCountsOnDelete).
+ * @returns { id, total, paid, refunded } or null when there is no such order
+ */
+function remove(id, by) {
+  const o = db.prepare('SELECT id, source, order_type, status, total_cents, paid_at FROM orders WHERE id = ?').get(Number(id));
+  if (!o) return null;
+  return transaction(() => {
+    const paid = db.prepare('SELECT COALESCE(SUM(amount_cents), 0) AS n FROM payments WHERE order_id = ?').get(o.id).n;
+    const refunded = db.prepare('SELECT COALESCE(SUM(amount_cents), 0) AS n FROM refunds WHERE order_id = ?').get(o.id).n;
+    const handedOver = o.status !== 'cancelled' && (o.status === 'completed' || o.paid_at !== null);
+    if (handedOver) require('./stock').keepCountsOnDelete(o.id, by);
+    db.prepare('DELETE FROM refunds WHERE order_id = ?').run(o.id);
+    db.prepare('DELETE FROM payments WHERE order_id = ?').run(o.id);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(o.id); // its lines go with it (ON DELETE CASCADE)
+    require('./audit').record({
+      action: 'order_delete', staff: by, order_id: o.id, amount_cents: o.total_cents,
+      details: { source: o.source, order_type: o.order_type, status: o.status, paid_cents: paid, refunded_cents: refunded },
+    });
+    return { id: o.id, total: o.total_cents / 100, paid: paid / 100, refunded: refunded / 100 };
+  });
+}
+
 module.exports = {
-  parseOptions,
+  parseOptions, remove,
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,

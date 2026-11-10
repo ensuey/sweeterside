@@ -262,6 +262,13 @@ On the admin Orders page:
   minutes shows **Waiting N min**, updated with every 20-second check.
 - **Cancel reasons.** Cancelling asks why: Customer cancelled, No-show /
   unreachable, Fake order or Other.
+- **Delete…** (test orders only) erases an order for good: its lines, payments
+  and refunds go with it, so it leaves the orders, the sales reports, the open
+  shift's totals and the customer history, and any name or phone on it is gone.
+  It needs an owner's name and PIN every time (wrong PINs lock like the POS).
+  The audit log keeps one line: the order number, total, what was paid and who
+  deleted it. Closed shifts keep their Z report as printed. Counted items keep
+  their count. A real order that did not happen should be cancelled instead.
 - **Customer history.** Each order shows the number's other orders: "First
   order", or e.g. "5 completed · 1 no-show" (no-shows and fakes are counted
   from the cancel reasons).

@@ -554,6 +554,8 @@ a { color: var(--navy); }
 .order__area strong { color: var(--ink); }
 .order__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .order__actions [data-confirm] { min-width: 7rem; }
+/* Deleting is rare and for test orders: kept apart, at the far end. */
+.order__actions .order__delete { margin-left: auto; min-height: 44px; }
 /* Block number: there when needed, but not something to tap by accident. */
 .link-quiet {
   margin-left: auto; padding: .25rem; border: 0; background: none; cursor: pointer;
