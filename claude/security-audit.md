@@ -78,6 +78,8 @@ Legend:
 | `GET /api/items`, `GET /api/categories` | S | | | |
 | `POST /api/items`, `PUT|PATCH|DELETE /api/items/:id` | S | ✓ | | `menu.validate`: whole-peso prices, image must resolve inside `assets/`, crop inside the image, description ≤120, size ≤20, option groups must exist (≤10). Rewrites `index.html` (escaped). |
 | `POST /api/items/reorder`, `PATCH /api/items/:id/stock` | S | ✓ | | |
+| `POST /api/items/:id/count` | S | ✓ | | Stock of a counted item (`stock.change`): `count` (stock take, whole number 0–9999), `add` (batch, 1–9999, only once counted) or `off`. Optional `request_key` (`[A-Za-z0-9_-]{8,64}`, unique): a repeat adds once. Audited (`stock_count` / `stock_add` / `stock_off`, item and numbers only). Rewrites `index.html`. |
+| `GET|POST /api/ingredients`, `PATCH|DELETE /api/ingredients/:id` | S | ✓ (writes) | | Name 1–40, unique (case-insensitive); `in_stock` must be a boolean and is checked before a rename is saved. In or out is audited (`ingredient_change`). Items link to ingredients through the item form (`ingredients`: ≤20 ids that must exist). Rewrites `index.html`; ingredient names are never sent to customers. |
 | `GET|POST /api/cake-gallery`, `PUT|PATCH|DELETE /api/cake-gallery/:id`, `POST /api/cake-gallery/reorder` | S | ✓ (writes) | | Image must be an upload under `assets/uploads/` that resolves inside the upload dir (so it went through the magic-byte check and metadata stripping); caption ≤120; at most 30. Public on `/cakes`, escaped. |
 | `GET|POST /api/testimonials`, `PUT|PATCH|DELETE /api/testimonials/:id`, `PUT|PATCH /api/testimonials/rating` | S | ✓ (writes) | | Quote ≤300, name ≤40, source from a fixed list, rating line ≤80. Shown escaped on the menu and `/cakes`; never seeded; no review structured data. |
 | `GET|PUT|PATCH /api/suggestions` | S | ✓ (writes) | | Up to 3 item ids per list; items and categories must exist. Rewrites `index.html`; the lists go out as an escaped `data-suggest` attribute (ids only). |
@@ -116,7 +118,9 @@ Legend:
 
 | Route | Auth | CSRF | Limit | Notes |
 |---|---|---|---|---|
-| `GET /api/pos/menu`, `GET /api/pos/open`, `GET /api/pos/recent` | P | | | `recent` lists paid POS **and online** orders (reprint, refund). |
+| `GET /api/pos/menu`, `GET /api/pos/open`, `GET /api/pos/recent` | P | | | `recent` lists paid POS **and online** orders (reprint, refund). The menu carries each item's count and any ingredient that is out, and the ingredient list (names, in stock). |
+| `POST /api/pos/stock` | P(manage_stock) | ✓ | | Owner and cashier. `add` or `count` only (no `off` at the counter); same checks, request key and audit as the Items page, with the staff member. |
+| `POST /api/pos/ingredients/:id` | P(manage_stock) | ✓ | | Owner and cashier: `in_stock` true or false, audited with the staff member. |
 | `POST /api/pos/quote` | P | ✓ | | Totals priced by `server/pricing.js`; the browser's numbers are never used. |
 | `POST /api/pos/orders`, `PUT|PATCH /api/pos/orders/:id` | P | ✓ | | Request key (idempotent) and `version` (no lost updates). Discounts, SC/PWD, price overrides and voids checked against role limits, with owner override audited. **POS orders only.** |
 | `GET /api/pos/orders/:id` | P | | | Reads POS **and online** orders (for the pay screen). SC/PWD IDs masked unless `see_id_numbers`. |
