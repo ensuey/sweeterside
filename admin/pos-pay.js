@@ -384,7 +384,8 @@ function receiptHtml(r) {
     ${p.voucher ? row(`Voucher ${esc(p.voucher.code)}`, -p.voucher.discount) : ''}
     ${p.manual ? row(`Discount (${esc(p.manual.reason)})`, -p.manual.discount) : ''}
     ${p.service.amount ? row(`Service charge ${p.service.rate_bp / 100}%`, p.service.amount) : ''}
-    ${p.totals.delivery_fee ? row('Delivery fee', p.totals.delivery_fee) : ''}
+    ${p.totals.delivery_fee ? row('Delivery fee', p.totals.delivery_fee)
+    : p.delivery && p.delivery.reason && p.delivery.default_cents ? row('Delivery fee (waived)', 0) : ''}
     ${row('TOTAL', p.totals.total, 'is-total')}
     <div class="slip__rule"></div>
     ${pays}
