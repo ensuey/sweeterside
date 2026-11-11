@@ -798,6 +798,29 @@ test('must try and trending are tags of their own: any mix, a badge each, only b
   }
 });
 
+test('sold out items come last in their category, on the menu and at the POS; the rest keep their order', () => {
+  const [a, b, c] = ['Alpha Frappe', 'Bravo Frappe', 'Charlie Frappe']
+    .map((name) => menu.create({ ...base, name, price: 100 }));
+  const order = (names, list) => list.filter((n) => names.includes(n));
+  const names = [a.name, b.name, c.name];
+  const menuOrder = () => {
+    const html = render.buildHtml();
+    return order(names, [...html.matchAll(/<section class="section"[\s\S]*?<\/section>/g)]
+      .flatMap((s) => [...s[0].matchAll(/data-name="([^"]+)"/g)].map((m) => m[1])));
+  };
+  const posOrder = () => order(names, require('../server/pos').posMenu().map((i) => i.name));
+  try {
+    assert.deepStrictEqual(menuOrder(), names, 'the usual order while all can be ordered');
+    menu.setStock(a.id, { availability: 'sold_out', daily_limit: '' });
+    assert.deepStrictEqual(menuOrder(), [b.name, c.name, a.name], 'sold out goes last');
+    assert.deepStrictEqual(posOrder(), [b.name, c.name, a.name], 'at the POS too');
+    menu.setStock(a.id, { availability: 'available', daily_limit: '' });
+    assert.deepStrictEqual(menuOrder(), names, 'back in its place when it is back');
+  } finally {
+    [a, b, c].forEach((i) => menu.remove(i.id));
+  }
+});
+
 function voucherErrors(input, id) {
   try { vouchers.validate(input, id); return null; } catch (err) { return err.errors; }
 }

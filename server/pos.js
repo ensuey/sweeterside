@@ -127,9 +127,11 @@ function open() {
     .map((o) => ({ ...o, total: o.total_cents / 100, held: !o.kitchen_sent_at }));
 }
 
-/** The menu for the item grid: everything not hidden, with today's stock. */
+/** The menu for the item grid: everything not hidden, with today's stock.
+    Sold out items come last, so the counter sees what it can sell first. */
 function posMenu() {
-  const items = menu.list().filter((i) => i.availability !== 'unavailable');
+  const all = menu.list().filter((i) => i.availability !== 'unavailable');
+  const items = [...all.filter((i) => !i.sold_out), ...all.filter((i) => i.sold_out)];
   // Items with options open a picker on the tablet; the server checks the choice.
   const opts = itemOptions.menuOptions(items);
   return items.map((i) => ({

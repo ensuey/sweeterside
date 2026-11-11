@@ -365,13 +365,20 @@ function soonBarHtml(state) {
 }
 
 /** The menu as customers see it: items marked not available are left off,
-    and empty categories get neither a section nor a filter chip. */
+    and empty categories get neither a section nor a filter chip. In each
+    category what can be ordered comes first, in the usual order, and sold
+    out items last. */
 function menuGroups(allItems = menu.list(), cats = categories.list()) {
   const items = allItems.filter((i) => i.availability !== 'unavailable');
   const groups = cats
-    .map((category) => ({ category, items: items.filter((i) => i.category_id === category.id) }))
+    .map((category) => ({ category, items: soldOutLast(items.filter((i) => i.category_id === category.id)) }))
     .filter((g) => g.items.length > 0);
   return { items, groups };
+}
+
+/** Sold out items moved to the end; otherwise the order is kept. */
+function soldOutLast(items) {
+  return [...items.filter((i) => !i.sold_out), ...items.filter((i) => i.sold_out)];
 }
 
 /** The menu page. now is the current time, for tests. */

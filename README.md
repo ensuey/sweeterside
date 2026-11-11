@@ -509,6 +509,11 @@ change:
 
 A manual **Sold out** stays until it is changed back.
 
+Sold out items (by hand, a daily limit used up, a count at 0 or an
+ingredient out) are listed **last in their category** on the customer menu,
+and last in the POS item grid; everything else keeps its order. When an item
+is back, it is back in its place.
+
 **Max per day** is how many of the item can be ordered in a day, for
 capacity or stock. Leave it blank for no limit. The count is the quantity on
 today's orders, in Manila time, not counting cancelled ones, so cancelling an

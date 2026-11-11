@@ -5,8 +5,8 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 261 (`npm test`):
-- 60 in `test/server.test.js`
+**Tests:** 262 (`npm test`):
+- 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
@@ -500,6 +500,13 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Sold out last (2026-11-11)
+
+- Customer menu (`render.menuGroups`): in each category, sold out items come
+  after the rest; otherwise the order is kept. Also the About page and
+  llms.txt, which use the same groups. POS grid (`pos.posMenu`): sold out last.
+  The admin Items page keeps the manual order.
 
 ## Tags: Must try and Trending (2026-11-11)
 
