@@ -99,6 +99,36 @@ async function saveConfirm(event) {
   }
 }
 
+/* ---------------------------- GCash (PayMongo) ---------------------------- */
+
+function showGcash(s) {
+  const parts = [];
+  if (!s.gcash_ready) parts.push('Not set up: the PayMongo keys are not on the server yet.');
+  else {
+    parts.push(s.gcash_live ? 'PayMongo keys: live (real payments).' : 'PayMongo keys: test mode (no real money).');
+    parts.push(s.gcash_webhook ? 'Payment confirmations: on.' : 'Payment confirmations: not set up yet (customers coming back still confirm it).');
+  }
+  $('gcash-status').textContent = parts.join(' ');
+  $('gcash-on').checked = s.gcash_online;
+  // Without keys there is nothing to switch on.
+  $('gcash-on').disabled = !s.gcash_ready && !s.gcash_online;
+}
+
+async function saveGcash() {
+  const err = $('gcash-err');
+  err.hidden = true;
+  $('gcash-on').disabled = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { gcash_online: $('gcash-on').checked } });
+    showGcash(s);
+    toast(s.gcash_online ? 'GCash is offered at checkout.' : 'GCash is off. Customers pay in person.');
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+    $('gcash-on').disabled = false;
+  }
+}
+
 /* ---------------------------- tracking ---------------------------- */
 
 // Setting -> input id.
@@ -496,6 +526,7 @@ $('trust-form').addEventListener('submit', saveTrust);
 $('hours-form').addEventListener('submit', saveHours);
 $('confirm-form').addEventListener('submit', saveConfirm);
 $('tracking-form').addEventListener('submit', saveTracking);
+$('gcash-on').addEventListener('change', saveGcash);
 $('share-file').addEventListener('change', uploadShare);
 $('share-remove').addEventListener('click', removeShare);
 
@@ -506,6 +537,7 @@ adminBoot(async () => {
   showConfirm(s);
   showShare(s);
   showTracking(s);
+  showGcash(s);
   $('free-min').value = s.free_delivery_min ?? '';
   showAreas((await api('/api/delivery-areas')).areas);
   await loadSuggestions();
