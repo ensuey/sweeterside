@@ -291,6 +291,17 @@ test('the return key never reaches the tracking tools or the page address', () =
   assert.match(cart, /history\.replaceState\(null, '', window\.location\.pathname \+ window\.location\.hash\)/);
 });
 
+test('coming back from GCash after closing still shows whether it was paid', () => {
+  // Bug: cart.js stopped at once when the shop was closed, so a customer back
+  // from GCash after closing saw no confirmation at all.
+  const cart = fs.readFileSync(path.join(__dirname, '..', 'assets', 'js', 'cart.js'), 'utf8');
+  assert.match(cart, /if \(closedOnLoad && !\/\[\?&\]gcash=\/\.test\(window\.location\.search\)\) return;/,
+    'closed: the cart stops early only when not coming back from GCash');
+  assert.match(cart, /var shopClosed = closedOnLoad;/, 'and then starts as closed: no checkout');
+  assert.match(cart, /if \(closedOnLoad\) document\.body\.classList\.add\('shop-closed'\);/, 'and no Add buttons');
+  assert.match(cart, /We are closed now, so your cart is kept for next time\./);
+});
+
 test('Other area stays cash; the POS will not take a second payment for a GCash order', async () => {
   // "Other area": the fee is agreed by phone, so there is nothing to pay online yet.
   deliveryAreas.create({ name: 'Near Barangay', fee: 30, eta_min: 30, eta_max: 60 }); // delivery needs an area set up

@@ -16,7 +16,11 @@
   // While the shop is closed the menu is for browsing only: no Add buttons and
   // no cart. A saved cart is left alone for when the shop opens again.
   // Outside the hours with pre-orders on, the cart works for a later time.
-  if (document.body.dataset.shopOpen === '0' && document.body.dataset.preorder !== '1') return;
+  // Except on the way back from GCash: that order was placed while open, so
+  // the customer must still see whether it was paid. The cart then starts as
+  // closed (no Add buttons, no checkout).
+  var closedOnLoad = document.body.dataset.shopOpen === '0' && document.body.dataset.preorder !== '1';
+  if (closedOnLoad && !/[?&]gcash=/.test(window.location.search)) return;
 
   var $ = function (id) { return document.getElementById(id); };
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card[data-id]'));
@@ -134,7 +138,8 @@
   var voucher = null; // { code, label, discount } once the server accepts a code
   var type = null; // 'delivery' | 'pickup' | 'dinein', or null when none is open
   var sending = false;
-  var shopClosed = false; // set if the shop closes while this page is open
+  var shopClosed = closedOnLoad; // also set if the shop closes while this page is open
+  if (closedOnLoad) document.body.classList.add('shop-closed');
 
   // Closing time came while the page was open (hours.js): stop taking the
   // order and say why. Whatever is in the cart is kept for next time.
@@ -1314,6 +1319,13 @@
     showDone(order);
   }
 
+  /** What happens to the cart: pay again now, or (closed by now) next time. */
+  function cartKept() {
+    return shopClosed
+      ? 'We are closed now, so your cart is kept for next time.'
+      : 'Your cart is still here: pay again, or choose cash.';
+  }
+
   /** Not paid: back to the cart, which is still full, with a word on why. */
   function notPaid(message) {
     paying.hidden = true;
@@ -1336,9 +1348,9 @@
       }).then(function (res) { return res.json().catch(function () { return {}; }); }).then(function (d) {
         // Paid after all (it happens when GCash was slow to send them back).
         if (d.status === 'paid') return checkPayment(ref).then(function (r) { finishPaid(r.data.order); });
-        notPaid('You left GCash before paying, so your order was not placed. Your cart is still here: pay again, or choose cash.');
+        notPaid('You left GCash before paying, so your order was not placed. ' + cartKept());
       }).catch(function () {
-        notPaid('Could not reach the shop. Check your connection; your cart is still here.');
+        notPaid('Could not reach the shop. Check your connection. ' + cartKept());
       });
       return;
     }
@@ -1347,7 +1359,7 @@
       checkPayment(ref).then(function (r) {
         if (r.ok && r.data.status === 'paid') return finishPaid(r.data.order);
         if (!r.ok || r.data.status === 'cancelled') {
-          return notPaid('Your GCash payment did not go through, so your order was not placed. Your cart is still here.');
+          return notPaid('Your GCash payment did not go through, so your order was not placed. ' + cartKept());
         }
         tries += 1;
         if (tries < 20) { setTimeout(poll, 3000); return; }
