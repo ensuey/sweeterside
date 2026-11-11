@@ -265,6 +265,17 @@
     else if (consent !== 'no') showBanner();
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
-  else start();
+  // After every deferred script: cart.js first takes the GCash return key out
+  // of the address bar, so no tool ever records it with the page address.
+  var started = false;
+  function startOnce() {
+    if (started) return;
+    started = true;
+    start();
+  }
+  if (document.readyState === 'complete') startOnce();
+  else {
+    document.addEventListener('DOMContentLoaded', startOnce);
+    window.addEventListener('load', startOnce);
+  }
 })();

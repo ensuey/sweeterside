@@ -23,6 +23,10 @@
   var form = $('checkout');
   var view = $('cart-view');
   var done = $('cart-done');
+  var paying = $('cart-paying'); // back from GCash, while the payment is checked
+  // GCash (PayMongo) is offered only while the server has it switched on.
+  var gcashOn = !!$('pay') && $('pay').dataset.gcash === '1';
+  var leaving = false; // on the way to GCash's page
   var submitBtn = $('checkout-submit');
 
   // Everything the cart knows about the menu comes from the rendered cards.
@@ -367,7 +371,7 @@
   /** Show the types that are open, and keep or pick a sensible current one. */
   function refreshTypes() {
     var open = availableTypes();
-    Array.prototype.forEach.call(form.querySelectorAll('.otype__opt'), function (opt) {
+    Array.prototype.forEach.call(form.querySelectorAll('.otype__opt[data-type]'), function (opt) {
       opt.hidden = open.indexOf(opt.dataset.type) === -1;
     });
     // With a single choice there is nothing to ask.
@@ -695,9 +699,44 @@
     if (short > 0) $('cart-free').textContent = 'Add ' + money(short) + ' more for free delivery.';
     $('o-area-eta').textContent = a && a.eta ? a.eta + '.' : a && a.other ? 'We will call you with the fee before we send it.' : '';
     $('cart-total').textContent = money(total());
-    submitBtn.textContent = sending ? 'Placing order…' : 'Place order · ' + money(total());
+    renderPay();
+    var gcash = payMethod() === 'gcash';
+    submitBtn.textContent = sending ? (gcash ? 'Opening GCash…' : 'Placing order…')
+      : (gcash ? 'Pay with GCash · ' : 'Place order · ') + money(total());
 
     renderChange();
+  }
+
+  /* ---------------------------- paying with GCash ---------------------------- */
+
+  /** 'gcash' when chosen and allowed, else 'cash' (in person). */
+  function payMethod() {
+    if (!gcashOn || !form.elements.pay || form.elements.pay.value !== 'gcash') return 'cash';
+    var a = type === 'delivery' ? area() : null;
+    return a && a.other ? 'cash' : 'gcash';
+  }
+
+  /** The pay choice, and what changes with it: the cash field and the notes. */
+  function renderPay() {
+    $('pay').hidden = !gcashOn || type === null;
+    if (!gcashOn) return;
+    $('pay-cash-label').textContent = type === 'delivery' ? 'Cash on delivery' : 'Pay at the counter';
+    // "Other area": the fee is agreed by phone first, so GCash waits for another time.
+    var other = type === 'delivery' && area() && area().other;
+    var gcashInput = form.querySelector('input[name="pay"][value="gcash"]');
+    gcashInput.disabled = !!other;
+    if (other && gcashInput.checked) form.querySelector('input[name="pay"][value="cash"]').checked = true;
+    $('pay-note').hidden = !other;
+    $('pay-note').textContent = other ? 'For "Other area" we call you with the fee first, so please pay in cash.' : '';
+
+    var gcash = payMethod() === 'gcash';
+    var cashField = $('o-cash').closest('.cfield');
+    cashField.hidden = type !== 'delivery' || gcash;
+    $('o-cash').disabled = cashField.hidden;
+    Array.prototype.forEach.call(form.querySelectorAll('.checkout__note[data-for]'), function (note) {
+      note.hidden = gcash || note.dataset.for.split(' ').indexOf(type) === -1;
+    });
+    $('gcash-note').hidden = !gcash;
   }
 
   function renderChange() {
@@ -861,7 +900,8 @@
       if (!address) errors.address = 'Enter the delivery address.';
       if (!landmark) errors.landmark = 'Add a landmark or directions, e.g. beside 7-Eleven, green gate.';
       else if (landmark.length < 5) errors.landmark = 'Tell us a little more so the rider can find you.';
-      // Cash is optional: blank is the exact amount.
+      // Cash is optional: blank is the exact amount. Paying with GCash: no cash.
+      if (payMethod() === 'gcash') cashRaw = '';
       if (cashRaw && (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash)) errors.cash = 'Enter the cash as a whole number of pesos.';
       else if (cashRaw && cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
     }
@@ -885,9 +925,10 @@
     $('done-discount-row').hidden = !order.discount;
     $('done-voucher-code').textContent = order.voucher_code || '';
     $('done-discount').textContent = '−' + money(order.discount || 0);
-    $('done-total-label').textContent = counter ? 'Total to pay at the counter' : 'Total to pay';
-    $('done-cash-row').hidden = counter;
-    $('done-change-row').hidden = counter;
+    var paid = !!order.paid_online;
+    $('done-total-label').textContent = paid ? 'Paid with GCash' : counter ? 'Total to pay at the counter' : 'Total to pay';
+    $('done-cash-row').hidden = counter || paid;
+    $('done-change-row').hidden = counter || paid;
     $('done-cash').textContent = order.change_due === 0 ? 'Exact amount' : money(order.cash);
     $('done-change').textContent = order.change_due === 0 ? 'None (exact amount)' : money(order.change_due);
     // The server's total and lines, with the order number so each tool counts it once.
@@ -961,7 +1002,8 @@
       address: type === 'delivery' ? form.elements.address.value : '',
       landmark: type === 'delivery' ? form.elements.landmark.value : '',
       delivery_area: type === 'delivery' ? form.elements.delivery_area.value : '',
-      cash: type === 'delivery' ? form.elements.cash.value.trim() : '',
+      cash: type === 'delivery' && payMethod() !== 'gcash' ? form.elements.cash.value.trim() : '',
+      pay: payMethod(),
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
       pickup_date: type === 'pickup' && form.elements.pickup_at.value !== 'asap' ? form.elements.pickup_date.value : '',
@@ -989,6 +1031,23 @@
         return { status: res.status, ok: res.ok, data: data };
       });
     }).then(function (r) {
+      // GCash: off to PayMongo's page. The cart stays until the payment is
+      // confirmed on the way back (see "Back from GCash" below).
+      if (r.ok && r.data.checkout_url) {
+        if (!/^https:\/\/[a-z0-9.-]*paymongo\.com\//.test(r.data.checkout_url)) {
+          formError('GCash could not be opened. Please try again or pay in cash.');
+          return;
+        }
+        leaving = true;
+        window.location.assign(r.data.checkout_url);
+        return;
+      }
+      // GCash is down: back to paying in person.
+      if (r.status === 409 && r.data.pay_unavailable) {
+        form.querySelector('input[name="pay"][value="cash"]').checked = true;
+        formError(r.data.error);
+        return;
+      }
       if (r.ok && r.data.order) {
         lines = [];
         setVoucher(null); // a code is used once per order; the next one starts fresh
@@ -1029,6 +1088,7 @@
     }).catch(function () {
       formError('Could not reach the shop. Check your connection and try again.');
     }).then(function () {
+      if (leaving) return; // the page is going to GCash: keep the button busy
       sending = false;
       submitBtn.disabled = false;
       render();
@@ -1052,6 +1112,7 @@
   dialog.addEventListener('close', function () {
     view.hidden = false;
     done.hidden = true;
+    paying.hidden = true;
     if (opener && opener.focus && document.contains(opener)) opener.focus();
     opener = null;
   });
@@ -1195,6 +1256,7 @@
   });
   form.addEventListener('change', function (e) {
     if (e.target.name === 'type') setType(e.target.value);
+    if (e.target.name === 'pay') { clearErrors(); render(); }
   });
 
   // Clear a field's error as soon as the customer starts fixing it.
@@ -1213,4 +1275,84 @@
   var savedCode = null;
   try { savedCode = localStorage.getItem(VOUCHER_KEY); } catch (e) { savedCode = null; }
   if (savedCode && count()) checkVoucher(savedCode);
+
+  /* ---------------------------- back from GCash ---------------------------- */
+
+  // PayMongo sends the customer back with ?gcash=<order>.<key> (and &back=1
+  // when they left without paying). The server says whether it is paid; the
+  // cart is emptied only then.
+  var gcashRef = (window.location.search.match(/[?&]gcash=([^&]+)/) || [])[1];
+  if (gcashRef) {
+    var leftGcash = /[?&]back=1(&|$)/.test(window.location.search);
+    // Keep the key out of the address bar, the history and any shared link.
+    history.replaceState(null, '', window.location.pathname + window.location.hash);
+    returnFromGcash(decodeURIComponent(gcashRef), leftGcash);
+  }
+
+  function showPaying(text) {
+    view.hidden = true;
+    done.hidden = true;
+    paying.hidden = false;
+    $('paying-text').textContent = text;
+    if (!dialog.open) dialog.showModal();
+  }
+
+  /** Paid: the order is placed. Empty the cart and show the confirmation. */
+  function finishPaid(order) {
+    lines = [];
+    setVoucher(null);
+    token = null;
+    save();
+    form.reset();
+    setType(type);
+    paying.hidden = true;
+    showDone(order);
+  }
+
+  /** Not paid: back to the cart, which is still full, with a word on why. */
+  function notPaid(message) {
+    paying.hidden = true;
+    view.hidden = false;
+    if (dialog.open) dialog.close();
+    open();
+    notice(message);
+  }
+
+  function checkPayment(ref) {
+    return fetch('api/orders/payment?ref=' + encodeURIComponent(ref), { cache: 'no-store' })
+      .then(function (res) { return res.json().catch(function () { return {}; }).then(function (d) { return { ok: res.ok, data: d }; }); });
+  }
+
+  function returnFromGcash(ref, left) {
+    showPaying('This takes a few seconds.');
+    if (left) {
+      fetch('api/orders/payment/cancel', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: ref }),
+      }).then(function (res) { return res.json().catch(function () { return {}; }); }).then(function (d) {
+        // Paid after all (it happens when GCash was slow to send them back).
+        if (d.status === 'paid') return checkPayment(ref).then(function (r) { finishPaid(r.data.order); });
+        notPaid('You left GCash before paying, so your order was not placed. Your cart is still here: pay again, or choose cash.');
+      }).catch(function () {
+        notPaid('Could not reach the shop. Check your connection; your cart is still here.');
+      });
+      return;
+    }
+    var tries = 0;
+    (function poll() {
+      checkPayment(ref).then(function (r) {
+        if (r.ok && r.data.status === 'paid') return finishPaid(r.data.order);
+        if (!r.ok || r.data.status === 'cancelled') {
+          return notPaid('Your GCash payment did not go through, so your order was not placed. Your cart is still here.');
+        }
+        tries += 1;
+        if (tries < 20) { setTimeout(poll, 3000); return; }
+        showPaying('GCash has not confirmed order #' + r.data.order.id + ' yet. If you paid, there is nothing more to do: '
+          + 'we will see it within a few minutes. If you did not, it is cancelled in 15 minutes.');
+      }).catch(function () {
+        tries += 1;
+        if (tries < 20) setTimeout(poll, 3000);
+        else showPaying('Could not reach the shop to check your payment. Please call us.');
+      });
+    })();
+  }
 })();
