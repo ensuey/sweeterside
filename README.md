@@ -596,6 +596,11 @@ Prices on the menu and in the admin show the peso sign (₱).
 Optional, at online checkout only. Off until the keys are set on the server
 and **Settings → GCash payments** is switched on.
 
+**Test keys never reach customers.** With PayMongo test keys (pretend
+payments), GCash is shown and accepted only in a browser signed in to the
+admin, so the owner can try it; customers do not see it and the server
+refuses it from them. With live keys, every customer is offered it.
+
 - At checkout the customer chooses **Cash on delivery** / **Pay at the
   counter**, or **GCash**. GCash goes to PayMongo's page to pay; the order is
   saved as awaiting payment, out of the order queue and the alerts, holding

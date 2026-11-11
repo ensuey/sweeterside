@@ -105,7 +105,9 @@ function showGcash(s) {
   const parts = [];
   if (!s.gcash_ready) parts.push('Not set up: the PayMongo keys are not on the server yet.');
   else {
-    parts.push(s.gcash_live ? 'PayMongo keys: live (real payments).' : 'PayMongo keys: test mode (no real money).');
+    parts.push(s.gcash_live
+      ? 'PayMongo keys: live (real payments). Switched on, every customer can pay with GCash.'
+      : 'PayMongo keys: test mode (no real money). Customers never see GCash; only a phone or computer signed in to this admin does, for trying it.');
     parts.push(s.gcash_webhook ? 'Payment confirmations: on.' : 'Payment confirmations: not set up yet (customers coming back still confirm it).');
   }
   $('gcash-status').textContent = parts.join(' ');

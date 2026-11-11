@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 271 (`npm test`):
+**Tests:** 272 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -30,7 +30,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 12 in `test/inventory.test.js`
 - 3 in `test/admin-common.test.js`
 - 4 in `test/orders-delete.test.js`
-- 9 in `test/paymongo.test.js`
+- 10 in `test/paymongo.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -510,7 +510,9 @@ After deploying (owner, once):
 - New order columns (additive): `pay_method`, `pay_status` (awaiting / paid /
   late), `pay_token`, `paymongo_session`, `paymongo_payment`,
   `online_paid_cents`, `online_paid_at`. Not in `payments` (not drawer cash).
-- Off until `PAYMONGO_SECRET_KEY` is set and Settings switches it on.
+- Off until `PAYMONGO_SECRET_KEY` is set and Settings switches it on. With
+  test keys only a signed-in admin sees and can use it (`paymongo.offeredTo`);
+  customers only with live keys.
   Webhook: `scripts/paymongo-webhook.js`, then `PAYMONGO_WEBHOOK_SECRET`.
 - Owner to do: test keys → register webhook → switch on → a test GCash order
   with PayMongo's test flow; live keys after activation.

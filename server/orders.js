@@ -608,9 +608,10 @@ function staleCart(message, q) {
  * expected_total is what the customer was shown; if the menu or the fee has
  * changed since, the order is refused with the new prices instead of charging
  * an amount they never saw.
- * options.now is the current time, for tests.
+ * options.now is the current time, for tests. options.admin: the order comes
+ * from someone signed in to the admin (GCash with test keys is for them only).
  */
-function create(input, { now = new Date() } = {}) {
+function create(input, { now = new Date(), admin = false } = {}) {
   if (!canOrder(now)) throw shopClosedError(now);
 
   const type = input.type === undefined ? 'delivery' : String(input.type);
@@ -660,7 +661,7 @@ function create(input, { now = new Date() } = {}) {
 
   const payMethod = input.pay === 'gcash' ? 'gcash' : '';
   if (input.pay !== undefined && !['', 'cash', 'gcash'].includes(input.pay)) errors.pay = 'Choose how you will pay.';
-  if (payMethod && !require('./paymongo').enabled()) {
+  if (payMethod && !require('./paymongo').offeredTo({ admin })) {
     errors.pay = 'GCash is not available right now. Please choose another way to pay.';
   }
 

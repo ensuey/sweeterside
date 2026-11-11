@@ -28,9 +28,13 @@ const payments = require('../server/payments');
 const checkout = require('../server/checkout');
 const deliveryAreas = require('../server/delivery');
 const paymongo = require('../server/paymongo');
+const auth = require('../server/auth');
 
 seedIfEmpty();
 orders.updateSettings({ open_at: '00:00', close_at: '24:00', gcash_online: true });
+auth.createUser('owner@example.com', 'a-long-enough-password');
+const OWNER_COOKIE = `${auth.SESSION_COOKIE}=${auth.createSession(auth.findUserByEmail('owner@example.com').id).token}`;
+const AS_OWNER = { admin: true };
 
 /* ---- a stand-in for PayMongo ---- */
 const pm = { calls: [], sessions: new Map(), fail: false, seq: 0 };
@@ -99,19 +103,50 @@ async function withServer(fn) {
   }
 }
 const post = (url, p, body, headers = {}) => fetch(`${url}${p}`, {
-  method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body),
+  method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: OWNER_COOKIE, ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body),
 });
 
 test('GCash is off until the keys are set and Settings switches it on', () => {
   orders.updateSettings({ gcash_online: false });
   assert.strictEqual(paymongo.enabled(), false);
-  assert.throws(() => orders.create(input()), (e) => !!e.errors.pay);
+  assert.throws(() => orders.create(input(), AS_OWNER), (e) => !!e.errors.pay);
   orders.updateSettings({ gcash_online: true });
   assert.strictEqual(paymongo.enabled(), true);
   const s = orders.settings();
   assert.deepStrictEqual([s.gcash_online, s.gcash_ready, s.gcash_webhook, s.gcash_live], [true, true, true, false]);
   assert.ok(!JSON.stringify(s).includes('sk_test_stubkey123') && !JSON.stringify(s).includes(WEBHOOK_SECRET), 'never the keys');
-  assert.throws(() => orders.create(input({ pay: 'card' })), (e) => !!e.errors.pay);
+  assert.throws(() => orders.create(input({ pay: 'card' }), AS_OWNER), (e) => !!e.errors.pay);
+});
+
+test('with test keys customers never see or use GCash; only the signed-in owner does; live keys offer it to all', async () => {
+  const render = require('../server/render');
+  const mode = (html) => html.match(/<fieldset class="otype pay" id="pay" data-gcash="(\w+)"/)[1];
+  assert.strictEqual(paymongo.offeredTo({ admin: false }), false);
+  assert.strictEqual(paymongo.offeredTo({ admin: true }), 'test');
+  assert.strictEqual(mode(render.buildHtml()), '0', 'the static menu never offers test GCash');
+  // A customer forcing pay: 'gcash' with test keys is refused.
+  assert.throws(() => orders.create(input()), (e) => !!e.errors.pay);
+
+  await withServer(async (url) => {
+    const asCustomer = await (await fetch(url)).text();
+    const asOwner = await (await fetch(url, { headers: { Cookie: OWNER_COOKIE } })).text();
+    assert.deepStrictEqual([mode(asCustomer), mode(asOwner)], ['0', 'test']);
+    const res = await post(url, '/api/orders', input(), { Cookie: '' });
+    assert.strictEqual(res.status, 422);
+    assert.ok((await res.json()).fields.pay, 'the server refuses it, whatever the page showed');
+  });
+
+  // Live keys: everyone, once switched on.
+  process.env.PAYMONGO_SECRET_KEY = 'sk_live_stubkey123';
+  try {
+    assert.strictEqual(paymongo.offeredTo({ admin: false }), 'live');
+    assert.strictEqual(mode(render.buildHtml()), 'live');
+    orders.updateSettings({ gcash_online: false });
+    assert.strictEqual(paymongo.offeredTo({ admin: true }), false, 'off is off for everyone');
+  } finally {
+    process.env.PAYMONGO_SECRET_KEY = 'sk_test_stubkey123';
+    orders.updateSettings({ gcash_online: true });
+  }
 });
 
 test('a GCash order waits out of the queue, and PayMongo gets exactly its total, GCash only', async () => {
@@ -191,7 +226,7 @@ test('the customer\'s return asks PayMongo when the webhook is slow; leaving can
 });
 
 test('unpaid after 15 minutes: cancelled, unless PayMongo says it was paid; a late payment is flagged', async () => {
-  const id = orders.create(input()).id;
+  const id = orders.create(input(), AS_OWNER).id;
   await paymongo.startCheckout(id, 'https://sweeterside.ph');
   const old = (minutes) => db.prepare("UPDATE orders SET created_at = datetime('now', ?) WHERE id = ?").run(`-${minutes} minutes`, id);
   old(5);
@@ -205,7 +240,7 @@ test('unpaid after 15 minutes: cancelled, unless PayMongo says it was paid; a la
   assert.strictEqual(paymongo.markPaid(id, { session_id: s, payment_id: 'pay_late', amount: 12900 }), 'late');
   assert.strictEqual(row(id).pay_status, 'late', 'to refund in PayMongo');
 
-  const id2 = orders.create(input()).id;
+  const id2 = orders.create(input(), AS_OWNER).id;
   await paymongo.startCheckout(id2, 'https://sweeterside.ph');
   payOnPaymongo(row(id2).paymongo_session, 12900);
   db.prepare("UPDATE orders SET created_at = datetime('now', '-20 minutes') WHERE id = ?").run(id2);
@@ -216,7 +251,7 @@ test('unpaid after 15 minutes: cancelled, unless PayMongo says it was paid; a la
 test('PayMongo unreachable on the way back: still waiting, never "not paid"', async () => {
   await withServer(async (url) => {
     // Placed directly: the HTTP route allows 5 orders per address in 10 minutes.
-    const order = orders.create(input());
+    const order = orders.create(input(), AS_OWNER);
     const { ref } = await paymongo.startCheckout(order.id, url);
     pm.fail = true;
     try {
@@ -262,11 +297,11 @@ test('Other area stays cash; the POS will not take a second payment for a GCash 
   assert.throws(() => orders.create(input({
     type: 'delivery', phone: '0917 123 4567', address: '1 Long Road', landmark: 'near the big tree',
     delivery_area: 'other',
-  })), (err) => !!(err.errors && err.errors.pay));
+  }), AS_OWNER), (err) => !!(err.errors && err.errors.pay));
 
   const owner = staff.create({ name: 'Dachel', role: 'owner', pin: '2580' }, null);
   shifts.open({ opening_cash: 0 }, owner);
-  const id = orders.create(input()).id;
+  const id = orders.create(input(), AS_OWNER).id;
   await paymongo.startCheckout(id, 'https://sweeterside.ph');
   const pay = () => payments.pay(id, { request_key: crypto.randomBytes(8).toString('hex'), payments: [{ method: 'cash', amount: 129 }] }, owner);
   assert.throws(pay, (err) => err.status === 409 && /paying this order with GCash/.test(err.message));

@@ -496,7 +496,8 @@ async function route(req, res) {
 
   /* ---- public menu ---- */
   if (pathname === '/' && (method === 'GET' || method === 'HEAD')) {
-    return sendHtml(res, 200, render.buildHtml(), customerHeaders());
+    // Signed in to the admin: GCash with test keys is shown (to the owner only).
+    return sendHtml(res, 200, render.buildHtml(null, undefined, new Date(), { admin: !!currentSession(req) }), customerHeaders());
   }
 
   if (pathname === '/cakes' && (method === 'GET' || method === 'HEAD')) {
@@ -740,7 +741,7 @@ async function route(req, res) {
     }
     let order;
     try {
-      order = orders.create(body);
+      order = orders.create(body, { admin: !!currentSession(req) });
     } catch (err) {
       logAndRethrow(err, 'order');
     }

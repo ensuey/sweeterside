@@ -25,7 +25,9 @@
   var done = $('cart-done');
   var paying = $('cart-paying'); // back from GCash, while the payment is checked
   // GCash (PayMongo) is offered only while the server has it switched on.
-  var gcashOn = !!$('pay') && $('pay').dataset.gcash === '1';
+  // 'live' for everyone; 'test' (PayMongo test keys) only for the signed-in owner.
+  var gcashMode = $('pay') ? $('pay').dataset.gcash : '0';
+  var gcashOn = gcashMode === 'live' || gcashMode === 'test';
   var leaving = false; // on the way to GCash's page
   var submitBtn = $('checkout-submit');
 
@@ -737,6 +739,9 @@
       note.hidden = gcash || note.dataset.for.split(' ').indexOf(type) === -1;
     });
     $('gcash-note').hidden = !gcash;
+    $('gcash-note').textContent = gcashMode === 'test'
+      ? 'Test mode: only you see GCash, because you are signed in to the admin. PayMongo takes pretend payments; no real money.'
+      : 'You will pay on GCash\'s page. Your order goes to the kitchen once it is paid.';
   }
 
   function renderChange() {

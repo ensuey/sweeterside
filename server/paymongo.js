@@ -35,9 +35,22 @@ function configured() {
   return /^sk_(test|live)_[A-Za-z0-9]+$/.test(secretKey());
 }
 
-/** GCash is offered at checkout: keys set and switched on in Settings. */
+/** GCash is switched on: keys set and switched on in Settings. */
 function enabled() {
   return configured() && getSetting('gcash_online', '0') === '1';
+}
+
+/**
+ * Whether this visitor is offered GCash. With live keys, everyone (once
+ * switched on). With test keys PayMongo takes pretend payments, so only
+ * someone signed in to the admin (the owner trying it) ever sees it:
+ * customers can never pay a test checkout and get an order marked paid.
+ * @returns false | 'live' | 'test'
+ */
+function offeredTo({ admin = false } = {}) {
+  if (!enabled()) return false;
+  if (liveMode()) return 'live';
+  return admin ? 'test' : false;
 }
 
 // 409, not 5xx: the customer needs this message (5xx shows a generic one), and
@@ -260,7 +273,7 @@ function handleEvent(event) {
 }
 
 module.exports = {
-  PAY_MINUTES, UNAVAILABLE, setFetch, configured, enabled, liveMode,
+  PAY_MINUTES, UNAVAILABLE, setFetch, configured, enabled, offeredTo, liveMode,
   startCheckout, newPayToken, orderByRef, markPaid, onPaid, cancelUnpaid, settle, expireStale,
   verifySignature, handleEvent,
 };
