@@ -213,6 +213,24 @@ test('unpaid after 15 minutes: cancelled, unless PayMongo says it was paid; a la
   assert.strictEqual(row(id2).pay_status, 'paid', 'paid after all: kept');
 });
 
+test('PayMongo unreachable on the way back: still waiting, never "not paid"', async () => {
+  await withServer(async (url) => {
+    // Placed directly: the HTTP route allows 5 orders per address in 10 minutes.
+    const order = orders.create(input());
+    const { ref } = await paymongo.startCheckout(order.id, url);
+    pm.fail = true;
+    try {
+      const r = await (await fetch(`${url}/api/orders/payment?ref=${encodeURIComponent(ref)}`)).json();
+      assert.strictEqual(r.status, 'awaiting');
+      const left = await (await post(url, '/api/orders/payment/cancel', { ref })).json();
+      assert.strictEqual(left.status, 'awaiting', 'not cancelled without asking PayMongo');
+      assert.strictEqual(row(order.id).status, 'new');
+    } finally {
+      pm.fail = false;
+    }
+  });
+});
+
 test('PayMongo down: the order is cancelled and the customer told to pay another way', async () => {
   await withServer(async (url) => {
     pm.fail = true;
@@ -226,6 +244,16 @@ test('PayMongo down: the order is cancelled and the customer told to pay another
       pm.fail = false;
     }
   });
+});
+
+test('the return key never reaches the tracking tools or the page address', () => {
+  const root = path.join(__dirname, '..');
+  const tracking = fs.readFileSync(path.join(root, 'assets', 'js', 'tracking.js'), 'utf8');
+  // Tracking starts after DOMContentLoaded, i.e. after cart.js has run.
+  assert.match(tracking, /document\.addEventListener\('DOMContentLoaded', startOnce\)/);
+  assert.ok(!/readyState === 'loading'/.test(tracking), 'not straight away while deferred scripts still run');
+  const cart = fs.readFileSync(path.join(root, 'assets', 'js', 'cart.js'), 'utf8');
+  assert.match(cart, /history\.replaceState\(null, '', window\.location\.pathname \+ window\.location\.hash\)/);
 });
 
 test('Other area stays cash; the POS will not take a second payment for a GCash order', async () => {

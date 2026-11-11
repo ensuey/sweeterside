@@ -772,7 +772,8 @@ async function route(req, res) {
     paymentLimiter.record(ip);
     const found = paymongo.orderByRef(url.searchParams.get('ref'));
     if (!found) return sendJson(res, 404, { error: 'We could not find that order. Please call us.' });
-    const status = await paymongo.settle(found);
+    // PayMongo unreachable: still waiting; the page asks again, the sweep settles it later.
+    const status = await paymongo.settle(found).catch(() => 'awaiting');
     return sendJson(res, 200, { status, order: publicOrder(orders.get(found.id)) });
   }
   // Back without paying: the order is cancelled (unless PayMongo says it was paid after all).
@@ -783,7 +784,7 @@ async function route(req, res) {
     paymentLimiter.record(ip);
     const found = paymongo.orderByRef((await readJson(req)).ref);
     if (!found) return sendJson(res, 404, { error: 'We could not find that order.' });
-    const status = await paymongo.settle(found, { giveUp: true });
+    const status = await paymongo.settle(found, { giveUp: true }).catch(() => 'awaiting');
     return sendJson(res, 200, { status });
   }
   // PayMongo says a payment went through. Nothing is trusted until the
