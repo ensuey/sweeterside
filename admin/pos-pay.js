@@ -53,6 +53,9 @@ function readingHtml(r, { forPrint = false } = {}) {
     || '<div><dt>None</dt><dd></dd></div>';
   return `
     ${forPrint ? `<p class="slip__title">${r.kind}-READING</p>` : `<p class="reading__kind">${r.kind === 'Z' ? 'Z reading (closed)' : 'X reading (so far)'}</p>`}
+    ${r.corrected ? `<p class="slip__meta reading__fixed">Corrected by ${esc(r.corrected.by)}, ${esc(manilaTime(r.corrected.at))}.${
+    r.original && r.original.cash.difference_cents !== null
+      ? ` At close it read ${r.original.cash.difference_cents < 0 ? 'short' : r.original.cash.difference_cents > 0 ? 'over' : 'even'}${r.original.cash.difference_cents ? ` by ${fmt(Math.abs(r.original.cash.difference_cents))}` : ''}.` : ''}</p>` : ''}
     <p class="slip__meta">Shift #${r.shift.id} · opened ${esc(manilaTime(r.shift.opened_at))} by ${esc(r.shift.opened_by)}
       ${r.shift.closed_at ? `<br>closed ${esc(manilaTime(r.shift.closed_at))} by ${esc(r.shift.closed_by)}` : ''}</p>
     <h4>Sales</h4>
@@ -95,6 +98,8 @@ async function showShift() {
   $('shift-open-form').hidden = !!shift;
   $('shift-open-view').hidden = !shift;
   $('shift-print').hidden = !shift;
+  // Fixing entries is the owner's (or with the owner's PIN); shown to whoever runs the drawer.
+  $('entries-btn').hidden = !staffGate.can('manage_shift');
   $('cash-form').hidden = !staffGate.can('cash_movement');
   $('close-form').hidden = !staffGate.can('manage_shift');
   if (shift) {
@@ -107,6 +112,187 @@ async function showShift() {
 function shiftError(e) {
   $('shift-err').textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
   $('shift-err').hidden = false;
+}
+
+/* ---------------------------- fixing entries ---------------------------- */
+
+const methodLabel = (id) => (PAY.methods.find((m) => m.id === id) || { label: id }).label;
+
+/** POST as this staff member; when the owner must approve, ask for the PIN and send it again. */
+async function asOwner(path, body) {
+  for (;;) {
+    try {
+      return await staffGate.call(path, { method: 'POST', body });
+    } catch (e) {
+      const data = e.data || {};
+      if (e.status === 403 && data.override_required) {
+        const ov = await staffGate.askOverride(data.needs);
+        if (!ov) return null;
+        body.override = { staff_id: ov.staff_id, pin: ov.pin };
+        continue;
+      }
+      if (e.status === 403 && data.wrong_pin) { toast(e.message, 'error'); delete body.override; continue; }
+      throw e;
+    }
+  }
+}
+
+function entriesError(e) {
+  $('entries-err').textContent = !e ? '' : e.fields ? Object.values(e.fields).join(' ') : e.message;
+  $('entries-err').hidden = !e;
+}
+
+function node(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+function field(label, input) {
+  const f = node('div', 'field field--xs');
+  const l = node('label', null, label);
+  input.id = `fix-${Math.random().toString(36).slice(2, 8)}`;
+  l.htmlFor = input.id;
+  f.append(l, input);
+  return f;
+}
+
+function moneyInput(cents) {
+  const i = node('input');
+  i.type = 'number'; i.min = '0.01'; i.step = '0.01'; i.inputMode = 'decimal';
+  i.value = (cents / 100).toFixed(2);
+  return i;
+}
+
+/** The fix form under an entry: the fields, a reason, Save and Cancel. */
+function fixForm(li, fields, onSave) {
+  li.querySelector('.entry__form')?.remove();
+  const form = node('form', 'entry__form tfields tfields--wrap');
+  form.noValidate = true;
+  const why = node('input');
+  why.maxLength = 200; why.autocomplete = 'off'; why.placeholder = 'e.g. was GCash, not cash';
+  const save = node('button', 'btn btn--primary btn--sm', 'Save');
+  save.type = 'submit';
+  const cancel = node('button', 'btn btn--ghost btn--sm', 'Cancel');
+  cancel.type = 'button';
+  cancel.addEventListener('click', () => form.remove());
+  const whyField = field('Why', why);
+  whyField.classList.add('field--grow');
+  form.append(...fields.map(([label, input]) => field(label, input)), whyField, save, cancel);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    entriesError(null);
+    save.disabled = true;
+    try {
+      const done = await onSave(why.value.trim());
+      if (done) { toast('Corrected.'); await loadEntries($('entries-shift').value); loadShift().catch(() => {}); }
+    } catch (err) {
+      entriesError(err);
+    } finally {
+      save.disabled = false;
+    }
+  });
+  li.append(form);
+  form.querySelector('input, select').focus();
+}
+
+async function deleteEntry(path, what) {
+  const why = await ask({ title: `Delete this ${what}?`, lead: 'It is taken out of the drawer and the reports. This is kept in the audit log.', label: 'Why', ok: 'Delete', danger: true });
+  if (why === null) return;
+  entriesError(null);
+  try {
+    if (await asOwner(path, { why })) {
+      toast('Deleted.');
+      await loadEntries($('entries-shift').value);
+      loadShift().catch(() => {});
+    }
+  } catch (err) {
+    entriesError(err);
+  }
+}
+
+function paymentEntry(p) {
+  const li = node('li', 'entry');
+  const main = node('div', 'entry__main');
+  main.append(
+    node('span', 'entry__what', `Order #${p.order_id} · ${methodLabel(p.method)}${p.reference ? ` · ${p.reference}` : ''}`),
+    node('span', 'entry__meta', `${manilaTime(p.at)} · ${p.staff}${p.refunded ? ' · refunded: cannot be fixed here' : ''}`),
+  );
+  const amount = node('span', 'entry__amount', moneyC(p.amount_cents));
+  const actions = node('div', 'entry__actions');
+  if (!p.refunded) {
+    const fix = node('button', 'btn btn--ghost btn--sm', 'Fix');
+    fix.type = 'button';
+    fix.addEventListener('click', () => {
+      const method = node('select');
+      PAY.methods.forEach((m) => method.append(new Option(m.label, m.id, false, m.id === p.method)));
+      const amt = moneyInput(p.amount_cents);
+      const ref = node('input');
+      ref.maxLength = 60; ref.autocomplete = 'off'; ref.value = p.reference || '';
+      fixForm(li, [['Paid by', method], ['Amount (₱)', amt], ['Reference / note', ref]],
+        (why) => asOwner(`/api/pos/payments/${p.id}/correct`, { method: method.value, amount: amt.value, reference: ref.value, why }));
+    });
+    const del = node('button', 'btn btn--danger-ghost btn--sm', 'Delete');
+    del.type = 'button';
+    del.addEventListener('click', () => deleteEntry(`/api/pos/payments/${p.id}/delete`, 'payment'));
+    actions.append(fix, del);
+  }
+  li.append(main, amount, actions);
+  return li;
+}
+
+function moveEntry(m) {
+  const li = node('li', 'entry');
+  const main = node('div', 'entry__main');
+  main.append(
+    node('span', 'entry__what', `${m.kind === 'in' ? 'Cash in' : 'Cash out'} · ${m.reason}`),
+    node('span', 'entry__meta', `${manilaTime(m.at)} · ${m.staff}`),
+  );
+  const amount = node('span', 'entry__amount', `${m.kind === 'out' ? '−' : ''}${moneyC(m.amount_cents)}`);
+  const actions = node('div', 'entry__actions');
+  const fix = node('button', 'btn btn--ghost btn--sm', 'Fix');
+  fix.type = 'button';
+  fix.addEventListener('click', () => {
+    const kind = node('select');
+    kind.append(new Option('Cash out', 'out', false, m.kind === 'out'), new Option('Cash in', 'in', false, m.kind === 'in'));
+    const amt = moneyInput(m.amount_cents);
+    const reason = node('input');
+    reason.maxLength = 200; reason.autocomplete = 'off'; reason.value = m.reason;
+    fixForm(li, [['In or out', kind], ['Amount (₱)', amt], ['What for', reason]],
+      (why) => asOwner(`/api/pos/cash-moves/${m.id}/correct`, { kind: kind.value, amount: amt.value, reason: reason.value, why }));
+  });
+  const del = node('button', 'btn btn--danger-ghost btn--sm', 'Delete');
+  del.type = 'button';
+  del.addEventListener('click', () => deleteEntry(`/api/pos/cash-moves/${m.id}/delete`, 'cash entry'));
+  actions.append(fix, del);
+  li.append(main, amount, actions);
+  return li;
+}
+
+async function loadEntries(shiftId) {
+  const data = await staffGate.call(`/api/pos/entries${shiftId ? `?shift=${encodeURIComponent(shiftId)}` : ''}`);
+  const select = $('entries-shift');
+  select.replaceChildren(...data.shifts.map((s) => new Option(
+    `#${s.id} · ${manilaTime(s.opened_at)}${s.closed_at ? '' : ' (open)'}${s.corrected_at ? ' · corrected' : ''}`,
+    String(s.id), false, s.id === data.shift.id)));
+  $('entries-state').textContent = data.shift.closed_at
+    ? 'This shift is closed: a fix works its reading out again, and keeps the one printed at close.'
+    : 'This shift is still open.';
+  const empty = (text) => node('li', 'entry entry--none', text);
+  $('entries-payments').replaceChildren(...(data.payments.length ? data.payments.map(paymentEntry) : [empty('No payments.')]));
+  $('entries-moves').replaceChildren(...(data.moves.length ? data.moves.map(moveEntry) : [empty('No cash in or out.')]));
+}
+
+async function openEntries() {
+  entriesError(null);
+  try {
+    if (!PAY.methods.length) await loadShift();
+    await loadEntries(PAY.shift ? PAY.shift.shift.id : '');
+    if (!$('entries-dialog').open) $('entries-dialog').showModal();
+  } catch (err) {
+    toast(err.status === 404 ? 'No shifts yet.' : err.message, 'error');
+  }
 }
 
 /* ---------------------------- paying ---------------------------- */
@@ -153,6 +339,7 @@ function renderPay() {
   $('tender-box').hidden = !m.drawer;
   $('quick').hidden = !m.drawer;
   $('ref-box').hidden = !m.reference;
+  $('ref-box').querySelector('label').textContent = m.id === 'other' ? 'What was it? (e.g. bank transfer)' : 'Reference number';
   $('pay-amount').value = (b.due_cents / 100).toFixed(2);
   $('pay-tendered').value = '';
   $('pay-ref').value = '';
@@ -473,6 +660,9 @@ function bindPay() {
 
   $('shift-btn').addEventListener('click', () => showShift().catch((e) => toast(e.message, 'error')));
   $('shift-close-x').addEventListener('click', () => $('shift-dialog').close());
+  $('entries-btn').addEventListener('click', openEntries);
+  $('entries-close').addEventListener('click', () => $('entries-dialog').close());
+  $('entries-shift').addEventListener('change', () => loadEntries($('entries-shift').value).catch(entriesError));
   $('shift-print').addEventListener('click', () => printReading().catch((e) => toast(e.message, 'error')));
   $('shift-open-form').addEventListener('submit', async (e) => {
     e.preventDefault();
