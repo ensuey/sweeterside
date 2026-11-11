@@ -95,6 +95,7 @@ function flagsHtml(o) {
   const flags = [];
   if (o.source === 'pos') flags.push(`<span class="flag">Counter${o.paid_at ? ' · paid' : ''}</span>`);
   else if (o.paid_at) flags.push('<span class="flag flag--good">Paid</span>');
+  else if (o.pay_status === 'paid') flags.push('<span class="flag flag--good">Paid with GCash</span>');
   if (o.blocked) flags.push('<span class="flag flag--bad">Blocked number</span>');
   if (o.history) {
     const kind = o.history.no_show || o.history.fake ? 'bad'
@@ -119,7 +120,7 @@ function actionsHtml(o) {
   if (o.status === 'new') {
     actions.push(`<button class="btn btn--primary btn--sm" type="button" data-confirm>Confirm</button>`);
   }
-  if (!o.paid_at && o.status !== 'cancelled') {
+  if (!orderPaid(o) && o.status !== 'cancelled') {
     actions.push(`<a class="btn btn--ghost btn--sm" href="/admin/pos?pay=${o.id}">Take payment</a>`);
   }
   if (o.phone_norm && !o.blocked) {
@@ -140,7 +141,7 @@ async function openDelete(id) {
   $('delete-err').hidden = true;
   $('delete-pin').value = '';
   $('delete-text').textContent = `Order #${o.id}${o.customer_name ? ` for ${o.customer_name}` : ''} (${money(o.total)}) and everything on it is erased: it leaves the orders, reports and customer history.`;
-  const paid = o.paid_at || o.source === 'online' && o.status === 'completed';
+  const paid = orderPaid(o) || o.source === 'online' && o.status === 'completed';
   $('delete-paid').hidden = !paid;
   $('delete-paid').textContent = paid
     ? 'It was paid or completed, so it comes off the sales reports and the shift total too.' : '';
@@ -200,7 +201,13 @@ function orderHtml(o) {
     .join('');
 
   // Delivery collects cash at the door; the other types pay at the counter.
-  const payment = o.source === 'online' && o.paid_at
+  // GCash orders were paid online; one cancelled after paying needs a refund in PayMongo.
+  const gcashRefund = o.pay_method === 'gcash' && (o.pay_status === 'late' || (o.pay_status === 'paid' && o.status === 'cancelled'));
+  const payment = gcashRefund
+    ? '<dd class="order__change order__refund">Paid with GCash, then cancelled: refund it in the PayMongo dashboard.</dd>'
+    : o.pay_status === 'paid'
+    ? '<dd class="order__change">Paid with GCash</dd>'
+    : o.source === 'online' && o.paid_at
     ? '<dd class="order__change">Paid</dd>'
     : o.source === 'pos'
     ? `<dd class="order__change">${o.paid_at ? 'Paid at the counter' : 'Not paid yet'}</dd>`

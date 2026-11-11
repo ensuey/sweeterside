@@ -99,6 +99,8 @@ function pay(orderId, body, actor) {
   const approver = staff.authorise(actor, 'take_payment', body.override).approver;
   if (o.status === 'cancelled') throw httpError(409, 'This order was voided.');
   if (o.paid_at) throw httpError(409, 'This order is already paid.');
+  if (o.pay_status === 'paid') throw httpError(409, 'This order was paid online with GCash.');
+  if (o.pay_status === 'awaiting') throw httpError(409, 'The customer is paying this order with GCash. Wait for it.');
   const parts = Array.isArray(body.payments) ? body.payments : [];
   if (!parts.length || parts.length > MAX_PARTS) throw new ValidationError({ payments: 'Add a payment.' });
 

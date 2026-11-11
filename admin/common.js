@@ -36,6 +36,11 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** Paid: at the counter (paid_at), or online with GCash (pay_status). */
+function orderPaid(o) {
+  return !!o.paid_at || o.pay_status === 'paid';
+}
+
 /** "1 item" / "3 items"; words like category pass their plural. */
 function plural(n, word, many = `${word}s`) {
   return `${n} ${n === 1 ? word : many}`;

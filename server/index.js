@@ -33,6 +33,7 @@ const shifts = require('./shifts');
 const reports = require('./reports');
 const audit = require('./audit');
 const stock = require('./stock');
+const paymongo = require('./paymongo');
 const render = require('./render');
 const imagesize = require('./imagesize');
 const imagemeta = require('./imagemeta');
@@ -225,6 +226,39 @@ const orderLimiter = rateLimiter(5, 10 * 60 * 1000);
 /* Checking a voucher code is public too. Every check counts, so nobody can
    try codes one after another until one works. */
 const voucherLimiter = rateLimiter(20, 10 * 60 * 1000);
+
+/* GCash: a customer checking on their payment, and PayMongo's webhook. */
+const paymentLimiter = rateLimiter(60, 10 * 60 * 1000);
+const webhookLimiter = rateLimiter(300, 10 * 60 * 1000);
+
+/** What the customer's confirmation screen needs about their own order. */
+function publicOrder(order) {
+  return {
+    id: order.id, order_type: order.order_type, items: order.items, subtotal: order.subtotal,
+    voucher_code: order.voucher_code, discount: order.discount,
+    delivery_fee: order.delivery_fee, total: order.total,
+    cash: order.cash, change_due: order.change_due,
+    table_no: order.table_no, pickup_at: order.pickup_at,
+    delivery_area: order.delivery_area, fee_to_confirm: order.fee_to_confirm === 1,
+    scheduled_label: order.scheduled_label,
+    eta: order.delivery_area_id ? delivery.etaLabel(delivery.get(order.delivery_area_id)) : '',
+    pay_method: order.pay_method, paid_online: order.pay_status === 'paid',
+  };
+}
+
+/** Where PayMongo sends the customer back: the shop's own address. */
+function siteUrl(req) {
+  const canonical = String(process.env.CANONICAL_HOST || '').trim().toLowerCase();
+  if (canonical) return `https://${canonical}`;
+  const host = String(req.headers.host || '');
+  return `${isSecure(req) ? 'https' : 'http'}://${/^[a-z0-9.-]+(:\d+)?$/i.test(host) ? host : 'localhost'}`;
+}
+
+// A GCash order is announced to the kitchen once it is paid.
+paymongo.onPaid((id) => {
+  const order = orders.get(id);
+  if (order) push.alert(push.orderMessage(order));
+});
 
 /* Cake bookings and their reference photos are public writes as well. */
 const cakeLimiter = rateLimiter(3, 10 * 60 * 1000);
@@ -462,7 +496,8 @@ async function route(req, res) {
 
   /* ---- public menu ---- */
   if (pathname === '/' && (method === 'GET' || method === 'HEAD')) {
-    return sendHtml(res, 200, render.buildHtml(), customerHeaders());
+    // Signed in to the admin: GCash with test keys is shown (to the owner only).
+    return sendHtml(res, 200, render.buildHtml(null, undefined, new Date(), { admin: !!currentSession(req) }), customerHeaders());
   }
 
   if (pathname === '/cakes' && (method === 'GET' || method === 'HEAD')) {
@@ -706,26 +741,69 @@ async function route(req, res) {
     }
     let order;
     try {
-      order = orders.create(body);
+      order = orders.create(body, { admin: !!currentSession(req) });
     } catch (err) {
       logAndRethrow(err, 'order');
     }
     orderLimiter.record(ip);
     console.log(`[order] #${order.id} ${order.order_type} Php ${order.total} — ${order.items.length} line(s)`
-      + (order.voucher_code ? ` — voucher ${order.voucher_code} -${order.discount}` : ''));
+      + (order.voucher_code ? ` — voucher ${order.voucher_code} -${order.discount}` : '')
+      + (order.pay_method === 'gcash' ? ' — GCash' : ''));
+    // GCash: the customer goes to PayMongo to pay. The kitchen hears about the
+    // order once it is paid (paymongo.onPaid below), not now.
+    if (order.pay_method === 'gcash') {
+      try {
+        const { url, ref } = await paymongo.startCheckout(order.id, siteUrl(req));
+        return sendJson(res, 201, { order: publicOrder(order), checkout_url: url, pay_ref: ref });
+      } catch (err) {
+        paymongo.cancelUnpaid(order.id); // frees its stock; the customer can pay another way
+        throw err;
+      }
+    }
     push.alert(push.orderMessage(order));
-    return sendJson(res, 201, {
-      order: {
-        id: order.id, order_type: order.order_type, items: order.items, subtotal: order.subtotal,
-        voucher_code: order.voucher_code, discount: order.discount,
-        delivery_fee: order.delivery_fee, total: order.total,
-        cash: order.cash, change_due: order.change_due,
-        table_no: order.table_no, pickup_at: order.pickup_at,
-        delivery_area: order.delivery_area, fee_to_confirm: order.fee_to_confirm === 1,
-        scheduled_label: order.scheduled_label,
-        eta: order.delivery_area_id ? delivery.etaLabel(delivery.get(order.delivery_area_id)) : '',
-      },
-    });
+    return sendJson(res, 201, { order: publicOrder(order) });
+  }
+
+  /* ---- GCash (PayMongo): the customer's way back, and PayMongo's webhook ---- */
+  // The customer back from PayMongo: paid, still waiting, or cancelled. ref is
+  // "<order id>.<token>" from the return link; the token is the key.
+  if (pathname === '/api/orders/payment' && method === 'GET') {
+    const ip = clientIp(req);
+    if (paymentLimiter.limited(ip)) return sendJson(res, 429, { error: 'Please wait a minute and try again.' });
+    paymentLimiter.record(ip);
+    const found = paymongo.orderByRef(url.searchParams.get('ref'));
+    if (!found) return sendJson(res, 404, { error: 'We could not find that order. Please call us.' });
+    // PayMongo unreachable: still waiting; the page asks again, the sweep settles it later.
+    const status = await paymongo.settle(found).catch(() => 'awaiting');
+    return sendJson(res, 200, { status, order: publicOrder(orders.get(found.id)) });
+  }
+  // Back without paying: the order is cancelled (unless PayMongo says it was paid after all).
+  if (pathname === '/api/orders/payment/cancel' && method === 'POST') {
+    if (!isJson(req)) return sendJson(res, 415, { error: 'Send it as JSON.' });
+    const ip = clientIp(req);
+    if (paymentLimiter.limited(ip)) return sendJson(res, 429, { error: 'Please wait a minute and try again.' });
+    paymentLimiter.record(ip);
+    const found = paymongo.orderByRef((await readJson(req)).ref);
+    if (!found) return sendJson(res, 404, { error: 'We could not find that order.' });
+    const status = await paymongo.settle(found, { giveUp: true }).catch(() => 'awaiting');
+    return sendJson(res, 200, { status });
+  }
+  // PayMongo says a payment went through. Nothing is trusted until the
+  // signature checks out; then only this order's own checkout and exact total count.
+  if (pathname === '/api/paymongo/webhook' && method === 'POST') {
+    const ip = clientIp(req);
+    if (webhookLimiter.limited(ip)) return sendJson(res, 429, { error: 'Too many requests.' });
+    webhookLimiter.record(ip);
+    const raw = await readBody(req, MAX_JSON);
+    if (!paymongo.verifySignature(raw, req.headers['paymongo-signature'])) {
+      console.warn('[paymongo] webhook refused: bad_signature');
+      return sendJson(res, 400, { error: 'Bad signature.' });
+    }
+    let event;
+    try { event = JSON.parse(raw.toString('utf8')); } catch { return sendJson(res, 400, { error: 'Bad JSON.' }); }
+    const done = paymongo.handleEvent(event);
+    if (done) console.log(`[paymongo] #${done.order_id} webhook: ${done.result}`);
+    return sendJson(res, 200, { ok: true });
   }
 
   /* ---- vouchers: checking a code is public, managing them is admin-only ---- */
@@ -1500,6 +1578,9 @@ if (require.main === module) {
   };
   sweepPhotos();
   setInterval(sweepPhotos, 60 * 60 * 1000).unref();
+
+  // GCash orders nobody paid for are cancelled after paymongo.PAY_MINUTES.
+  setInterval(() => { paymongo.expireStale().catch(() => {}); }, 60 * 1000).unref();
 
   server.listen(PORT, HOST, () => {
     console.log(`Menu   http://${HOST}:${PORT}/`);

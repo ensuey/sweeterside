@@ -195,7 +195,7 @@ async function showOnline() {
     <li class="tab${isNew ? ' tab--unopened' : ''}" data-online-id="${o.id}">
       <div class="tab__main">
         <span class="tab__title">${esc(onlineType(o))} · ${esc(o.customer_name)} <span class="tab__id">#${o.id}</span>${waiting}</span>
-        <span class="tab__meta">${esc(ONLINE_STATUS[o.status] || o.status)} · ${plural(units, 'item')} · ${minutesAgo(o.created_at)} ago · ${o.paid_at ? 'Paid' : 'Not paid'}</span>
+        <span class="tab__meta">${esc(ONLINE_STATUS[o.status] || o.status)} · ${plural(units, 'item')} · ${minutesAgo(o.created_at)} ago · ${o.pay_status === 'paid' ? 'Paid with GCash' : o.paid_at ? 'Paid' : 'Not paid'}</span>
       </div>
       <span class="tab__total">${money(o.total)}</span>
       <div class="tab__actions"><button class="btn btn--primary btn--sm" type="button" data-online-open>Open</button></div>
@@ -246,7 +246,7 @@ function renderOnline() {
     o.discount > 0 && [`Voucher ${o.voucher_code}`, -o.discount],
     o.delivery_fee > 0 && ['Delivery fee', o.delivery_fee],
   ].filter(Boolean).map(([label, v]) => `<div><dt>${esc(label)}</dt><dd>${v < 0 ? `−${money(-v)}` : money(v)}</dd></div>`).join('');
-  const cash = o.order_type === 'delivery' && !o.paid_at && o.cash > 0
+  const cash = o.order_type === 'delivery' && !orderPaid(o) && o.cash > 0
     ? `<p class="od__cash">Customer pays with ${money(o.cash)}${o.change_due > 0 ? ` · bring ${money(o.change_due)} change` : ' · exact amount'}</p>` : '';
   const flags = [
     o.blocked && '<span class="flag flag--bad">Blocked number</span>',
@@ -254,7 +254,7 @@ function renderOnline() {
   ].filter(Boolean).join('');
 
   $('od-body').innerHTML = `
-    <p class="od__state"><strong>${esc(status)}</strong> · ${o.paid_at ? '<span class="flag flag--good">Paid</span>' : 'Not paid'} · ${minutesAgo(o.created_at)} ago</p>
+    <p class="od__state"><strong>${esc(status)}</strong> · ${o.pay_status === 'paid' ? '<span class="flag flag--good">Paid with GCash</span>' : o.paid_at ? '<span class="flag flag--good">Paid</span>' : 'Not paid'} · ${minutesAgo(o.created_at)} ago</p>
     <div class="od__who">
       <span class="od__name">${esc(o.customer_name)}</span>
       ${o.phone ? `<a href="tel:${esc(o.phone_norm || o.phone)}">${esc(o.phone)}</a>` : ''}
@@ -280,11 +280,11 @@ function renderOnline() {
     <p class="field__err" id="od-err" hidden></p>`;
 
   const step = nextStep(o);
-  const canPay = !o.paid_at && staffGate.can('take_payment');
+  const canPay = !orderPaid(o) && staffGate.can('take_payment');
   const foot = [];
   foot.push('<button class="btn btn--ghost" type="button" data-od-kitchen>Kitchen ticket</button>');
   foot.push('<span class="modal__spacer"></span>');
-  if (step && step[0] === 'completed' && !o.paid_at) {
+  if (step && step[0] === 'completed' && !orderPaid(o)) {
     // Handed over but not paid: take the money first. Completing anyway stays possible.
     foot.push(`<button class="link-quiet" type="button" data-od-step="completed">Complete without payment</button>`);
     if (canPay) foot.push('<button class="btn btn--primary" type="button" data-od-pay>Take payment</button>');

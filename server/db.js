@@ -694,6 +694,25 @@ CREATE TABLE IF NOT EXISTS item_ingredients (
 );
 CREATE INDEX IF NOT EXISTS idx_item_ingredients_ingredient ON item_ingredients(ingredient_id);`);
 
+/* Paying online with GCash through PayMongo (server/paymongo.js). Every
+   earlier order was paid in person: pay_method '' and pay_status ''.
+   pay_status 'awaiting' while the customer is on PayMongo's page (the order
+   stays out of the queue and the alerts), 'paid' once PayMongo confirms it,
+   'late' when a payment arrived after the order was cancelled for not being
+   paid (to refund in PayMongo). pay_token is the customer's own key to their
+   order on the way back from PayMongo. The GCash money is not drawer cash, so
+   it is kept on the order, not in payments. */
+addMissingColumns('orders', {
+  pay_method: "TEXT NOT NULL DEFAULT ''",
+  pay_status: "TEXT NOT NULL DEFAULT ''",
+  pay_token: 'TEXT',
+  paymongo_session: 'TEXT',
+  paymongo_payment: 'TEXT',
+  online_paid_cents: 'INTEGER',
+  online_paid_at: 'TEXT',
+});
+db.exec("CREATE INDEX IF NOT EXISTS idx_orders_pay ON orders(pay_status) WHERE pay_status = 'awaiting'");
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

@@ -208,6 +208,18 @@
         <p class="cfield__err" data-err="landmark" hidden></p>
       </div>
 
+      <!-- How to pay: in person, or GCash now through PayMongo. Shown only
+           while GCash is switched on (data-gcash, set by the server). -->
+      <fieldset class="otype pay" id="pay" data-gcash="<!--GCASH-->" hidden>
+        <legend class="checkout__title">How will you pay?</legend>
+        <div class="otype__opts">
+          <label class="otype__opt"><input type="radio" name="pay" value="cash" checked><span id="pay-cash-label">Cash on delivery</span></label>
+          <label class="otype__opt" id="pay-gcash-opt"><input type="radio" name="pay" value="gcash"><span>GCash</span></label>
+        </div>
+        <p class="otype__note" id="pay-note" hidden></p>
+        <p class="cfield__err" data-err="pay" hidden></p>
+      </fieldset>
+
       <div class="cfield" data-for="delivery">
         <label for="o-cash">Cash you will pay with <span class="cfield__hint">optional, so we can bring your change</span></label>
         <div class="cfield__money">
@@ -249,7 +261,14 @@
       <p class="checkout__note" data-for="delivery">Pay in cash when your order arrives. We will call to confirm.</p>
       <p class="checkout__note" data-for="pickup">Pay at the counter when you pick up.</p>
       <p class="checkout__note" data-for="dinein">Pay at the counter. We will bring your order to your table.</p>
+      <p class="checkout__note" id="gcash-note" hidden>You will pay on GCash's page. Your order goes to the kitchen once it is paid.</p>
     </form>
+  </div>
+
+  <!-- Back from GCash: checking the payment with the server. -->
+  <div class="cart__done" id="cart-paying" hidden>
+    <h2 class="cart__title" id="paying-title" tabindex="-1">Checking your GCash payment…</h2>
+    <p id="paying-text" aria-live="polite">This takes a few seconds.</p>
   </div>
 
   <div class="cart__done" id="cart-done" hidden>

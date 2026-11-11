@@ -381,8 +381,10 @@ function soldOutLast(items) {
   return [...items.filter((i) => !i.sold_out), ...items.filter((i) => i.sold_out)];
 }
 
-/** The menu page. now is the current time, for tests. */
-function buildHtml(allItems = null, cats = categories.list(), now = new Date()) {
+/** The menu page. now is the current time, for tests. viewer.admin: the
+    visitor is signed in to the admin (GCash with test keys shows only then;
+    the static index.html never has it). */
+function buildHtml(allItems = null, cats = categories.list(), now = new Date(), viewer = {}) {
   const template = fs.readFileSync(TEMPLATE, 'utf8');
   // Closed now, switch on: a pre-order for the first time there is.
   const state = orders.shopState(now);
@@ -418,6 +420,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date()) 
     .replace('<!--AREA_OPTIONS-->', () => areaOptionsHtml())
     .replace('<!--SUGGEST-->', () => esc(JSON.stringify(suggestions.forMenu())))
     .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
+    .replace('<!--GCASH-->', require('./paymongo').offeredTo({ admin: !!viewer.admin }) || '0')
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))

@@ -218,6 +218,15 @@
     <p class="field__err" id="tracking-err" hidden></p>
   </section>
 
+  <!-- GCash at checkout, through PayMongo. Needs the keys on the server first. -->
+  <section class="hours" aria-labelledby="gcash-title">
+    <h2 class="admin__title" id="gcash-title">GCash payments</h2>
+    <p class="admin__sub">Lets customers pay with GCash at checkout, through PayMongo. The order reaches the kitchen once it is paid; one left unpaid is cancelled after 15 minutes. "Other area" deliveries stay cash. Refunds are done in the PayMongo dashboard.</p>
+    <p class="hint" id="gcash-status"></p>
+    <label class="promo__check"><input type="checkbox" id="gcash-on"> Offer GCash at checkout</label>
+    <p class="field__err" id="gcash-err" hidden></p>
+  </section>
+
   <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
   <section class="trust" aria-labelledby="trust-title">
     <h2 class="admin__title" id="trust-title">Fake-order protection</h2>

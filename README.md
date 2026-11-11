@@ -591,6 +591,41 @@ Sugar level are made once and ticked on each item that has them.
   ones off.
 Prices on the menu and in the admin show the peso sign (₱).
 
+## Paying online with GCash (PayMongo)
+
+Optional, at online checkout only. Off until the keys are set on the server
+and **Settings → GCash payments** is switched on.
+
+**Test keys never reach customers.** With PayMongo test keys (pretend
+payments), GCash is shown and accepted only in a browser signed in to the
+admin, so the owner can try it; customers do not see it and the server
+refuses it from them. With live keys, every customer is offered it.
+
+- At checkout the customer chooses **Cash on delivery** / **Pay at the
+  counter**, or **GCash**. GCash goes to PayMongo's page to pay; the order is
+  saved as awaiting payment, out of the order queue and the alerts, holding
+  its stock.
+- It is paid only when PayMongo says so: its signed webhook, or the customer
+  coming back (the page asks the server, which asks PayMongo). Then it joins
+  the queue, the alert goes out, and the customer sees "Paid with GCash".
+- Left without paying, or unpaid after 15 minutes: cancelled (reason
+  *unpaid*), its stock free again. The customer's cart stays, to pay again or
+  choose cash.
+- **Other area** deliveries stay cash: the fee is agreed by phone first.
+- The Orders page and the POS show **Paid with GCash** and no Take payment.
+  GCash money is not drawer cash, so it is not in the shift's cash. Refunds
+  are done in the PayMongo dashboard; an order cancelled after it was paid
+  says so in red.
+
+Setting it up (owner):
+1. Get the API keys from dashboard.paymongo.com (test keys first).
+2. `flyctl secrets set PAYMONGO_SECRET_KEY=sk_test_… PAYMONGO_PUBLIC_KEY=pk_test_…`
+3. Register the payment confirmations: `flyctl ssh console -C "node scripts/paymongo-webhook.js"`,
+   then `flyctl secrets set PAYMONGO_WEBHOOK_SECRET=…` with the secret it prints.
+4. Settings → GCash payments → **Offer GCash at checkout**.
+5. For real payments, after PayMongo activates the account, repeat 2 and 3
+   with the live keys.
+
 ## Promotions: best sellers, sale prices and vouchers
 
 **Best seller and sale price** are set in the item editor on the Items page,
