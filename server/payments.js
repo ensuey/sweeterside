@@ -32,6 +32,8 @@ const METHODS = {
   maya: { label: 'Maya', reference: true },
   qrph: { label: 'QR Ph', reference: true },
   card: { label: 'Card (terminal)', reference: true },
+  // Anything else (a bank transfer, a voucher from a partner): say what in the reference.
+  other: { label: 'Other', reference: true, referenceLabel: 'what it was' },
 };
 const REFERENCE_MAX = 60;
 const REASON_MAX = 200;
@@ -125,7 +127,9 @@ function pay(orderId, body, actor) {
       change = tendered - amount;
     }
     const reference = String(p.reference ?? '').trim();
-    if (m.reference && !reference) throw new ValidationError({ reference: `Enter the ${m.label} reference number.` });
+    if (m.reference && !reference) {
+      throw new ValidationError({ reference: m.referenceLabel ? `For Other, say ${m.referenceLabel}.` : `Enter the ${m.label} reference number.` });
+    }
     if (reference.length > REFERENCE_MAX) throw new ValidationError({ reference: 'That reference is too long.' });
     rows.push({ method, amount, tendered, change, reference });
     due -= amount;

@@ -34,6 +34,7 @@ const reports = require('./reports');
 const audit = require('./audit');
 const stock = require('./stock');
 const paymongo = require('./paymongo');
+const corrections = require('./corrections');
 const render = require('./render');
 const imagesize = require('./imagesize');
 const imagemeta = require('./imagemeta');
@@ -1167,6 +1168,30 @@ async function route(req, res) {
     const report = shifts.report(Number(shiftMatch[1]));
     if (!report) return sendJson(res, 404, { error: 'No such shift.' });
     return sendJson(res, 200, { report });
+  }
+
+  /* ---- POS: correcting payments and cash in / out (the owner, or the owner's PIN) ---- */
+  // The entries of a shift (the open one by default), to correct from.
+  if (pathname === '/api/pos/entries' && method === 'GET') {
+    if (!requireStaff(req, res, { permission: 'manage_shift' })) return;
+    const list = corrections.entries(url.searchParams.get('shift'));
+    if (!list) return sendJson(res, 404, { error: 'No such shift.' });
+    return sendJson(res, 200, { ...list, shifts: shifts.recent(10) });
+  }
+  const correctMatch = pathname.match(/^\/api\/pos\/(payments|cash-moves)\/(\d+)\/(correct|delete)$/);
+  if (correctMatch && method === 'POST') {
+    // No permission gate here: the owner may, anyone else needs the owner's PIN (corrections.approve).
+    const who = requireStaff(req, res, { csrf: true });
+    if (!who) return;
+    const [, what, id, action] = correctMatch;
+    const body = await readJson(req);
+    const fn = {
+      'payments/correct': corrections.correctPayment, 'payments/delete': corrections.deletePayment,
+      'cash-moves/correct': corrections.correctMove, 'cash-moves/delete': corrections.deleteMove,
+    }[`${what}/${action}`];
+    const result = fn(Number(id), body, who.staff);
+    console.log(`[pos] ${what} ${id} ${action} by staff ${who.staff.id}`);
+    return sendJson(res, 200, result);
   }
 
   /* ---- Reports and the audit log: the owner only ---- */

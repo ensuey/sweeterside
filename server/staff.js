@@ -44,6 +44,10 @@ const PERMISSIONS = {
   see_id_numbers: ['owner', 'cashier'],
   // Stock takes, batches from the oven and ingredients in or out.
   manage_stock: ['owner', 'cashier'],
+  // A line not on the menu (a custom cake, a deposit), named and priced at the counter.
+  custom_item: ['owner', 'cashier'],
+  // Correcting or deleting a payment or a cash in / out entered by mistake.
+  correct_entries: ['owner'],
   void: ['owner'],
   refund: ['owner'],
   price_override: ['owner'],
