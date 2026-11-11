@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 262 (`npm test`):
+**Tests:** 271 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -30,6 +30,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 12 in `test/inventory.test.js`
 - 3 in `test/admin-common.test.js`
 - 4 in `test/orders-delete.test.js`
+- 9 in `test/paymongo.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -500,6 +501,22 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## GCash through PayMongo (2026-11-11)
+
+- Optional GCash at online checkout (`server/paymongo.js`, hosted Checkout).
+  Decisions: online checkout only, optional, GCash only; unpaid cancelled
+  after 15 min; Other area cash only; refunds in the PayMongo dashboard.
+- New order columns (additive): `pay_method`, `pay_status` (awaiting / paid /
+  late), `pay_token`, `paymongo_session`, `paymongo_payment`,
+  `online_paid_cents`, `online_paid_at`. Not in `payments` (not drawer cash).
+- Off until `PAYMONGO_SECRET_KEY` is set and Settings switches it on.
+  Webhook: `scripts/paymongo-webhook.js`, then `PAYMONGO_WEBHOOK_SECRET`.
+- Owner to do: test keys → register webhook → switch on → a test GCash order
+  with PayMongo's test flow; live keys after activation.
+- Known gap: a customer who comes back after the shop closed sees no
+  confirmation screen (cart.js stops early when closed); the order is still
+  paid by the webhook.
 
 ## Sold out last (2026-11-11)
 
