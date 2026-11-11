@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 272 (`npm test`):
+**Tests:** 273 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -30,7 +30,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 12 in `test/inventory.test.js`
 - 3 in `test/admin-common.test.js`
 - 4 in `test/orders-delete.test.js`
-- 10 in `test/paymongo.test.js`
+- 11 in `test/paymongo.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -516,9 +516,9 @@ After deploying (owner, once):
   Webhook: `scripts/paymongo-webhook.js`, then `PAYMONGO_WEBHOOK_SECRET`.
 - Owner to do: test keys → register webhook → switch on → a test GCash order
   with PayMongo's test flow; live keys after activation.
-- Known gap: a customer who comes back after the shop closed sees no
-  confirmation screen (cart.js stops early when closed); the order is still
-  paid by the webhook.
+- Coming back from GCash after closing: the cart starts as closed (no Add
+  buttons, no checkout) only for that return, so the customer still sees
+  Paid with GCash, or that the order was not placed and the cart is kept.
 
 ## Sold out last (2026-11-11)
 
