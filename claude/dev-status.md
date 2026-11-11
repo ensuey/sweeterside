@@ -5,8 +5,8 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 260 (`npm test`):
-- 59 in `test/server.test.js`
+**Tests:** 261 (`npm test`):
+- 60 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
@@ -500,6 +500,13 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Tags: Must try and Trending (2026-11-11)
+
+- Two more item tags beside Best seller, each its own tick box (`items.must_try`,
+  `items.trending`, additive columns). Any mix; a badge each on the card,
+  stacked; the popup lists them (`data-badges`). Only Best seller fills the
+  top row. A save without the field keeps the tag.
 
 ## Delete test orders (2026-11-10)
 

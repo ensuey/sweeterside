@@ -496,10 +496,13 @@ a { color: var(--navy); }
 /* Promotion chips on item rows. */
 .row-item__chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .row-item__chips:empty { display: none; }
-.chip-best, .chip-sale {
+.chip-best, .chip-must, .chip-trend, .chip-sale {
   padding: .1rem .5rem; border-radius: var(--r-full); font-size: .75rem; font-weight: 700;
 }
 .chip-best { background: #FFE9A8; color: #5A3A00; }
+.chip-must { background: #FDE3DE; color: #8E2C1D; }
+.promo__tags-hint { margin: 0; }
+.chip-trend { background: #E3ECF5; color: #23415E; }
 .chip-sale { background: #FDE3DE; color: #8E2C1D; }
 .chip-sale s { font-weight: 600; opacity: .75; }
 .crop__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; align-items: end; }

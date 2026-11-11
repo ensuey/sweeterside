@@ -216,6 +216,12 @@ function addMissingColumns(table, columns) {
 
 addMissingColumns('items', ITEM_STOCK_COLUMNS);
 addMissingColumns('items', ITEM_PROMO_COLUMNS);
+/* More tags beside best seller, each on or off by itself: an item can have
+   any of them. Each puts its own badge on the menu card. */
+addMissingColumns('items', {
+  must_try: 'INTEGER NOT NULL DEFAULT 0',
+  trending: 'INTEGER NOT NULL DEFAULT 0',
+});
 
 /* Orders were delivery-only before pick-up and dine-in. Adding columns with
    defaults keeps every earlier order as a delivery order. Pick-up and dine-in

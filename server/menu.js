@@ -131,8 +131,9 @@ function validate(input) {
     }
   }
 
-  const bestSeller = input.best_seller === true || input.best_seller === 'true'
-    || input.best_seller === 1 || input.best_seller === '1';
+  // The tags (best seller, must try, trending) are each on or off by themselves.
+  const flag = (v) => v === true || v === 'true' || v === 1 || v === '1';
+  const bestSeller = flag(input.best_seller);
 
   // A sale is kept as its rule, so the full price is never lost.
   const saleType = String(input.sale_type ?? '');
@@ -159,7 +160,8 @@ function validate(input) {
   return {
     name, price, category_id: categoryId, image: image.rel, alt,
     crop_x: crop.x, crop_y: crop.y, crop_w: crop.w, crop_h: crop.h,
-    best_seller: bestSeller ? 1 : 0, sale_type: saleType, sale_value: saleValue,
+    best_seller: bestSeller ? 1 : 0, must_try: flag(input.must_try) ? 1 : 0, trending: flag(input.trending) ? 1 : 0,
+    sale_type: saleType, sale_value: saleValue,
     sc_eligible: scEligible ? 1 : 0, description, size_label: sizeLabel,
   };
 }
@@ -219,7 +221,7 @@ function withStock(item, { sold, levels, missing }) {
   const remaining = dayLeft === null ? stock_left : stock_left === null ? dayLeft : Math.min(dayLeft, stock_left);
   const missing_ingredients = missing.get(item.id) || [];
   return {
-    ...item, best_seller: item.best_seller === 1, sc_eligible: item.sc_eligible !== 0, sale_price: salePrice(item),
+    ...item, best_seller: item.best_seller === 1, must_try: item.must_try === 1, trending: item.trending === 1, sc_eligible: item.sc_eligible !== 0, sale_price: salePrice(item),
     sold_today, remaining, stock_left, left_by: remaining !== null && remaining === stock_left ? 'stock' : 'day',
     missing_ingredients,
     sold_out: item.availability === 'sold_out' || remaining === 0 || missing_ingredients.length > 0,
@@ -259,7 +261,7 @@ function setStock(id, input) {
 
 const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
                        i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position,
-                       i.availability, i.daily_limit, i.best_seller, i.sale_type, i.sale_value,
+                       i.availability, i.daily_limit, i.best_seller, i.must_try, i.trending, i.sale_type, i.sale_value,
                        i.sc_eligible, i.description, i.size_label
                 FROM items i`;
 
@@ -287,11 +289,11 @@ function create(input) {
   const id = transaction(() => {
     const info = db.prepare(`
       INSERT INTO items (name, price, category_id, image, alt, crop_x, crop_y, crop_w, crop_h, position,
-                         best_seller, sale_type, sale_value, sc_eligible, description, size_label)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                         best_seller, must_try, trending, sale_type, sale_value, sc_eligible, description, size_label)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       row.name, row.price, row.category_id, row.image, row.alt,
       row.crop_x, row.crop_y, row.crop_w, row.crop_h, next,
-      row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label);
+      row.best_seller, row.must_try, row.trending, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label);
     if (groups) require('./options').setItemGroups(info.lastInsertRowid, groups);
     if (ingredients) require('./stock').setItemIngredients(info.lastInsertRowid, ingredients);
     return info.lastInsertRowid;
@@ -309,6 +311,8 @@ function update(id, input) {
     sc_eligible: 'sc_eligible' in input ? input.sc_eligible : existing.sc_eligible,
     description: 'description' in input ? input.description : existing.description,
     size_label: 'size_label' in input ? input.size_label : existing.size_label,
+    must_try: 'must_try' in input ? input.must_try : existing.must_try,
+    trending: 'trending' in input ? input.trending : existing.trending,
   });
   const groups = require('./options').parseItemGroups(input.option_groups);
   const ingredients = require('./stock').parseItemIngredients(input.ingredients);
@@ -317,12 +321,14 @@ function update(id, input) {
     db.prepare(`
       UPDATE items SET name = ?, price = ?, category_id = ?, image = ?, alt = ?,
         crop_x = ?, crop_y = ?, crop_w = ?, crop_h = ?,
-        best_seller = ?, sale_type = ?, sale_value = ?, sc_eligible = ?, description = ?, size_label = ?,
+        best_seller = ?, must_try = ?, trending = ?, sale_type = ?, sale_value = ?, sc_eligible = ?,
+        description = ?, size_label = ?,
         updated_at = datetime('now')
       WHERE id = ?`).run(
       row.name, row.price, row.category_id, row.image, row.alt,
       row.crop_x, row.crop_y, row.crop_w, row.crop_h,
-      row.best_seller, row.sale_type, row.sale_value, row.sc_eligible, row.description, row.size_label, Number(id));
+      row.best_seller, row.must_try, row.trending, row.sale_type, row.sale_value, row.sc_eligible,
+      row.description, row.size_label, Number(id));
     if (groups) require('./options').setItemGroups(id, groups);
     if (ingredients) require('./stock').setItemIngredients(id, ingredients);
   });

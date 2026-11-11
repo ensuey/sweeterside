@@ -39,10 +39,12 @@ function todayText(item) {
   return `${item.sold_today} / ${item.daily_limit} sold today`;
 }
 
-/** "★ Best seller" and "On sale ~~129~~ 103" chips for a row. */
+/** "★ Best seller", "♥ Must try", "↗ Trending" and "On sale ~~129~~ 103" chips for a row. */
 function promoChips(item) {
   const chips = [];
   if (item.best_seller) chips.push('<span class="chip-best">★ Best seller</span>');
+  if (item.must_try) chips.push('<span class="chip-must">♥ Must try</span>');
+  if (item.trending) chips.push('<span class="chip-trend">↗ Trending</span>');
   if (item.sale_price < item.price) {
     chips.push(`<span class="chip-sale">On sale <s>${item.price}</s> ${item.sale_price}</span>`);
   }
@@ -324,6 +326,8 @@ function openEditor(item) {
   $('f-cw').value = item && item.crop_w != null ? item.crop_w : '';
   $('f-ch').value = item && item.crop_h != null ? item.crop_h : '';
   $('f-best').checked = !!(item && item.best_seller);
+  $('f-must').checked = !!(item && item.must_try);
+  $('f-trend').checked = !!(item && item.trending);
   $('f-sc').checked = item ? item.sc_eligible !== false : true;
   $('f-sale-type').value = item ? item.sale_type : '';
   $('f-sale-value').value = item && item.sale_value != null ? item.sale_value : '';
@@ -348,6 +352,8 @@ async function saveItem(event) {
     crop_w: $('f-cw').value,
     crop_h: $('f-ch').value,
     best_seller: $('f-best').checked,
+    must_try: $('f-must').checked,
+    trending: $('f-trend').checked,
     sc_eligible: $('f-sc').checked,
     sale_type: $('f-sale-type').value,
     sale_value: $('f-sale-type').value ? $('f-sale-value').value : '',
