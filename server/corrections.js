@@ -182,10 +182,14 @@ function deleteMove(id, input, actor) {
 
 /**
  * A shift's payments and cash in / out, for the correction screen.
- * shiftId: a shift, or the open one when absent.
+ * shiftId: a shift; when absent, the open one, or else the latest.
  */
 function entries(shiftId) {
-  const shift = shiftId ? shifts.get(Number(shiftId)) : shifts.current();
+  const latest = () => {
+    const row = shifts.recent(1)[0];
+    return row ? shifts.get(row.id) : null;
+  };
+  const shift = shiftId ? shifts.get(Number(shiftId)) : shifts.current() || latest();
   if (!shift) return null;
   const payments = db.prepare(`
     SELECT p.id, p.order_id, p.method, p.amount_cents, p.tendered_cents, p.change_cents, p.reference, p.at,
