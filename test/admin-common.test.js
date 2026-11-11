@@ -41,6 +41,18 @@ test('admin dialogs stay fixed to the screen, so they open in view on a scrolled
   }
 });
 
+test('finished orders: today as cards, earlier days as rows that open into the card', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'admin', 'orders.js'), 'utf8');
+  assert.match(js, /state\.ordersShow === 'finished' \? finishedHtml\(state\.orders\) : state\.orders\.map\(orderHtml\)/,
+    'the active queue stays all cards');
+  assert.match(js, /todays\.map\(orderHtml\)/, 'today: cards');
+  assert.match(js, /<details class="orow"[^`]*\$\{openRows\.has\(o\.id\) \? ' open' : ''\}/, 'earlier: a row, kept open across refreshes');
+  assert.match(js, /<ul class="orow__card">\$\{orderHtml\(o\)\}<\/ul>/, 'opening a row shows the full card (status, Delete…)');
+  assert.match(js, /<span class="orow__name">\$\{esc\(who\)\}<\/span>/, 'the customer name is escaped');
+  assert.match(js, /toLocaleDateString\('en-CA', \{ timeZone: 'Asia\/Manila' \}\)/, 'days are Manila days');
+  assert.match(js, /unpaid: 'GCash not paid'/);
+});
+
 test('the Items page names its categories with the right plural', () => {
   const js = fs.readFileSync(path.join(__dirname, '..', 'admin', 'items.js'), 'utf8');
   assert.ok(js.includes("plural(list.length, 'category', 'categories')"));

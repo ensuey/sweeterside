@@ -221,6 +221,37 @@ a { color: var(--navy); }
 .tab__n { font-size: .8125rem; opacity: .75; font-variant-numeric: tabular-nums; }
 
 .orders__list { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; }
+/* Finished orders before today: a heading per day, then one line per order.
+   Tapping a line opens the full card inside it. Full width on every screen. */
+.orows { grid-column: 1 / -1; display: flex; flex-direction: column; gap: .4rem; }
+.orows--head { margin-bottom: -.4rem; }
+.orows__day {
+  margin: .4rem 0 0; font-size: 1rem; display: flex; align-items: baseline; gap: .5rem;
+}
+.orows__n { font: 600 .8125rem "Nunito", sans-serif; color: var(--ink-soft); }
+.orows__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
+.orow { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.orow__sum {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: .6rem;
+  min-height: 52px; padding: .45rem .75rem; cursor: pointer; list-style: none;
+}
+.orow__sum::-webkit-details-marker { display: none; }
+.orow__sum:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(62,94,126,.24); border-radius: var(--r-md); }
+.orow__id { font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.orow__main { min-width: 0; display: flex; flex-direction: column; }
+.orow__name, .orow__meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.orow__name { font-weight: 700; }
+.orow__meta { font-size: .8125rem; color: var(--ink-soft); }
+.orow__end { display: flex; flex-direction: column; align-items: flex-end; gap: .15rem; }
+.orow__total { font-weight: 700; font-variant-numeric: tabular-nums; }
+.orow__status { padding: .05rem .5rem; border-radius: var(--r-full); font-size: .75rem; font-weight: 700; }
+.orow__status--completed { background: #EEF7F1; color: var(--ok); }
+.orow__status--cancelled { background: #FDF1EF; color: var(--danger); }
+.orow[open] { border-color: #E2CFA5; }
+.orow[open] .orow__sum { border-bottom: 1px solid var(--line); }
+.orow__card { list-style: none; margin: 0; padding: .5rem; }
+.orow__card .order { box-shadow: none; }
+
 /* As many order cards across as fit: one on a phone, two on a tablet, more on a wide screen. */
 @media (min-width: 820px) { .orders__list { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); } }
 

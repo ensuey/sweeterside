@@ -260,6 +260,9 @@ On the admin Orders page:
   can go straight to Preparing. The **Call to confirm before preparing**
   switches change this per order type. A New order still waiting after 10
   minutes shows **Waiting N min**, updated with every 20-second check.
+- **Finished** shows today's orders as cards and each earlier day under its
+  own heading as one line per order (number, name, time, total, Completed or
+  Cancelled), to keep the list short. Tap a line to open the full card.
 - **Cancel reasons.** Cancelling asks why: Customer cancelled, No-show /
   unreachable, Fake order or Other.
 - **Delete…** (test orders only) erases an order for good: its lines, payments
