@@ -40,7 +40,11 @@ function enabled() {
   return configured() && getSetting('gcash_online', '0') === '1';
 }
 
-const unavailable = () => Object.assign(new Error(UNAVAILABLE), { status: 502, body: { error: UNAVAILABLE } });
+// 409, not 5xx: the customer needs this message (5xx shows a generic one), and
+// pay_unavailable tells the checkout to offer cash instead.
+const unavailable = () => Object.assign(new Error(UNAVAILABLE), {
+  status: 409, body: { error: UNAVAILABLE, pay_unavailable: true },
+});
 
 async function call(method, path, body) {
   let res;
