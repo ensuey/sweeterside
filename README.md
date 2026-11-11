@@ -595,6 +595,10 @@ under *Promotion*:
   item popup, and the item in the **Best sellers** row at the top of the menu
   (a sideways-scrolling row of the best sellers that can be ordered today;
   hidden during a search or a category filter, and in the static index.html).
+- **Must try** and **Trending** are tags of their own, ticked separately next
+  to Best seller. An item can have any mix of the three; each tag that is on
+  puts its own badge on the photo ("♥ Must try", "↗ Trending"), stacked, and
+  the item popup lists them. Only Best seller puts an item in the top row.
 - **Sale** is a % off (1 to 90) or a ₱ amount off (less than the full
   price). The menu shows the full price struck through next to the sale
   price, and the cart and the order charge the sale price. The full price is

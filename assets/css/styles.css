@@ -361,13 +361,20 @@ body[data-empty="true"] .section { display: none; }
 }
 .card__left { margin: 0; font-size: .875rem; font-weight: 700; color: var(--coral-ink); }
 
-/* Promotions: a best seller ribbon on the photo, and a sale price. */
+/* Promotions: a ribbon on the photo for each tag (best seller, must try,
+   trending), stacked, and a sale price. */
+.card__badges {
+  position: absolute; top: var(--sp-3); left: var(--sp-3); right: var(--sp-3); z-index: 1;
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1);
+  pointer-events: none;
+}
 .card__badge {
-  position: absolute; top: var(--sp-3); left: var(--sp-3); z-index: 1;
-  padding: .3rem .6rem; border-radius: var(--r-full);
-  font-size: .75rem; font-weight: 700; letter-spacing: .02em;
+  padding: .3rem .6rem; border-radius: var(--r-full); max-width: 100%;
+  font-size: .75rem; font-weight: 700; letter-spacing: .02em; white-space: nowrap;
   color: #5A3A00; background: #FFD66B; box-shadow: 0 2px 6px rgba(90,58,0,.18);
 }
+.card__badge--must  { color: #fff; background: var(--coral-ink); box-shadow: 0 2px 6px rgba(142,44,29,.22); }
+.card__badge--trend { color: #fff; background: var(--navy); box-shadow: 0 2px 6px rgba(35,65,94,.22); }
 .card__sale {
   margin: 0; align-self: flex-start; padding: .15rem .5rem; border-radius: var(--r-full);
   font-size: .8125rem; font-weight: 700; color: #fff; background: var(--coral-ink);

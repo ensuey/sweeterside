@@ -140,6 +140,13 @@ function encPath(p) {
   return String(p).split('/').map(encodeURIComponent).join('/');
 }
 
+// The tags an item can have, each with its own badge, in this order.
+const TAGS = [
+  { key: 'best_seller', label: '★ Best seller', cls: 'best' },
+  { key: 'must_try', label: '♥ Must try', cls: 'must' },
+  { key: 'trending', label: '↗ Trending', cls: 'trend' },
+];
+
 // Below this many left, customers are told how many remain.
 const FEW_LEFT = 5;
 // The first few photos are on screen at once; the rest load as you scroll.
@@ -208,8 +215,15 @@ function cardHtml(item, category, { eager = false } = {}) {
     + (item.size_label ? ` data-size="${esc(item.size_label)}"` : '');
   const desc = item.description ? `\n          <p class="card__desc">${esc(item.description)}</p>` : '';
   const size = item.size_label ? ` <span class="card__size">${esc(item.size_label)}</span>` : '';
-  const promoAttrs = (item.best_seller ? ' data-best' : '') + (onSale ? ` data-was="${item.price}"` : '');
-  const badge = item.best_seller ? '\n        <span class="card__badge">★ Best seller</span>' : '';
+  // A ribbon for each tag that is on, stacked on the photo. data-badges carries
+  // the same words to the item popup.
+  const tags = TAGS.filter((t) => item[t.key]);
+  const promoAttrs = (item.best_seller ? ' data-best' : '')
+    + (tags.length ? ` data-badges="${esc(tags.map((t) => t.label).join(' · '))}"` : '')
+    + (onSale ? ` data-was="${item.price}"` : '');
+  const badge = tags.length
+    ? `\n        <span class="card__badges">${tags.map((t) => `<span class="card__badge card__badge--${t.cls}">${esc(t.label)}</span>`).join('')}</span>`
+    : '';
   const saleTag = onSale
     ? `\n          <p class="card__sale">${saleLabel(item)}</p>`
     : '';

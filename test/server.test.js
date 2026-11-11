@@ -767,6 +767,37 @@ test('best sellers get a badge and sale items show the old price and charge the 
   [star, sale, plain].forEach((i) => menu.remove(i.id));
 });
 
+test('must try and trending are tags of their own: any mix, a badge each, only best sellers in the top row', () => {
+  const both = menu.create({ ...base, name: 'Hot Frappe', price: 120, must_try: true, trending: true });
+  const all = menu.create({ ...base, name: 'Top Frappe', price: 120, best_seller: true, must_try: '1', trending: 'true' });
+  const trend = menu.create({ ...base, name: 'Trend Frappe', price: 120, trending: true });
+  const plain = menu.create({ ...base, name: 'Calm Frappe', price: 90 });
+  assert.deepStrictEqual([both.best_seller, both.must_try, both.trending], [false, true, true]);
+  assert.deepStrictEqual([all.best_seller, all.must_try, all.trending], [true, true, true]);
+  assert.deepStrictEqual([plain.must_try, plain.trending], [false, false]);
+  try {
+    const html = render.buildHtml();
+    const card = (name) => html.split('<li class="card').find((c) => c.includes(`data-name="${name}"`));
+    const badges = (name) => [...card(name).matchAll(/card__badge card__badge--(\w+)">([^<]*)</g)].map((m) => [m[1], m[2]]);
+    assert.deepStrictEqual(badges('Hot Frappe'), [['must', '♥ Must try'], ['trend', '↗ Trending']]);
+    assert.deepStrictEqual(badges('Top Frappe'), [['best', '★ Best seller'], ['must', '♥ Must try'], ['trend', '↗ Trending']]);
+    assert.deepStrictEqual(badges('Trend Frappe'), [['trend', '↗ Trending']]);
+    assert.deepStrictEqual(badges('Calm Frappe'), []);
+    assert.match(card('Hot Frappe'), /data-badges="♥ Must try · ↗ Trending"/, 'the popup gets the same words');
+    assert.ok(!card('Hot Frappe').includes('data-best'), 'not a best seller');
+    const row = html.match(/<section class="best" id="best-sellers"[\s\S]*?<\/section>/)[0];
+    assert.ok(row.includes('data-name="Top Frappe"') && !row.includes('data-name="Hot Frappe"'), 'only best sellers in the row');
+
+    // One at a time: turning one tag off leaves the others; a save without the field keeps it.
+    menu.update(both.id, { ...base, name: 'Hot Frappe', price: 120, must_try: false, trending: true });
+    assert.deepStrictEqual([menu.get(both.id).must_try, menu.get(both.id).trending], [false, true]);
+    menu.update(trend.id, { ...base, name: 'Trend Frappe', price: 125 });
+    assert.strictEqual(menu.get(trend.id).trending, true, 'kept when the form does not send it');
+  } finally {
+    [both, all, trend, plain].forEach((i) => menu.remove(i.id));
+  }
+});
+
 function voucherErrors(input, id) {
   try { vouchers.validate(input, id); return null; } catch (err) { return err.errors; }
 }

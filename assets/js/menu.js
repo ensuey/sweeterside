@@ -132,7 +132,7 @@
 
         var soldOut = card.hasAttribute('data-soldout');
         tagEl.textContent   = soldOut ? 'Sold out'
-          : card.hasAttribute('data-best') ? '★ Best seller'
+          : card.dataset.badges ? card.dataset.badges
           : card.dataset.tag || '';
         sheet.dataset.id    = card.dataset.id;  // read by cart.js's "Add to cart"
         sheet.toggleAttribute('data-soldout', soldOut); // hides "Add to cart"
