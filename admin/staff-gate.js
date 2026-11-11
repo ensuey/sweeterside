@@ -27,6 +27,8 @@ const staffGate = (() => {
     takeout_and_delivery: 'A takeout or delivery order',
     take_payment: 'Taking payment',
     refund: 'A refund',
+    custom_item: 'A custom item',
+    correct_entries: 'Correcting a payment or a cash in / out',
   };
 
   let current = null; // { token, staff, permissions, lock_minutes }

@@ -52,6 +52,7 @@
     <div class="catalog__top">
       <label class="vh" for="search">Search items</label>
       <input class="catalog__search" id="search" type="search" placeholder="Search items" autocomplete="off">
+      <button class="btn btn--ghost btn--sm catalog__custom" type="button" id="custom-btn">+ Custom item</button>
     </div>
     <div class="cats" id="cats" role="toolbar" aria-label="Categories"></div>
     <ul class="grid" id="grid" aria-live="polite"></ul>
@@ -186,6 +187,34 @@
     <p class="hint" id="ing-none" hidden>No ingredients yet. Add them on the Items page.</p>
     <ul class="stock__list" id="stock-ings"></ul>
   </div>
+</dialog>
+
+<!-- Something not on the menu: a custom cake, a deposit -->
+<dialog class="modal modal--sm" id="custom-dialog" aria-labelledby="custom-title">
+  <form method="dialog" class="modal__form" id="custom-form" novalidate>
+    <div class="modal__head">
+      <h2 class="modal__title" id="custom-title">Custom item</h2>
+      <button class="icon-btn" type="button" id="custom-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <p class="hint">For something not on the menu, e.g. "Custom cake deposit #12" or "Cake balance #12".</p>
+      <div class="field"><label for="custom-name">What is it</label>
+        <input id="custom-name" maxlength="60" autocomplete="off" placeholder="Custom cake deposit #12"></div>
+      <div class="tfields">
+        <div class="field field--xs"><label for="custom-price">Price each (₱)</label>
+          <input id="custom-price" type="number" min="0.01" step="0.01" inputmode="decimal"></div>
+        <div class="field field--xs"><label for="custom-qty">How many</label>
+          <input id="custom-qty" type="number" min="1" max="99" step="1" inputmode="numeric" value="1"></div>
+      </div>
+      <label class="fee__check"><input type="checkbox" id="custom-sc" checked> Food or drink (SC/PWD discount can apply)</label>
+      <p class="field__err" id="custom-err" role="alert" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="custom-cancel">Cancel</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--primary" type="submit">Add to ticket</button>
+    </div>
+  </form>
 </dialog>
 
 <!-- Options for an item: size, add-ons… -->
@@ -400,7 +429,29 @@
       <p class="field__err" id="shift-err" hidden></p>
     </div>
     <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="entries-btn" hidden>Fix entries</button>
+      <span class="modal__spacer"></span>
       <button class="btn btn--ghost" type="button" id="shift-print" hidden>Print reading</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Fixing a payment or a cash in / out entered by mistake: the owner, or the owner's PIN -->
+<dialog class="modal" id="entries-dialog" aria-labelledby="entries-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="entries-title">Fix entries</h2>
+      <button class="icon-btn" type="button" id="entries-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal__body">
+      <p class="hint">Fix or delete a payment or a cash in / out entered by mistake. The owner can, or anyone with the owner's PIN. Every fix needs a reason and goes in the audit log.</p>
+      <div class="field"><label for="entries-shift">Shift</label><select id="entries-shift"></select></div>
+      <p class="hint" id="entries-state"></p>
+      <h3 class="panel__sub">Payments</h3>
+      <ul class="entries" id="entries-payments"></ul>
+      <h3 class="panel__sub">Cash in / out</h3>
+      <ul class="entries" id="entries-moves"></ul>
+      <p class="field__err" id="entries-err" role="alert" hidden></p>
     </div>
   </div>
 </dialog>

@@ -57,7 +57,7 @@ function fromOrder(o) {
       id: l.id, key: l.key, item_id: l.item_id, name: l.name, qty: l.qty, note: l.note,
       sent: l.sent_qty - l.voided_qty, unit_cents: l.unit_cents,
       price: l.override_cents === null ? null : l.override_cents / 100, price_reason: l.override_reason,
-      sc_eligible: l.sc_eligible, options: [], options_text: l.options_text || '',
+      sc_eligible: l.sc_eligible, options: [], options_text: l.options_text || '', custom: !!l.custom,
     })),
     discounts: {
       voucher_code: i.voucher_code || '', manual, claimants: i.claimants || [], diners: i.diners ?? null,
@@ -100,6 +100,7 @@ function payload() {
       price: l.price, price_reason: l.price_reason,
       // Options are chosen once, when the line is added; the server checks them.
       options: l.id ? undefined : l.options || [],
+      ...(l.custom && !l.id ? { custom: true, name: l.name, unit_price: l.unit_cents / 100, sc_eligible: l.sc_eligible } : {}),
     })),
   };
   // Waiters never send discounts, so a cashier's discounts on a tab stay as they are.
@@ -305,6 +306,40 @@ async function toggleIngredient(id) {
   } catch (e) {
     stockError(e.message);
   }
+}
+
+/* ---------------------------- custom items ---------------------------- */
+
+/** Something not on the menu, named and priced at the counter. */
+function openCustom() {
+  $('custom-form').reset();
+  $('custom-qty').value = '1';
+  $('custom-err').hidden = true;
+  $('custom-dialog').showModal();
+  $('custom-name').focus();
+}
+
+function addCustom(event) {
+  event.preventDefault();
+  const name = $('custom-name').value.trim().replace(/\s+/g, ' ');
+  const price = Number($('custom-price').value);
+  const cents = Math.round(price * 100);
+  const qty = Number($('custom-qty').value);
+  const err = !name ? 'Say what it is.'
+    : !Number.isFinite(price) || cents < 1 || Math.abs(price * 100 - cents) > 1e-6 ? 'Enter the price in pesos.'
+    : !Number.isInteger(qty) || qty < 1 || qty > 99 ? 'Enter how many, 1 to 99.' : '';
+  if (err) {
+    $('custom-err').textContent = err;
+    $('custom-err').hidden = false;
+    return;
+  }
+  P.t.lines.push({
+    id: null, key: `n${newKey().slice(0, 12)}`, item_id: null, name, qty, note: '', sent: 0,
+    unit_cents: cents, price: null, price_reason: '', sc_eligible: $('custom-sc').checked,
+    options: [], options_text: '', custom: true,
+  });
+  $('custom-dialog').close();
+  changed();
 }
 
 /* ---------------------------- adding and changing lines ---------------------------- */
@@ -924,6 +959,7 @@ function openLine(key) {
   $('line-price').value = l.price ?? '';
   $('line-price').placeholder = (l.unit_cents / 100).toFixed(2);
   $('line-price-reason').value = l.price_reason || '';
+  $('line-price-box').hidden = !!l.custom;
   $('line-sent').hidden = !l.sent;
   $('line-sent').textContent = l.sent ? `${l.sent} already sent to the kitchen. Taking them off is a void.` : '';
   $('line-remove').textContent = l.sent ? 'Void this line' : 'Remove';
@@ -1074,6 +1110,10 @@ function bind() {
     else addItem(b.dataset.id);
   });
   $('stock-btn').addEventListener('click', () => openStock(null));
+  $('custom-btn').addEventListener('click', openCustom);
+  $('custom-form').addEventListener('submit', addCustom);
+  $('custom-close').addEventListener('click', () => $('custom-dialog').close());
+  $('custom-cancel').addEventListener('click', () => $('custom-dialog').close());
   $('stock-close').addEventListener('click', () => $('stock-dialog').close());
   $('stock-items').addEventListener('click', (e) => {
     const b = e.target.closest('[data-do]');

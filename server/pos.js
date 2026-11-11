@@ -49,6 +49,7 @@ const MAX_LINES = 60;
 const MAX_QTY = 99;
 const MAX_PAX = 50;
 const MAX_PRICE_CENTS = 100000 * 100;
+const CUSTOM_NAME_MAX = 60;
 const KEY_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
 const httpError = (status, message, extra = {}) =>
@@ -102,7 +103,7 @@ function view(id, actor) {
     unit_cents: l.override_cents ?? l.menu_sale_cents ?? l.price_cents,
     menu_price_cents: l.menu_price_cents ?? l.regular_price_cents,
     override_cents: l.override_cents, override_reason: l.override_reason,
-    net_cents: l.net_cents, sc_eligible: l.sc_eligible === 1,
+    net_cents: l.net_cents, sc_eligible: l.sc_eligible === 1, custom: l.custom === 1,
     options: orders.parseOptions(l.options), options_text: itemOptions.optionsText(orders.parseOptions(l.options)),
   }));
   const people = db.prepare('SELECT id, name FROM staff WHERE id IN (?, ?)').all(row.staff_id, row.updated_by);
@@ -390,8 +391,8 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
       let voided = o.voided_qty;
       const charged = units - voided;
       if (qty > charged) {
-        if (o.item_id === null) errors.lines = `${o.name} is no longer on the menu; add it as a new line.`;
-        else increase.set(o.item_id, (increase.get(o.item_id) || 0) + qty - charged);
+        if (o.item_id === null && !o.custom) errors.lines = `${o.name} is no longer on the menu; add it as a new line.`;
+        else if (o.item_id !== null) increase.set(o.item_id, (increase.get(o.item_id) || 0) + qty - charged);
         units += qty - charged;
       } else if (qty < charged) {
         const off = charged - qty;
@@ -429,6 +430,30 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
       const key = String(l.key ?? '');
       if (!/^[A-Za-z0-9_-]{1,40}$/.test(key) || keyMap.has(key)) {
         errors.lines = 'Each new line needs its own key.';
+        continue;
+      }
+      if (l.custom === true) {
+        const name = text(l.name, CUSTOM_NAME_MAX);
+        const price = pesosToCents(l.unit_price);
+        if (!name || name.length > CUSTOM_NAME_MAX) {
+          errors.lines = `Name the custom item, up to ${CUSTOM_NAME_MAX} characters.`;
+          continue;
+        }
+        if (!Number.isSafeInteger(price) || price < 1 || price > MAX_PRICE_CENTS) {
+          errors.lines = 'Enter the price of the custom item in pesos, with at most two decimals.';
+          continue;
+        }
+        need('custom_item');
+        const engineKey = `new-${key}`;
+        keyMap.set(key, engineKey);
+        const line = {
+          key: engineKey, item_id: null, name, qty, menu_price_cents: price, menu_sale_cents: price,
+          options: [], options_cents: 0, options_text: '', override_cents: null, override_reason: '',
+          // Food or a cake, so SC/PWD can apply; untick for anything else.
+          sc_eligible: l.sc_eligible !== false, note, custom: true,
+        };
+        ops.push({ op: 'insert', clientKey: key, line });
+        result.push(line);
         continue;
       }
       const item = menu.get(Number(l.item_id), { now });
@@ -584,11 +609,11 @@ function insertLine(orderId, l) {
   return db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty, note,
                              menu_price_cents, menu_sale_cents, override_cents, override_reason, sc_eligible,
-                             options, options_cents)
-    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                             options, options_cents, custom)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     orderId, l.item_id, l.name, l.menu_sale_cents, l.menu_price_cents, l.qty, l.note,
     l.menu_price_cents, l.menu_sale_cents, l.override_cents, l.override_reason, l.sc_eligible ? 1 : 0,
-    l.options && l.options.length ? JSON.stringify(l.options) : '', l.options_cents || 0,
+    l.options && l.options.length ? JSON.stringify(l.options) : '', l.options_cents || 0, l.custom ? 1 : 0,
   ).lastInsertRowid;
 }
 

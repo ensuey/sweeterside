@@ -13,7 +13,9 @@
      voids      from the audit log, during the shift
      cash       expected = opening + cash taken - cash refunded + in - out
    The Z reading is saved with the shift when it closes, so it reads the same
-   later even if something is changed afterwards. */
+   later. When the owner corrects a payment or a cash in / out of a closed
+   shift (corrections.js), it is worked out again (recount): the corrected
+   reading replaces it, and the one printed at close is kept as the original. */
 
 const { db, transaction } = require('./db');
 const { ValidationError } = require('./menu');
@@ -149,7 +151,7 @@ function reading(shift, now = new Date()) {
       counted_cents: shift.counted_cash_cents,
       difference_cents: shift.counted_cash_cents === null ? null : shift.counted_cash_cents - expected,
     },
-    movements: db.prepare(`SELECT m.kind, m.amount_cents, m.reason, m.at, s.name AS staff
+    movements: db.prepare(`SELECT m.id, m.kind, m.amount_cents, m.reason, m.at, s.name AS staff
                            FROM cash_movements m JOIN staff s ON s.id = m.staff_id
                            WHERE m.shift_id = ? ORDER BY m.id`).all(shift.id),
     note: shift.close_note,
@@ -179,16 +181,37 @@ function close(input, actor) {
   });
 }
 
-/** A shift's reading: the saved Z reading for a closed shift, a fresh X reading otherwise. */
+/** A shift's reading: the saved Z reading for a closed shift (with the one
+    printed at close, when corrected since), a fresh X reading otherwise. */
 function report(id) {
   const shift = get(id);
   if (!shift) return null;
-  return shift.z_report ? JSON.parse(shift.z_report) : reading(shift);
+  if (!shift.z_report) return reading(shift);
+  const z = JSON.parse(shift.z_report);
+  return shift.z_original ? { ...z, original: JSON.parse(shift.z_original) } : z;
+}
+
+/**
+ * Work a closed shift's reading out again after a correction (inside the
+ * correction's transaction). The first time, the reading printed at close is
+ * kept as the original. The counted cash stays as counted; the expected cash
+ * and the difference follow the corrected entries. An open shift needs
+ * nothing: its X reading is always worked out fresh.
+ */
+function recount(id, by) {
+  const shift = get(id);
+  if (!shift || !shift.closed_at) return null;
+  if (!shift.z_original) db.prepare('UPDATE shifts SET z_original = z_report WHERE id = ?').run(shift.id);
+  const z = { ...reading(shift), corrected: { by: by ? by.name : '', at: new Date().toISOString().slice(0, 19).replace('T', ' ') } };
+  db.prepare(`UPDATE shifts SET z_report = ?, expected_cash_cents = ?, corrected_at = datetime('now'), corrected_by = ?
+              WHERE id = ?`).run(JSON.stringify(z), z.cash.expected_cents, by ? by.id : null, shift.id);
+  return z;
 }
 
 function recent(limit = 20) {
-  return db.prepare('SELECT id, opened_at, closed_at, opening_cash_cents, counted_cash_cents, expected_cash_cents FROM shifts ORDER BY id DESC LIMIT ?')
+  return db.prepare(`SELECT id, opened_at, closed_at, opening_cash_cents, counted_cash_cents, expected_cash_cents, corrected_at
+                     FROM shifts ORDER BY id DESC LIMIT ?`)
     .all(limit);
 }
 
-module.exports = { current, get, open, cashMove, reading, close, report, recent, cents };
+module.exports = { current, get, open, cashMove, reading, close, report, recount, recent, cents };

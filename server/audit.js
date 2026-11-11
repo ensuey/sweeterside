@@ -12,6 +12,7 @@ const ACTIONS = [
   'delivery_fee_changed', 'cash_in', 'cash_out', 'shift_open', 'shift_close',
   'staff_add', 'staff_change', 'staff_pin_change', 'settings_change', 'order_cancel',
   'stock_count', 'stock_add', 'stock_off', 'ingredient_change', 'order_delete',
+  'payment_correct', 'payment_delete', 'cash_move_correct', 'cash_move_delete',
 ];
 
 /**

@@ -351,10 +351,26 @@ receipts, and reports with the audit log at `/admin/reports`.
     Php 100/200/500/1,000) and the change.
   - **GCash, Maya, QR Ph and Card** (paid on the external terminal) need the
     reference number.
+  - **Other** (a bank transfer, anything else) needs a note saying what it was.
+  - Only **cash** counts in the drawer: GCash, Maya, QR Ph, Card and Other are
+    in the readings by method, never in the cash expected.
   - **Split payments** work: pay part one way, the rest another. The order is
     Paid only when it is fully covered.
   - Takeout can be sent to the kitchen in the same step.
   - Once payment has started, the ticket cannot be changed or voided.
+- **Custom item** (cashier and owner; a waiter needs the owner's PIN): **+ Custom
+  item** beside the search adds something not on the menu, named and priced at
+  the counter, e.g. "Custom cake deposit #12" or "Cake balance #12". It is paid
+  like any ticket (cash, GCash, Other…) and counts in the drawer, the readings
+  and the sales reports. No stock.
+- **Fix entries** (Shift → Fix entries; the owner, or anyone with the owner's
+  PIN): a payment or a cash in / out entered by mistake can be fixed (method,
+  amount, reference; in or out, amount, what for) or deleted, with a reason.
+  Each fix is in the audit log with what it was and what it became. A
+  payment's order is paid, or unpaid again (back among the open tabs), by
+  what is left. Fixing a closed shift works its reading out again: the
+  reading says "Corrected by …" and how it read at close, and the original
+  is kept. Orders with a refund are not fixed here.
 - **Refunds** (owner, or the owner's PIN) are under **Receipts**. Refund
   everything, or some items: an item's refund includes its share of the
   service charge. Pick the method it is paid back by, and give a reason.

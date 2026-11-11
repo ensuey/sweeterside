@@ -713,6 +713,20 @@ addMissingColumns('orders', {
 });
 db.exec("CREATE INDEX IF NOT EXISTS idx_orders_pay ON orders(pay_status) WHERE pay_status = 'awaiting'");
 
+/* A custom line: something not on the menu (a custom cake, a deposit), named
+   and priced at the counter. No menu item, so no stock. */
+addMissingColumns('order_items', { custom: 'INTEGER NOT NULL DEFAULT 0' });
+
+/* The owner can correct or delete a payment or a cash in / out after the
+   shift has closed. The shift's reading is then worked out again: z_report
+   holds the corrected one, z_original the one printed at close (kept once,
+   at the first correction), corrected_at / corrected_by the latest. */
+addMissingColumns('shifts', {
+  z_original: "TEXT NOT NULL DEFAULT ''",
+  corrected_at: 'TEXT',
+  corrected_by: 'INTEGER REFERENCES staff(id)',
+});
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

@@ -126,7 +126,7 @@ Legend:
 | `POST /api/pos/stock` | P(manage_stock) | ✓ | | Owner and cashier. `add` or `count` only (no `off` at the counter); same checks, request key and audit as the Items page, with the staff member. |
 | `POST /api/pos/ingredients/:id` | P(manage_stock) | ✓ | | Owner and cashier: `in_stock` true or false, audited with the staff member. |
 | `POST /api/pos/quote` | P | ✓ | | Totals priced by `server/pricing.js`; the browser's numbers are never used. |
-| `POST /api/pos/orders`, `PUT|PATCH /api/pos/orders/:id` | P | ✓ | | Request key (idempotent) and `version` (no lost updates). Discounts, SC/PWD, price overrides and voids checked against role limits, with owner override audited. **POS orders only.** |
+| `POST /api/pos/orders`, `PUT|PATCH /api/pos/orders/:id` | P | ✓ | | Request key (idempotent) and `version` (no lost updates). Discounts, SC/PWD, price overrides and voids checked against role limits, with owner override audited. A custom line (`custom: true`, name 1–60, price 0.01–100000 pesos) needs `custom_item` (owner, cashier; else the owner's PIN); it has no item id and no stock. **POS orders only.** |
 | `GET /api/pos/orders/:id` | P | | | Reads POS **and online** orders (for the pay screen). SC/PWD IDs masked unless `see_id_numbers`. |
 | `POST /api/pos/orders/:id/{table,merge,void}` | P | ✓ | | POS orders only. Void needs a reason and the owner. |
 | `POST /api/pos/orders/:id/pay` | P (`take_payment` or owner override) | ✓ | | POS and online orders. Request key; amounts checked against what is due; cash needs an open shift. |
@@ -135,6 +135,8 @@ Legend:
 | `GET /api/pos/shift` | P | | | |
 | `POST /api/pos/shift/{open,close}` | P(manage_shift) | ✓ | | Audited. |
 | `POST /api/pos/shift/cash` | P(cash_movement) | ✓ | | Cash in/out with a reason; audited. |
+| `GET /api/pos/entries?shift=` | P(manage_shift) | | | A shift's payments and cash in / out (the open shift, else the latest), to fix from. Staff names, order numbers, methods and references only; no customer data. |
+| `POST /api/pos/payments/:id/{correct,delete}`, `POST /api/pos/cash-moves/:id/{correct,delete}` | P + owner (`correct_entries`, or the owner's PIN in `override`) | ✓ | per-staff PIN lock | Reason required (≤200). Payments: a valid method, a reference where the method needs one, amount ≥ 0.01 and never more than the order; orders with a refund refused (409). The order's paid state follows what is left. Cash moves: in/out, amount ≥ 0.01, what for ≤200. A closed shift is recounted (`shifts.recount`), the printed Z kept as `z_original`. Audited before/after (`payment_correct`, `payment_delete`, `cash_move_correct`, `cash_move_delete`). Wrong PIN is 403 `wrong_pin`. |
 | `GET /api/pos/shifts`, `GET /api/pos/shifts/:id` | P(manage_shift) | | | X/Z readings. |
 | `GET /api/pos/receipt-settings`, `GET /api/pos/settings` | P | | | |
 | `PUT|PATCH /api/pos/receipt-settings`, `PUT|PATCH /api/pos/settings` | P(tax_settings) | ✓ | | Owner only; audited (`settings_change`). |
