@@ -20,6 +20,7 @@ const { ValidationError } = menu;
 const STATUSES = ['new', 'confirmed', 'preparing', 'delivering', 'completed', 'cancelled'];
 const ACTIVE_STATUSES = ['new', 'confirmed', 'preparing', 'delivering'];
 // Why an order was cancelled. No-shows and fakes count against the number.
+// What staff choose from. 'unpaid' (a GCash order nobody paid for) is set only by paymongo.js.
 const CANCEL_REASONS = ['customer', 'no_show', 'fake', 'other'];
 const LANDMARK_MIN = 5;
 const LANDMARK_MAX = 200;
@@ -386,6 +387,12 @@ function settings() {
     facebook_url: facebookUrl(),
     share_image: shareImage(),
     ...tracking(),
+    // GCash through PayMongo: the switch, and whether the keys are set on
+    // the server (never the keys themselves).
+    gcash_online: getSetting('gcash_online', '0') === '1',
+    gcash_ready: require('./paymongo').configured(),
+    gcash_webhook: !!process.env.PAYMONGO_WEBHOOK_SECRET,
+    gcash_live: require('./paymongo').liveMode(),
     free_delivery_min: delivery.freeOver(),
     preorder_days: schedule.preorderDays(),
     require_confirm_delivery: requiresConfirmation('delivery'),
@@ -412,6 +419,7 @@ function updateSettings(input) {
     facebook_url: parseFacebookUrl,
     share_image: parseShareImage,
     ...Object.fromEntries(Object.keys(TRACKING).map((key) => [key, parseTracking(key)])),
+    gcash_online: parseSwitch('gcash_online'),
     free_delivery_min: parseFreeMin,
     preorder_days: schedule.parseDays,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
@@ -650,6 +658,12 @@ function create(input, { now = new Date() } = {}) {
     }
   }
 
+  const payMethod = input.pay === 'gcash' ? 'gcash' : '';
+  if (input.pay !== undefined && !['', 'cash', 'gcash'].includes(input.pay)) errors.pay = 'Choose how you will pay.';
+  if (payMethod && !require('./paymongo').enabled()) {
+    errors.pay = 'GCash is not available right now. Please choose another way to pay.';
+  }
+
   let tableNo = '';
   if (type === 'dinein') {
     tableNo = String(input.table_no ?? '').trim();
@@ -678,6 +692,10 @@ function create(input, { now = new Date() } = {}) {
     q = quote(input.items, type, now, input.voucher, input.delivery_area, when.service_date);
     if (type === 'delivery' && !q.area) {
       errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
+    }
+    // The fee for "Other area" is agreed by phone, so there is nothing to pay online yet.
+    if (payMethod && q.area && q.area.to_confirm) {
+      errors.pay = 'For "Other area" we call you with the fee first, so please pay in cash.';
     }
   } catch (err) {
     if (!(err instanceof ValidationError)) throw err;
@@ -716,12 +734,13 @@ function create(input, { now = new Date() } = {}) {
   if (Number(input.expected_total) !== q.total) {
     throw staleCart('Prices have changed since you opened the menu. Check the new total and place your order again.', q);
   }
-  if (type === 'delivery' && cash === null) cash = q.total; // blank: exact amount
-  if (type === 'delivery' && cash < q.total) {
+  if (payMethod) cash = 0; // paid online: no cash, no change
+  else if (type === 'delivery' && cash === null) cash = q.total; // blank: exact amount
+  if (type === 'delivery' && !payMethod && cash < q.total) {
     throw new ValidationError({ cash: `The total is ₱${q.total}, so the cash must be at least that.` });
   }
   // Counter orders store no cash: they pay the total in person.
-  const changeDue = type === 'delivery' ? cash - q.total : 0;
+  const changeDue = type === 'delivery' && !payMethod ? cash - q.total : 0;
 
   const id = transaction(() => {
     const t = q.priced.totals;
@@ -729,13 +748,15 @@ function create(input, { now = new Date() } = {}) {
       INSERT INTO orders (source, order_type, status, customer_name, phone, phone_norm, address, landmark,
                           table_no, pickup_at, gross_cents, subtotal_cents, voucher_code, discount_cents,
                           delivery_fee_cents, total_cents, cash_cents, change_due_cents, pricing,
-                          delivery_area_id, delivery_area, fee_to_confirm, scheduled_for, scheduled_date)
-      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                          delivery_area_id, delivery_area, fee_to_confirm, scheduled_for, scheduled_date,
+                          pay_method, pay_status, pay_token)
+      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       type, status, name, phone, phoneNorm, address, landmark, tableNo, pickupAt,
       t.gross, t.subtotal, q.voucher ? q.voucher.code : '', t.voucher_discount,
       t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced),
       q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0,
-      when.scheduled_for, when.scheduled_date);
+      when.scheduled_for, when.scheduled_date,
+      payMethod, payMethod ? 'awaiting' : '', payMethod ? require('./paymongo').newPayToken() : null);
     insertLines(info.lastInsertRowid, q.priced.lines, q.lines);
     return info.lastInsertRowid;
   });
@@ -802,6 +823,8 @@ function withLines(order, { fullIds = false } = {}) {
   // it nor the request key ever goes out with an order.
   delete order.pos_input;
   delete order.last_request_key;
+  // The customer's key to their GCash order never goes out with it.
+  delete order.pay_token;
   if (order.pricing && !fullIds) {
     order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
   }
@@ -817,7 +840,7 @@ function get(id, options) {
  */
 // A POS tab that has not been sent to the kitchen is not in the queue yet,
 // and is not counted with it.
-const IN_QUEUE = "NOT (source = 'pos' AND kitchen_sent_at IS NULL)";
+const IN_QUEUE = "NOT (source = 'pos' AND kitchen_sent_at IS NULL) AND pay_status <> 'awaiting'";
 
 function list(which = 'active') {
   const filter = {
