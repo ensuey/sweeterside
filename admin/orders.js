@@ -28,6 +28,7 @@ const ORDER_POLL_MS = 20000;
 const WAITING_FLAG_MIN = 10;
 const CANCEL_REASON = {
   customer: 'Customer cancelled', no_show: 'No-show / unreachable', fake: 'Fake order', other: 'Other',
+  unpaid: 'GCash not paid',
 };
 
 /* ---------------------------- orders ---------------------------- */
@@ -252,9 +253,72 @@ function orderHtml(o) {
     </li>`;
 }
 
+/* ---------------------------- finished: today as cards, older as rows ---------------------------- */
+
+const openRows = new Set(); // older orders opened into a card, kept open across refreshes
+
+/** The Manila calendar day (YYYY-MM-DD) of a stored UTC time or a Date (default now). */
+function manilaDay(when = new Date()) {
+  const d = when instanceof Date ? when : new Date(`${String(when).replace(' ', 'T')}Z`);
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+}
+
+/** "Yesterday" or "Mon, 9 Nov". */
+function dayLabel(day) {
+  if (day === manilaDay(new Date(Date.now() - 86400000))) return 'Yesterday';
+  return new Date(`${day}T12:00:00+08:00`)
+    .toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Manila' });
+}
+
+/** An older finished order on one line; tap to open the full card. */
+function orderRowHtml(o) {
+  const type = o.order_type || 'delivery';
+  const placed = new Date(`${String(o.created_at).replace(' ', 'T')}Z`)
+    .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
+  const who = o.customer_name || (o.source === 'pos' ? 'Counter' : TYPE_LABEL[type]);
+  const meta = `${placed} · ${typeBadge(o)}`;
+  return `
+    <li>
+      <details class="orow" data-row-id="${o.id}"${openRows.has(o.id) ? ' open' : ''}>
+        <summary class="orow__sum">
+          <span class="orow__id">#${o.id}</span>
+          <span class="orow__main">
+            <span class="orow__name">${esc(who)}</span>
+            <span class="orow__meta">${esc(meta)}</span>
+          </span>
+          <span class="orow__end">
+            <span class="orow__total">${money(o.total)}</span>
+            <span class="orow__status orow__status--${o.status === 'cancelled' ? 'cancelled' : 'completed'}">${o.status === 'cancelled' ? 'Cancelled' : 'Completed'}</span>
+          </span>
+        </summary>
+        <ul class="orow__card">${orderHtml(o)}</ul>
+      </details>
+    </li>`;
+}
+
+/** Finished orders: today's as cards; each earlier day under its own heading, as rows. */
+function finishedHtml(orders) {
+  const today = manilaDay();
+  const todays = orders.filter((o) => manilaDay(o.created_at) === today);
+  const days = new Map(); // newest day first, as the list comes
+  for (const o of orders) {
+    const day = manilaDay(o.created_at);
+    if (day !== today) days.set(day, [...(days.get(day) || []), o]);
+  }
+  const head = (label, n) => `<h3 class="orows__day">${esc(label)} <span class="orows__n">${plural(n, 'order')}</span></h3>`;
+  let html = '';
+  if (todays.length && days.size) html += `<li class="orows orows--head">${head('Today', todays.length)}</li>`;
+  html += todays.map(orderHtml).join('');
+  // Newest day first ('YYYY-MM-DD' sorts as dates do).
+  for (const [day, list] of [...days].sort((a, b) => b[0].localeCompare(a[0]))) {
+    html += `<li class="orows">${head(dayLabel(day), list.length)}<ul class="orows__list">${list.map(orderRowHtml).join('')}</ul></li>`;
+  }
+  return html;
+}
+
 function renderOrders(counts) {
   const list = $('orders');
-  list.innerHTML = state.orders.map(orderHtml).join('');
+  list.innerHTML = state.ordersShow === 'finished' ? finishedHtml(state.orders) : state.orders.map(orderHtml).join('');
 
   const active = counts.new + counts.confirmed + counts.preparing + counts.delivering;
   $('n-active').textContent = active;
@@ -474,6 +538,16 @@ function pollOrders() {
 }
 
 /* ---------------------------- events ---------------------------- */
+
+// Remember which older orders are open, so a refresh does not close them.
+// (toggle does not bubble, so listen while it travels down.)
+$('orders').addEventListener('toggle', (event) => {
+  const row = event.target.closest && event.target.closest('.orow');
+  if (!row) return;
+  const id = Number(row.dataset.rowId);
+  if (row.open) openRows.add(id);
+  else openRows.delete(id);
+}, true);
 
 $('orders').addEventListener('change', (event) => {
   if (event.target.matches('[data-status-select]')) changeStatus(event.target);

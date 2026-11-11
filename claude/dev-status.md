@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 273 (`npm test`):
+**Tests:** 274 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -28,7 +28,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/cakes-page.test.js`
 - 9 in `test/tracking.test.js`
 - 12 in `test/inventory.test.js`
-- 3 in `test/admin-common.test.js`
+- 4 in `test/admin-common.test.js`
 - 4 in `test/orders-delete.test.js`
 - 11 in `test/paymongo.test.js`
 
@@ -501,6 +501,13 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Finished orders: today as cards, earlier as rows (2026-11-11)
+
+- Orders → Finished: today's orders (Manila day they were placed) as cards;
+  each earlier day under a heading, one line per order (number, name, time,
+  type, total, Completed / Cancelled). A line opens into the full card, and
+  stays open across the 20-second refresh. The To do queue is unchanged.
 
 ## GCash through PayMongo (2026-11-11)
 
