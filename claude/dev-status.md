@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 274 (`npm test`):
+**Tests:** 281 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -31,6 +31,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 4 in `test/admin-common.test.js`
 - 4 in `test/orders-delete.test.js`
 - 11 in `test/paymongo.test.js`
+- 7 in `test/corrections.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -501,6 +502,18 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Custom items, Other payments, fixing entries (2026-11-11)
+
+- POS **+ Custom item**: a line named and priced at the counter
+  (`order_items.custom`, no item id, no stock); `custom_item` owner/cashier.
+- Payment method **Other** (note required). The drawer already counted cash
+  only.
+- **Fix entries** (`server/corrections.js`): owner (`correct_entries`) or the
+  owner's PIN fixes or deletes a payment or a cash in / out, with a reason,
+  audited before/after. The order's paid state follows. A closed shift is
+  recounted; `shifts.z_original` keeps the printed Z. Refunded orders are
+  refused.
 
 ## Finished orders: today as cards, earlier as rows (2026-11-11)
 
