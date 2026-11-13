@@ -678,8 +678,13 @@ body.is-locked { overflow: hidden; }
   position: fixed; inset: 0; z-index: 50; overflow-y: auto;
   display: grid; place-items: center; padding: 1.5rem 1rem;
   background: var(--cream);
+  /* A <dialog>: whole screen, no box. */
+  width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; border: 0; color: inherit;
 }
-.gate[hidden] { display: none; }
+.gate:not([open]) { display: none; }
+.gate::backdrop { background: var(--cream); }
+/* Anything left open under the PIN screen stays out of sight until unlocked. */
+body.is-locked dialog[open]:not(.gate) { visibility: hidden; }
 .gate__panel { width: min(100%, 520px); display: flex; flex-direction: column; align-items: center; gap: 1rem; text-align: center; }
 .gate__logo { width: 64px; height: 64px; border-radius: 50%; }
 .gate__title { font-size: 1.5rem; }

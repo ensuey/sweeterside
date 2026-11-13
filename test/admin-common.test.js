@@ -58,3 +58,24 @@ test('the Items page names its categories with the right plural', () => {
   assert.ok(js.includes("plural(list.length, 'category', 'categories')"));
   assert.ok(!/plural\([^)]*'category'\)/.test(js), 'no "categorys"');
 });
+
+test('an owner PIN prompt keeps asking after a wrong PIN until it goes through or is cancelled', () => {
+  // A capped loop (3 tries) used one try for the first ask, one for the wrong
+  // PIN and one for the second ask, so the right PIN was never sent.
+  for (const f of ['pos.js', 'pos-pay.js', 'pos-credit.js']) {
+    const js = fs.readFileSync(path.join(__dirname, '..', 'admin', f), 'utf8');
+    assert.ok(!/for \(let attempt = 0; attempt < \d+; attempt\+\+\)/.test(js), `${f}: no capped retry loop`);
+    assert.ok(js.includes('askOverride'), `${f} asks for the owner's PIN`);
+  }
+});
+
+test('the PIN screen opens above any open dialog, and locking closes what was open', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'admin', 'staff-gate.js'), 'utf8');
+  assert.match(js, /el = document\.createElement\('dialog'\);\s*el\.id = 'gate';/, 'a dialog, so it goes in the top layer');
+  assert.match(js, /if \(!el\.open\) el\.showModal\(\);/);
+  assert.ok(js.includes("el.addEventListener('close', () => { if (waiting) el.showModal(); });"), 'Escape cannot close it while locked');
+  assert.match(js, /for \(const d of document\.querySelectorAll\('dialog\[open\]:not\(\.gate\)'\)\) d\.close\(\);/, 'Lock closes the rest');
+  assert.match(js, /dlg\.addEventListener\('close', \(\) => done\(null\)\)/, 'an owner prompt closed by the lock approves nothing');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'admin', 'admin.css'), 'utf8');
+  assert.match(css, /body\.is-locked dialog\[open\]:not\(\.gate\) \{ visibility: hidden; \}/, 'nothing shows under the PIN screen');
+});

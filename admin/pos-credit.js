@@ -18,7 +18,7 @@ const UTANG = (() => {
 
   /** POST or PATCH; when the owner must approve, ask for the PIN and send again. */
   async function withOwner(path, method, body) {
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (;;) { // until it goes through or is cancelled: a wrong PIN asks again
       try {
         return await staffGate.call(path, { method, body });
       } catch (e) {
@@ -33,7 +33,6 @@ const UTANG = (() => {
         throw e;
       }
     }
-    return null;
   }
 
   async function load() {
