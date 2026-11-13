@@ -842,11 +842,18 @@ function get(id, options) {
 // A POS tab that has not been sent to the kitchen is not in the queue yet,
 // and is not counted with it.
 const IN_QUEUE = "NOT (source = 'pos' AND kitchen_sent_at IS NULL) AND pay_status <> 'awaiting'";
+// A POS order never sent to the kitchen that is done anyway: paid at the
+// counter, or discarded. It is finished, so it shows under Finished (where it
+// can be deleted). A tab merged into another is left out: its lines moved.
+const HELD_DONE = `source = 'pos' AND kitchen_sent_at IS NULL AND merged_into IS NULL
+  AND (paid_at IS NOT NULL OR status = 'cancelled')`;
+// Finished, as the list and the count see it. A paid one counts as completed.
+const FINISHED = `(status IN ('completed','cancelled') AND ${IN_QUEUE}) OR (${HELD_DONE})`;
 
 function list(which = 'active') {
   const filter = {
     active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')}) AND ${IN_QUEUE}`,
-    finished: `WHERE status IN ('completed','cancelled') AND ${IN_QUEUE}`,
+    finished: `WHERE ${FINISHED}`,
     all: '',
   }[which];
   if (filter === undefined) throw Object.assign(new Error('Unknown order filter.'), { status: 400 });
@@ -887,7 +894,13 @@ function withHistory(list) {
 
 function counts() {
   const rows = db.prepare(`SELECT status, COUNT(*) AS n FROM orders WHERE ${IN_QUEUE} GROUP BY status`).all();
-  return Object.fromEntries(STATUSES.map((s) => [s, (rows.find((r) => r.status === s) || {}).n || 0]));
+  const out = Object.fromEntries(STATUSES.map((s) => [s, (rows.find((r) => r.status === s) || {}).n || 0]));
+  // Held POS orders that are done are finished too (see HELD_DONE).
+  const held = db.prepare(`SELECT SUM(status = 'cancelled') AS cancelled, SUM(status <> 'cancelled') AS completed
+                           FROM orders WHERE ${HELD_DONE}`).get();
+  out.completed += held.completed || 0;
+  out.cancelled += held.cancelled || 0;
+  return out;
 }
 
 /**
