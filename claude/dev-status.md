@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 282 (`npm test`):
+**Tests:** 283 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -29,7 +29,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 9 in `test/tracking.test.js`
 - 12 in `test/inventory.test.js`
 - 4 in `test/admin-common.test.js`
-- 5 in `test/orders-delete.test.js`
+- 6 in `test/orders-delete.test.js`
 - 11 in `test/paymongo.test.js`
 - 7 in `test/corrections.test.js`
 
@@ -564,6 +564,12 @@ After deploying (owner, once):
 - Held POS tabs (saved, never sent) are left off the Orders page, so the
   POS ticket has its own **Delete…** on a held tab: the same route
   (`/api/orders/:id/delete`), the owner's PIN every time (2026-11-13).
+- Fix (2026-11-13): a POS order paid at the counter without being sent to
+  the kitchen was on no screen (the Orders page hid every never-sent POS
+  order, the POS tabs hide paid ones), yet counted in the reports. Live
+  #12 was one, with an SC/PWD discount. Such orders, and discarded tabs,
+  now show under Finished (`HELD_DONE` in `server/orders.js`) and count as
+  completed / cancelled; open tabs and merged-away tabs stay off.
 
 ## Inventory: stock counts and ingredients (2026-11-10)
 
@@ -691,8 +697,9 @@ then a dry run on the live site. The owner ran the apply step.
   regroup above).
 - Dachel to set the real opening hours on Settings (still 10:00–20:00).
 - Owner notifications (Messenger / WhatsApp) were discussed and put on hold.
-- POS order #12 (a test takeout saved at the counter, never sent) is still
-  open on the live site: after the deploy, open it in the POS and Delete….
+- POS order #12 (a test takeout paid at the counter with an SC/PWD discount,
+  never sent) is still on the live site and in the reports: after the
+  deploy, Orders → Finished → #12 → Delete….
 - Check the POS item photos on the counter iPad.
 - SEO after #34 (owner):
   - **Google Business Profile:** primary category Café, plus Coffee shop,
