@@ -32,6 +32,7 @@
   <button class="btn btn--ghost btn--sm sound-hint" type="button" id="sound-hint" hidden>Tap to turn on sound</button>
   <button class="btn btn--ghost btn--sm" type="button" id="new-btn">New ticket</button>
   <button class="btn btn--ghost btn--sm" type="button" id="receipts-btn">Receipts</button>
+  <button class="btn btn--ghost btn--sm" type="button" id="utang-btn" hidden>Utang</button>
   <button class="btn btn--ghost btn--sm" type="button" id="stock-btn" hidden>Stock</button>
   <button class="btn btn--ghost btn--sm shift-btn" type="button" id="shift-btn" data-open="0">Shift</button>
   <div class="pos-bar__spacer"></div>
@@ -370,6 +371,11 @@
           <div class="field field--xs" id="tender-box"><label for="pay-tendered">Cash handed over</label><input id="pay-tendered" type="number" min="0" step="0.01" inputmode="decimal"></div>
           <div class="field field--xs field--grow" id="ref-box" hidden><label for="pay-ref">Reference number</label><input id="pay-ref" maxlength="60" autocomplete="off"></div>
         </div>
+        <div class="utang-pick" id="utang-box" hidden>
+          <div class="field field--grow"><label for="utang-account">Utang for</label><select id="utang-account"></select></div>
+          <button class="btn btn--ghost btn--sm" type="button" id="utang-new">+ New customer</button>
+          <p class="hint" id="utang-info"></p>
+        </div>
         <div class="quick" id="quick" role="group" aria-label="Cash handed over">
           <button type="button" class="chip" data-cash="exact">Exact</button>
           <button type="button" class="chip" data-cash="100">₱100</button>
@@ -496,6 +502,71 @@
   </form>
 </dialog>
 
+<!-- Utang: customers who pay later -->
+<dialog class="modal" id="utang-dialog" aria-labelledby="utang-title">
+  <div class="modal__form">
+    <div class="modal__head">
+      <h2 class="modal__title" id="utang-title">Utang</h2>
+      <button class="icon-btn" type="button" id="utang-close" aria-label="Close">×</button>
+    </div>
+    <div class="modal__body">
+      <div id="utang-list-view">
+        <div class="tfields tfields--wrap">
+          <div class="field field--grow"><label for="utang-search">Find a customer</label><input id="utang-search" type="search" autocomplete="off"></div>
+          <button class="btn btn--ghost btn--sm" type="button" id="utang-add">+ Add customer</button>
+        </div>
+        <p class="utang-total" id="utang-total"></p>
+        <ul class="tabs" id="utang-list"></ul>
+        <p class="hint" id="utang-empty" hidden>No one on the Utang list yet. The owner adds the customers who may pay later.</p>
+      </div>
+      <div id="utang-account-view" hidden>
+        <button class="link" type="button" id="utang-back">← All customers</button>
+        <h3 class="utang-name" id="utang-name"></h3>
+        <p class="hint" id="utang-meta"></p>
+        <p class="utang-owes" id="utang-owes"></p>
+        <form class="utang-collect" id="utang-collect" novalidate>
+          <h4>Pay back</h4>
+          <div class="tfields tfields--wrap">
+            <div class="field field--xs"><label for="collect-method">Paid by</label><select id="collect-method"></select></div>
+            <div class="field field--xs"><label for="collect-amount">Amount (₱)</label><input id="collect-amount" type="number" min="0.01" step="0.01" inputmode="decimal"></div>
+            <div class="field field--xs" id="collect-tender-box"><label for="collect-tendered">Cash handed over</label><input id="collect-tendered" type="number" min="0" step="0.01" inputmode="decimal"></div>
+            <div class="field field--xs field--grow" id="collect-ref-box" hidden><label for="collect-ref">Reference number</label><input id="collect-ref" maxlength="60" autocomplete="off"></div>
+          </div>
+          <p class="change" id="collect-change" aria-live="polite"></p>
+          <p class="field__err" id="collect-err" hidden></p>
+          <button class="btn btn--primary" type="submit" id="collect-submit">Record payment</button>
+        </form>
+        <div class="utang-actions">
+          <button class="btn btn--ghost btn--sm" type="button" id="utang-statement">Print statement</button>
+          <button class="btn btn--ghost btn--sm" type="button" id="utang-edit">Edit…</button>
+        </div>
+        <h4>History</h4>
+        <ul class="utang-history" id="utang-history"></ul>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Add or change someone on the Utang list -->
+<dialog class="modal modal--sm" id="utang-edit-dialog" aria-labelledby="utang-edit-title">
+  <form method="dialog" class="modal__form" id="utang-edit-form" novalidate>
+    <div class="modal__head"><h2 class="modal__title" id="utang-edit-title">Add to the Utang list</h2></div>
+    <div class="modal__body">
+      <div class="field"><label for="ue-name">Name</label><input id="ue-name" maxlength="60" autocomplete="off" required></div>
+      <div class="field"><label for="ue-phone">Mobile number (optional)</label><input id="ue-phone" type="tel" maxlength="20" autocomplete="off"></div>
+      <div class="field"><label for="ue-limit">Limit (₱, blank for none)</label><input id="ue-limit" type="number" min="0" step="1" inputmode="numeric"></div>
+      <div class="field"><label for="ue-note">Note (optional)</label><input id="ue-note" maxlength="200" autocomplete="off"></div>
+      <label class="fee__check" id="ue-active-box"><input type="checkbox" id="ue-active"> On the list (can take utang)</label>
+      <p class="field__err" id="ue-err" hidden></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn btn--ghost" type="button" id="ue-cancel">Cancel</button>
+      <span class="modal__spacer"></span>
+      <button class="btn btn--primary" type="submit" id="ue-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
 <!-- What gets printed: a receipt, a kitchen ticket or a shift reading -->
 <div class="print-area" id="print-area" aria-hidden="true"></div>
 
@@ -506,5 +577,6 @@
 <script src="/admin/pos.js"></script>
 <script src="/admin/pos-pay.js"></script>
 <script src="/admin/pos-online.js"></script>
+<script src="/admin/pos-credit.js"></script>
 </body>
 </html>

@@ -279,3 +279,19 @@ test('the endpoints: session, CSRF, a PIN, the right role; a locked POS is 423',
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test('the POS: an Utang button, the method on the pay screen with a customer picker, and the panel script', () => {
+  const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'admin', f), 'utf8');
+  const html = read('pos.html');
+  assert.match(html, /id="utang-btn"[^>]*hidden/, 'hidden until the staff member may use it');
+  assert.match(html, /id="utang-account"/);
+  assert.match(html, /<script src="\/admin\/pos-credit\.js"><\/script>/);
+  assert.ok(html.indexOf('pos-pay.js') < html.indexOf('pos-credit.js'), 'after the pay screen it uses');
+  const pay = read('pos-pay.js');
+  assert.match(pay, /!m\.credit \|\| staffGate\.can\('give_credit'\)/, 'only for those who may give utang');
+  assert.match(pay, /part\.account_id = Number\(\$\('utang-account'\)\.value\)/);
+  const panel = read('pos-credit.js');
+  assert.match(panel, /\/api\/pos\/credit\/\$\{S\.account\.id\}\/collect/);
+  assert.ok(!/innerHTML\s*=/.test(panel), 'the panel builds its rows with DOM APIs');
+  assert.match(read('staff-gate.js'), /credit_over_limit:/);
+});

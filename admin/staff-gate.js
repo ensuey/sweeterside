@@ -30,6 +30,10 @@ const staffGate = (() => {
     custom_item: 'A custom item',
     correct_entries: 'Correcting a payment or a cash in / out',
     delete_orders: 'Deleting a test order for good',
+    give_credit: 'Utang (pay later)',
+    collect_credit: 'Taking an utang payment',
+    manage_credit: 'Adding or changing someone on the Utang list',
+    credit_over_limit: 'Utang over the customer\'s limit',
   };
 
   let current = null; // { token, staff, permissions, lock_minutes }

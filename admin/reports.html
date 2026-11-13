@@ -83,6 +83,7 @@
       <button type="button" role="tab" id="tab-sales" aria-controls="view-sales" aria-selected="true" data-view="sales">Sales</button>
       <button type="button" role="tab" id="tab-scpwd" aria-controls="view-scpwd" aria-selected="false" data-view="scpwd">SC / PWD</button>
       <button type="button" role="tab" id="tab-discounts" aria-controls="view-discounts" aria-selected="false" data-view="discounts">Vouchers and discounts</button>
+      <button type="button" role="tab" id="tab-utang" aria-controls="view-utang" aria-selected="false" data-view="utang">Utang</button>
       <button type="button" role="tab" id="tab-audit" aria-controls="view-audit" aria-selected="false" data-view="audit">Audit log</button>
     </div>
 
@@ -102,6 +103,15 @@
 
     <section id="view-discounts" role="tabpanel" aria-labelledby="tab-discounts" hidden>
       <div class="report-grid" id="discount-tables"></div>
+    </section>
+
+    <section id="view-utang" role="tabpanel" aria-labelledby="tab-utang" hidden>
+      <div class="report-head">
+        <p class="hint">Utang is a sale on the day of the order. What they pay back later is not a new sale. Who owes what is as of now; charged and paid back are for the dates.</p>
+        <button class="btn btn--primary btn--sm" type="button" id="utang-csv">Download CSV</button>
+      </div>
+      <div class="cards" id="utang-cards"></div>
+      <div class="report-grid" id="utang-tables"></div>
     </section>
 
     <section id="view-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>

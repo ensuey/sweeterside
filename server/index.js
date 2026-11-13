@@ -1143,7 +1143,7 @@ async function route(req, res) {
     const open = shifts.current();
     return sendJson(res, 200, {
       shift: open ? shifts.reading(open) : null,
-      methods: Object.entries(payments.METHODS).map(([id, m]) => ({ id, label: m.label, reference: m.reference, drawer: !!m.drawer })),
+      methods: Object.entries(payments.METHODS).map(([id, m]) => ({ id, label: m.label, reference: m.reference, drawer: !!m.drawer, credit: !!m.credit })),
     });
   }
 

@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 283 (`npm test`):
+**Tests:** 293 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -32,6 +32,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/orders-delete.test.js`
 - 11 in `test/paymongo.test.js`
 - 7 in `test/corrections.test.js`
+- 10 in `test/credit.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -502,6 +503,42 @@ After deploying (owner, once):
 - The CSP adds only the origins of the tools that are on (`TRACKING_ORIGINS`
   in `server/index.js`), on those pages only. Admin and POS pages never load
   any of them.
+
+## Utang: customers who pay later (2026-11-13)
+
+Decided with the owner: utang is a sale on the day of the order; a cashier
+can give it to customers on the owner's list, up to their limit (over it,
+or adding someone new, needs the owner's PIN); they pay it back in any
+amount, by any method.
+
+- **The list** (`server/credit.js`, table `credit_accounts`): name,
+  optional phone, optional limit, note, on/off. POS → **Utang**. Phones are
+  masked in lists; the owner sees them in full on the account.
+- **Charging:** payment method **Utang** on the pay screen, with a customer
+  picker (`payments.credit_account_id`). The order is paid: in the sales,
+  the shift sales and the ₱3M tracker that day. Not drawer cash. Can be
+  split with cash. One customer per order.
+- **Paying back** (`credit_collections`): from the customer's page in the
+  Utang panel, any amount up to what they owe, any method. Cash goes into
+  the drawer: the X/Z reading shows "Utang paid back (not sales)" and adds
+  the cash to what is expected. A slip prints ("not a sales receipt"), and a
+  statement on request.
+- **The balance is never stored:** utang payments − utang refunds −
+  collections. Deleting an order or a payment fixes it by itself. Refunds
+  can go back to utang. A payment cannot be fixed to or from utang (delete
+  it and take it again). Nothing may leave someone owing less than nothing.
+- **Receipts** say who the utang is for and what they owe now in all.
+- **Reports → Utang:** owed now, charged and paid back in the dates, who
+  owes what, CSV (no phones).
+- **Permissions:** `give_credit`, `collect_credit` (owner, cashier);
+  `manage_credit`, `credit_over_limit` (owner). Audit actions
+  `credit_account`, `credit_collect`, `credit_collection_delete` (ids only).
+- Migration: new tables and two nullable columns; nothing existing changed.
+- Also fixed: the pay screen showed the last order's payments on the next
+  order's screen.
+- **Owner to do after deploy:** POS → Utang → **+ Add customer** for each
+  regular allowed utang, with a limit. Ask the accountant whether counting
+  utang as a sale on the day suits the books.
 
 ## Custom items, Other payments, fixing entries (2026-11-11)
 

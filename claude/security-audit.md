@@ -141,6 +141,29 @@ Legend:
 | `GET /api/pos/receipt-settings`, `GET /api/pos/settings` | P | | | |
 | `PUT|PATCH /api/pos/receipt-settings`, `PUT|PATCH /api/pos/settings` | P(tax_settings) | ✓ | | Owner only; audited (`settings_change`). |
 
+### POS: Utang (customers who pay later)
+
+Every route needs the admin session and an unlocked staff member (P), and
+the staff member must have `give_credit` or `collect_credit` (owner,
+cashier; never a waiter). The body limit is the usual one (`readJson`).
+
+| Route | Auth | CSRF | Limit | Notes |
+|---|---|---|---|---|
+| `GET /api/pos/credit` | P + give/collect_credit | | | The list with balances. Phones masked (`****1234`). |
+| `POST /api/pos/credit` | P + owner (`manage_credit`, or the owner's PIN) | ✓ | per-staff PIN lock | Name 1–60 (no two active with one name), optional PH mobile, optional limit in pesos, note ≤200. Audited (`credit_account`, ids only). |
+| `GET /api/pos/credit/:id` | P + give/collect_credit | | | The account and its history. Full phone only for `manage_credit` (owner). |
+| `PATCH /api/pos/credit/:id` | P + owner (`manage_credit`, or the owner's PIN) | ✓ | per-staff PIN lock | Same checks; cannot switch off someone who still owes. Column names come from the server's own list. Audited. |
+| `POST /api/pos/credit/:id/collect` | P + collect_credit | ✓ | | Idempotent (`request_key`). Amount ≥ 0.01 and never more than owed (checked again in the transaction). Any method but utang; cash needs an open shift; references as for payments. Audited (`credit_collect`). |
+| `GET /api/pos/credit/collections/:id` | P + give/collect_credit | | | One payment back, to print the slip again. |
+| `POST /api/pos/credit/collections/:id/delete` | P + owner (`correct_entries`, or the owner's PIN) | ✓ | per-staff PIN lock | Reason required. Recounts a closed shift. Audited (`credit_collection_delete`). |
+
+Charging happens in `POST /api/pos/orders/:id/pay` with method `utang` and
+`account_id`: `give_credit`, an active account, one customer per order, and
+the limit checked inside the transaction (over it needs `credit_over_limit`,
+the owner's PIN, audited as `override`). Refunds to utang only on an order
+paid with utang and never below what is owed. A payment cannot be corrected
+to or from utang.
+
 ### POS: online orders (PR #23)
 
 | Route | Auth | CSRF | Limit | Notes |
@@ -166,7 +189,8 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 
 | Route | Auth | CSRF | Limit | Notes |
 |---|---|---|---|---|
-| `GET /api/reports/{summary,sc-pwd,discounts,threshold}` | P(reports) | | | |
+| `GET /api/reports/{summary,sc-pwd,discounts,threshold,utang}` | P(reports) | | | |
+| `GET /api/reports/utang.csv` | P(reports) | | | Who owes what: name, balance, limit, on the list. No phones. CSV formula characters neutralised. |
 | `GET /api/reports/sc-pwd.csv` | P(reports) | | | The only place SC/PWD IDs appear in full outside receipts. CSV formula characters neutralised. |
 | `GET /api/audit`, `GET /api/audit.csv` | P(audit) | | | Append-only log (triggers refuse UPDATE and DELETE). |
 
@@ -198,6 +222,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-13: Utang (customer credit) routes added under `/api/pos/credit`, and `/api/reports/utang` (+ `.csv`).
 - 2026-11-03: Settings gain confirm_call_minutes, facebook_url and share_image (PR A). No new endpoint.
 - 2026-11-03: About us page (`/about`) added.
 - 2026-11-03: robots.txt, sitemap.xml and llms.txt added (local SEO).
