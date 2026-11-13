@@ -77,11 +77,13 @@ function readingHtml(r, { forPrint = false } = {}) {
     <h4>Payments</h4>
     <dl class="rd">${methods(r.payments.by_method)}</dl>
     ${r.refunds.total_cents ? `<h4>Refunds</h4><dl class="rd">${methods(r.refunds.by_method)}</dl>` : ''}
+    ${r.utang_collected && r.utang_collected.total_cents ? `<h4>Utang paid back (not sales)</h4><dl class="rd">${methods(r.utang_collected.by_method)}</dl>` : ''}
     <h4>Cash drawer</h4>
     <dl class="rd">
       ${row('Starting cash', r.cash.opening_cents)}
       ${row('Cash sales', r.cash.sales_cents)}
       ${r.cash.refunds_cents ? row('Cash refunds', -r.cash.refunds_cents) : ''}
+      ${r.cash.utang_collected_cents ? row('Utang paid back in cash', r.cash.utang_collected_cents) : ''}
       ${row('Cash in', r.cash.in_cents)}
       ${row('Cash out', -r.cash.out_cents)}
       ${row('Expected in the drawer', r.cash.expected_cents, 'is-strong')}
@@ -226,7 +228,9 @@ function paymentEntry(p) {
     fix.type = 'button';
     fix.addEventListener('click', () => {
       const method = node('select');
-      PAY.methods.forEach((m) => method.append(new Option(m.label, m.id, false, m.id === p.method)));
+      // Utang names a customer: it stays utang, and nothing else becomes it.
+      PAY.methods.filter((m) => !!m.credit === (p.method === 'utang'))
+        .forEach((m) => method.append(new Option(m.label, m.id, false, m.id === p.method)));
       const amt = moneyInput(p.amount_cents);
       const ref = node('input');
       ref.maxLength = 60; ref.autocomplete = 'off'; ref.value = p.reference || '';
@@ -306,6 +310,7 @@ async function openPay(orderId, { from = null } = {}) {
   PAY.balance = balance;
   PAY.key = newKey();
   PAY.method = PAY.shift ? 'cash' : (PAY.methods.find((m) => !m.drawer) || {}).id;
+  $('paid-list').replaceChildren(); // the last order's payments are not this one's
   $('pay-entry').hidden = false;
   $('pay-done').hidden = true;
   $('pay-submit').hidden = false;
@@ -332,7 +337,7 @@ function renderPay() {
     <div><dt>Total</dt><dd>${moneyC(b.total_cents)}</dd></div>
     ${b.paid_cents ? `<div><dt>Paid so far</dt><dd>${moneyC(b.paid_cents)}</dd></div>` : ''}
     <div class="is-total"><dt>Due</dt><dd>${moneyC(b.due_cents)}</dd></div>`;
-  $('methods').innerHTML = PAY.methods.map((m) => `
+  $('methods').innerHTML = PAY.methods.filter((m) => !m.credit || staffGate.can('give_credit')).map((m) => `
     <button type="button" role="radio" class="method" data-method="${m.id}" aria-checked="${String(m.id === PAY.method)}"
       ${m.drawer && !PAY.shift ? 'disabled title="Open a shift to take cash"' : ''}>${esc(m.label)}</button>`).join('');
   const m = PAY.methods.find((x) => x.id === PAY.method) || {};
@@ -340,6 +345,8 @@ function renderPay() {
   $('quick').hidden = !m.drawer;
   $('ref-box').hidden = !m.reference;
   $('ref-box').querySelector('label').textContent = m.id === 'other' ? 'What was it? (e.g. bank transfer)' : 'Reference number';
+  $('utang-box').hidden = !m.credit;
+  if (m.credit) UTANG.fillPicker().catch((e) => toast(e.message, 'error'));
   $('pay-amount').value = (b.due_cents / 100).toFixed(2);
   $('pay-tendered').value = '';
   $('pay-ref').value = '';
@@ -362,6 +369,14 @@ async function takePayment() {
   const part = { method: m.id, amount: $('pay-amount').value };
   if (m.drawer) part.tendered = $('pay-tendered').value || $('pay-amount').value;
   if (m.reference) part.reference = $('pay-ref').value;
+  if (m.credit) {
+    part.account_id = Number($('utang-account').value);
+    if (!part.account_id) {
+      $('pay-err').textContent = 'Choose who the utang is for.';
+      $('pay-err').hidden = false;
+      return;
+    }
+  }
   const body = { request_key: PAY.key, payments: [part], send: !$('pay-send-box').hidden && $('pay-send').checked };
   $('pay-submit').disabled = true;
   try {
@@ -455,7 +470,7 @@ async function openRefund(orderId) {
       <select id="rf-${l.id}" data-refund-line="${l.id}">
         ${Array.from({ length: l.qty + 1 }, (_, n) => `<option value="${n}">${n}</option>`).join('')}
       </select></li>`).join('');
-  $('refund-method').innerHTML = PAY.methods.map((m) => `<option value="${m.id}"${m.drawer && !PAY.shift ? ' disabled' : ''}>${esc(m.label)}</option>`).join('');
+  $('refund-method').innerHTML = PAY.methods.map((m) => `<option value="${m.id}"${m.drawer && !PAY.shift ? ' disabled' : ''}>${esc(m.credit ? 'Utang (take off what they owe)' : m.label)}</option>`).join('');
   $('refund-method').value = PAY.shift ? 'cash' : (PAY.methods.find((m) => !m.drawer) || {}).id;
   $('refund-ref').value = '';
   $('refund-reason').value = '';
@@ -577,6 +592,7 @@ function receiptHtml(r) {
     <div class="slip__rule"></div>
     ${pays}
     ${r.refunds.length ? r.refunds.map((x) => row(`Refunded (${esc(x.label)})`, -x.amount_cents)).join('') : ''}
+    ${r.utang ? `<p class="slip__meta">Utang: ${esc(r.utang.name)}</p>${row('Owes now in all', r.utang.balance_cents, 'is-strong')}` : ''}
     <div class="slip__rule"></div>
     ${s.receipt_footer ? `<p class="slip__center">${esc(s.receipt_footer)}</p>` : ''}
     ${s.bir_mode && s.bir_tin && s.bir_notice ? `<p class="slip__notice">${esc(s.bir_notice)}</p>` : ''}

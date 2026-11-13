@@ -117,7 +117,10 @@ function reading(shift, now = new Date()) {
 
   const cashIn = (payments.cash || { amount_cents: 0 }).amount_cents;
   const cashRefunds = (refunds.cash || { amount_cents: 0 }).amount_cents;
-  const expected = shift.opening_cash_cents + cashIn - cashRefunds + moved('in') - moved('out');
+  // Utang paid back in this shift: not a sale, but its cash is in the drawer.
+  const collected = require('./credit').collectedInShift(shift.id);
+  const cashCollected = (collected.cash || { amount_cents: 0 }).amount_cents;
+  const expected = shift.opening_cash_cents + cashIn - cashRefunds + cashCollected + moved('in') - moved('out');
   const discounts = {
     sale: sales.sale, sc_pwd: sales.sc_pwd, vat_exempt: sales.vat_exempt, voucher: sales.voucher, manual: sales.manual,
   };
@@ -141,10 +144,12 @@ function reading(shift, now = new Date()) {
     voids: { count: voids.n, amount_cents: voids.amount },
     refunds: { by_method: refunds, total_cents: sum(refunds) },
     payments: { by_method: payments, total_cents: sum(payments) },
+    utang_collected: { by_method: collected, total_cents: sum(collected) },
     cash: {
       opening_cents: shift.opening_cash_cents,
       sales_cents: cashIn,
       refunds_cents: cashRefunds,
+      utang_collected_cents: cashCollected,
       in_cents: moved('in'),
       out_cents: moved('out'),
       expected_cents: expected,

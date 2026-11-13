@@ -395,6 +395,29 @@ receipts, and reports with the audit log at `/admin/reports`.
   the PTU number. Once a TIN is filled in, it also prints the non-VAT notice
   ("THIS DOCUMENT IS NOT VALID FOR CLAIM OF INPUT TAX", editable). Turn it on
   only when your accountant confirms the details.
+### Utang (pay later)
+
+Some regulars take their order now and pay later. The owner keeps the list:
+POS → **Utang** → **+ Add customer** (name, optional mobile number, optional
+limit, a note). A cashier can add someone too, with the owner's PIN.
+
+- **Charging:** on the pay screen, choose **Utang** and the customer. It can
+  be split, e.g. ₱100 cash and the rest on utang. The order is paid and
+  counts as a sale that day. Going over the customer's limit needs the
+  owner's PIN.
+- **Paying back:** POS → **Utang** → open the customer → **Pay back**, any
+  amount up to what they owe, by cash, GCash or another method. Cash goes
+  into the drawer and shows on the X/Z reading as "Utang paid back", not as
+  a sale. A slip prints with what is still owed; **Print statement** lists
+  everything.
+- **Mistakes:** a payment back can be deleted by the owner (or with the
+  owner's PIN), with a reason. An utang charge is fixed like any payment
+  (Shift → Fix entries), but cannot be changed to or from another method:
+  delete it and take it again.
+- **Reports → Utang** shows who owes what now, what was charged and paid
+  back in the dates, and a CSV.
+- Someone can be taken off the list only once they owe nothing.
+
 ### Reports and the audit log
 
 **Reports** (`/admin/reports`) is for the owner (owner PIN). Pick the dates

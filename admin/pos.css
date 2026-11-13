@@ -326,6 +326,27 @@ body.pos {
 /* ---------------- printing ---------------- */
 .print-area { display: none; }
 
+/* Utang */
+.utang-pick { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem; margin-top: .5rem; }
+.utang-pick .hint { width: 100%; margin: 0; }
+.utang-pick select { min-height: 44px; }
+.utang-total { margin: .5rem 0; font-weight: 700; }
+.tab--off { opacity: .6; }
+.utang-name { margin: .25rem 0 0; font: 600 1.25rem "Fredoka", sans-serif; overflow-wrap: anywhere; }
+.utang-owes { margin: .25rem 0 .75rem; font: 600 1.4rem "Fredoka", sans-serif; color: var(--coral-ink); }
+.utang-collect { border: 1.5px solid var(--line); border-radius: 12px; padding: .75rem; margin-bottom: .75rem; }
+.utang-collect h4 { margin: 0 0 .5rem; }
+.utang-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+.utang-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+.uh { display: grid; grid-template-columns: 1fr auto; gap: 0 .75rem; padding: .5rem 0; border-bottom: 1px solid var(--line); }
+.uh__what { font-weight: 700; overflow-wrap: anywhere; }
+.uh__amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+.uh--collection .uh__amount { color: var(--ok); }
+.uh__meta { grid-column: 1 / -1; font-size: .8125rem; color: var(--ink-soft); }
+.uh__actions { grid-column: 1 / -1; display: flex; gap: 1rem; }
+.uh--none { color: var(--ink-soft); }
+.link--danger { color: var(--danger); }
+
 @media print {
   body.pos { height: auto; overflow: visible; display: block; background: #fff; }
   body.pos > *:not(.print-area) { display: none !important; }

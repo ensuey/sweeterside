@@ -35,6 +35,7 @@ const audit = require('./audit');
 const stock = require('./stock');
 const paymongo = require('./paymongo');
 const corrections = require('./corrections');
+const credit = require('./credit');
 const render = require('./render');
 const imagesize = require('./imagesize');
 const imagemeta = require('./imagemeta');
@@ -1142,7 +1143,7 @@ async function route(req, res) {
     const open = shifts.current();
     return sendJson(res, 200, {
       shift: open ? shifts.reading(open) : null,
-      methods: Object.entries(payments.METHODS).map(([id, m]) => ({ id, label: m.label, reference: m.reference, drawer: !!m.drawer })),
+      methods: Object.entries(payments.METHODS).map(([id, m]) => ({ id, label: m.label, reference: m.reference, drawer: !!m.drawer, credit: !!m.credit })),
     });
   }
 
@@ -1194,6 +1195,70 @@ async function route(req, res) {
     return sendJson(res, 200, result);
   }
 
+  /* ---- POS: Utang (customers who pay later) ---- */
+  // Whoever can charge utang or take it back sees the list (phones masked).
+  const canUtang = (who) => staff.can(who.staff.role, 'give_credit') || staff.can(who.staff.role, 'collect_credit');
+  const utangStaff = async (options) => {
+    const who = requireStaff(req, res, options);
+    if (!who) return null;
+    if (!canUtang(who)) {
+      sendJson(res, 403, { error: 'Only the owner or a cashier can use the Utang list.' });
+      return null;
+    }
+    return who;
+  };
+  if (pathname === '/api/pos/credit' && method === 'GET') {
+    if (!(await utangStaff())) return;
+    return sendJson(res, 200, { accounts: credit.list() });
+  }
+  // Add someone: the owner, or the owner's PIN (credit.create).
+  if (pathname === '/api/pos/credit' && method === 'POST') {
+    const who = await utangStaff({ csrf: true });
+    if (!who) return;
+    const result = credit.create(await readJson(req), who.staff);
+    console.log(`[pos] utang account ${result.account.id} added by staff ${who.staff.id}`);
+    return sendJson(res, 201, result);
+  }
+  const creditMatch = pathname.match(/^\/api\/pos\/credit\/(\d+)$/);
+  if (creditMatch && method === 'GET') {
+    const who = await utangStaff();
+    if (!who) return;
+    return sendJson(res, 200, credit.get(Number(creditMatch[1]), who.staff));
+  }
+  // Change details, limit or on/off: the owner, or the owner's PIN (credit.update).
+  if (creditMatch && method === 'PATCH') {
+    const who = await utangStaff({ csrf: true });
+    if (!who) return;
+    const result = credit.update(Number(creditMatch[1]), await readJson(req), who.staff);
+    console.log(`[pos] utang account ${creditMatch[1]} changed by staff ${who.staff.id}`);
+    return sendJson(res, 200, result);
+  }
+  const collectMatch = pathname.match(/^\/api\/pos\/credit\/(\d+)\/collect$/);
+  if (collectMatch && method === 'POST') {
+    const who = await utangStaff({ csrf: true });
+    if (!who) return;
+    const result = credit.collect(Number(collectMatch[1]), await readJson(req), who.staff);
+    if (!result.replayed) console.log(`[pos] utang collected for account ${collectMatch[1]} by staff ${who.staff.id}`);
+    return sendJson(res, 200, result);
+  }
+  // A collection slip, to print again.
+  const slipMatch = pathname.match(/^\/api\/pos\/credit\/collections\/(\d+)$/);
+  if (slipMatch && method === 'GET') {
+    if (!(await utangStaff())) return;
+    const slip = credit.slip(Number(slipMatch[1]));
+    if (!slip) return sendJson(res, 404, { error: 'That payment no longer exists.' });
+    return sendJson(res, 200, slip);
+  }
+  // Delete a collection entered by mistake: the owner, or the owner's PIN (credit.deleteCollection).
+  const uncollectMatch = pathname.match(/^\/api\/pos\/credit\/collections\/(\d+)\/delete$/);
+  if (uncollectMatch && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true });
+    if (!who) return;
+    const result = credit.deleteCollection(Number(uncollectMatch[1]), await readJson(req), who.staff);
+    console.log(`[pos] utang collection ${uncollectMatch[1]} deleted by staff ${who.staff.id}`);
+    return sendJson(res, 200, result);
+  }
+
   /* ---- Reports and the audit log: the owner only ---- */
   const q = Object.fromEntries(url.searchParams);
   const sendCsv = (name, body) => send(res, 200, `﻿${body}`, {
@@ -1201,7 +1266,7 @@ async function route(req, res) {
     'Content-Disposition': `attachment; filename="${name}"`,
   });
 
-  const reportMatch = pathname.match(/^\/api\/reports\/(summary|sc-pwd|sc-pwd\.csv|discounts|threshold)$/);
+  const reportMatch = pathname.match(/^\/api\/reports\/(summary|sc-pwd|sc-pwd\.csv|discounts|threshold|utang|utang\.csv)$/);
   if (reportMatch && method === 'GET') {
     if (!requireStaff(req, res, { permission: 'reports' })) return;
     const which = reportMatch[1];
@@ -1209,6 +1274,8 @@ async function route(req, res) {
     if (which === 'sc-pwd') return sendJson(res, 200, reports.scPwd(q));
     if (which === 'sc-pwd.csv') return sendCsv(`sc-pwd-${reports.range(q).from}-to-${reports.range(q).to}.csv`, reports.scPwdCsv(q));
     if (which === 'discounts') return sendJson(res, 200, reports.discounts(q));
+    if (which === 'utang') return sendJson(res, 200, reports.utang(q));
+    if (which === 'utang.csv') return sendCsv(`utang-${reports.range(q).to}.csv`, reports.utangCsv(q));
     return sendJson(res, 200, reports.threshold());
   }
 

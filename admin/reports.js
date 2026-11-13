@@ -8,7 +8,7 @@ const R = { view: 'sales', from: '', to: '', audit: null };
 
 const TYPE = { dinein: 'Dine-in', pickup: 'Pick-up / takeout', delivery: 'Delivery' };
 const SOURCE = { pos: 'Counter (POS)', online: 'Online' };
-const METHOD = { cash: 'Cash', gcash: 'GCash', maya: 'Maya', qrph: 'QR Ph', card: 'Card' };
+const METHOD = { cash: 'Cash', gcash: 'GCash', maya: 'Maya', qrph: 'QR Ph', card: 'Card', other: 'Other', utang: 'Utang' };
 const ACTION = {
   void: 'Void', refund: 'Refund', override: 'Owner override', price_change: 'Price change',
   manual_discount: 'Manual discount', service_charge_removed: 'Service charge removed',
@@ -16,6 +16,7 @@ const ACTION = {
   shift_open: 'Shift opened', shift_close: 'Shift closed', staff_add: 'Staff added',
   staff_change: 'Staff changed', staff_pin_change: 'PIN changed', settings_change: 'Settings changed',
   order_cancel: 'Online order cancelled',
+  credit_account: 'Utang list changed', credit_collect: 'Utang paid back', credit_collection_delete: 'Utang payment deleted',
 };
 
 /* ---------------------------- dates (Manila) ---------------------------- */
@@ -191,6 +192,29 @@ async function loadDiscounts() {
   ].join('');
 }
 
+async function loadUtang() {
+  const u = await staffGate.call(`/api/reports/utang?from=${R.from}&to=${R.to}`);
+  const card = (label, value) => `<div class="card-stat"><span>${esc(label)}</span><strong>${value}</strong></div>`;
+  $('utang-cards').innerHTML = [
+    card('Owed now', moneyC(u.outstanding)),
+    card('Charged as utang', moneyC(u.charged.amount)),
+    card('Paid back', moneyC(u.collected_total)),
+  ].join('');
+  $('utang-tables').innerHTML = [
+    table('Who owes what (now)', [
+      { label: 'Customer', get: (a) => `${esc(a.name)}${a.active ? '' : ' <span class="hint">(off the list)</span>'}` },
+      { label: 'Limit', get: (a) => (a.limit === null ? '—' : moneyC(a.limit)), num: true },
+      { label: 'Owes', get: (a) => signed(a.balance), num: true },
+    ], u.accounts, { empty: 'No one owes anything.', foot: u.accounts.length ? ['Total', '', moneyC(u.outstanding)] : null }),
+    table('Paid back, by method', [
+      { label: 'Method', get: (r) => esc(METHOD[r.method] || r.method) },
+      { label: 'Payments', get: (r) => r.count, num: true },
+      { label: 'Amount', get: (r) => moneyC(r.amount), num: true },
+    ], u.collected, { empty: 'Nothing paid back in these dates.' })
+      + (u.taken_off ? `<p class="hint">Refunds that took ${moneyC(u.taken_off)} off what customers owe.</p>` : ''),
+  ].join('');
+}
+
 function auditQuery() {
   return `from=${R.from}&to=${R.to}&action=${encodeURIComponent($('audit-action').value)}&staff_id=${encodeURIComponent($('audit-staff').value)}`;
 }
@@ -205,6 +229,8 @@ function auditDetail(e) {
   if (e.action.startsWith('staff_')) return d.name || (d.after ? `${d.after.name} (${d.after.role}${d.after.active ? '' : ', off'})` : '');
   if (e.action === 'shift_close') return `Expected ${moneyC(d.expected_cents)}, ${d.difference_cents ? `${signed(d.difference_cents)} off` : 'exact'}`;
   if (e.action === 'settings_change') return d.receipt ? 'Receipt settings' : 'POS settings';
+  if (e.action === 'credit_account') return `Customer ${d.account_id}: ${d.created ? 'added' : (d.changed || []).join(', ')}`;
+  if (e.action === 'credit_collect' || e.action === 'credit_collection_delete') return `Customer ${d.account_id}, ${METHOD[d.method] || d.method}`;
   return '';
 }
 
@@ -227,7 +253,7 @@ async function loadAudit() {
   ], a.entries, { empty: 'Nothing logged in these dates.' });
 }
 
-const LOADERS = { sales: loadSales, scpwd: loadScPwd, discounts: loadDiscounts, audit: loadAudit };
+const LOADERS = { sales: loadSales, scpwd: loadScPwd, discounts: loadDiscounts, utang: loadUtang, audit: loadAudit };
 
 async function show(view = R.view) {
   R.view = view;
@@ -300,6 +326,7 @@ function bind() {
   $('audit-form').addEventListener('submit', (e) => { e.preventDefault(); show('audit'); });
   $('audit-csv').addEventListener('click', () => download(`/api/audit.csv?${auditQuery()}`));
   $('scpwd-csv').addEventListener('click', () => download(`/api/reports/sc-pwd.csv?from=${R.from}&to=${R.to}`));
+  $('utang-csv').addEventListener('click', () => download(`/api/reports/utang.csv?from=${R.from}&to=${R.to}`));
   $('lock-btn').addEventListener('click', () => staffGate.lock());
   $('switch-staff').addEventListener('click', () => staffGate.lock());
   let shownFor = null;
