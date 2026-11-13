@@ -58,3 +58,13 @@ test('the Items page names its categories with the right plural', () => {
   assert.ok(js.includes("plural(list.length, 'category', 'categories')"));
   assert.ok(!/plural\([^)]*'category'\)/.test(js), 'no "categorys"');
 });
+
+test('an owner PIN prompt keeps asking after a wrong PIN until it goes through or is cancelled', () => {
+  // A capped loop (3 tries) used one try for the first ask, one for the wrong
+  // PIN and one for the second ask, so the right PIN was never sent.
+  for (const f of ['pos.js', 'pos-pay.js', 'pos-credit.js']) {
+    const js = fs.readFileSync(path.join(__dirname, '..', 'admin', f), 'utf8');
+    assert.ok(!/for \(let attempt = 0; attempt < \d+; attempt\+\+\)/.test(js), `${f}: no capped retry loop`);
+    assert.ok(js.includes('askOverride'), `${f} asks for the owner's PIN`);
+  }
+});

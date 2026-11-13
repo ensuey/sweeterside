@@ -748,7 +748,7 @@ async function submit(send, { keep = false } = {}) {
       if (reason === null) return;
       extra.void_reason = reason;
     }
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (;;) { // until it goes through or is cancelled: a wrong PIN asks again
       try {
         const body = { ...payload(), request_key: t.pendingKey, send, ...extra };
         const res = t.id
@@ -874,7 +874,7 @@ async function voidTicket() {
     : await ask({ title: 'Discard this tab?', lead: 'Nothing was sent to the kitchen yet.', input: false, ok: 'Discard', danger: true });
   if (reason === null) return;
   const body = { reason };
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (;;) { // until it goes through or is cancelled: a wrong PIN asks again
     try {
       await staffGate.call(`/api/pos/orders/${t.id}/void`, { method: 'POST', body });
       toast(sent ? `Order #${t.id} voided.` : `Tab #${t.id} discarded.`);
@@ -909,7 +909,7 @@ async function deleteTicket() {
     input: false, ok: 'Delete', danger: true,
   });
   if (ok === null) return;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (;;) { // until it goes through or is cancelled: a wrong PIN asks again
     const ov = await staffGate.askOverride(['delete_orders']);
     if (!ov) return;
     try {

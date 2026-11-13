@@ -380,7 +380,7 @@ async function takePayment() {
   const body = { request_key: PAY.key, payments: [part], send: !$('pay-send-box').hidden && $('pay-send').checked };
   $('pay-submit').disabled = true;
   try {
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (;;) { // until it goes through or is cancelled: a wrong PIN asks again
       try {
         const res = await staffGate.call(`/api/pos/orders/${PAY.order.id}/pay`, { method: 'POST', body });
         return paid(res);
@@ -491,7 +491,7 @@ async function submitRefund() {
     if (!body.lines.length) return refundError('Choose what to refund.');
   }
   if (!body.reason) return refundError('Give a reason for the refund.');
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (;;) { // until it goes through or is cancelled: a wrong PIN asks again
     try {
       const res = await staffGate.call(`/api/pos/orders/${PAY.refundOrder.id}/refund`, { method: 'POST', body });
       $('refund-dialog').close();
