@@ -572,6 +572,8 @@ function renderTicket() {
   renderDiscounts();
   renderSummary();
   $('void-btn').hidden = !t.id;
+  // A held tab never reaches the Orders page, so it is deleted from here.
+  $('delete-btn').hidden = !(t.id && t.held);
   $('save-btn').textContent = t.type === 'dinein' ? 'Save tab' : 'Save';
 }
 
@@ -889,6 +891,38 @@ async function voidTicket() {
         continue;
       }
       if (e.status === 403 && data.wrong_pin) { toast(e.message, 'error'); delete body.override; continue; }
+      return toast(e.message, 'error');
+    }
+  }
+}
+
+/**
+ * Delete a held tab for good (a test order). Held tabs are left off the
+ * Orders page, so its Delete… cannot reach them. The owner's PIN every time.
+ */
+async function deleteTicket() {
+  const t = P.t;
+  if (!t.id || !t.held) return;
+  const ok = await ask({
+    title: `Delete tab #${t.id}?`,
+    lead: 'It is erased for good, with everything on it. Use this for test orders only.',
+    input: false, ok: 'Delete', danger: true,
+  });
+  if (ok === null) return;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const ov = await staffGate.askOverride(['delete_orders']);
+    if (!ov) return;
+    try {
+      await staffGate.call(`/api/orders/${t.id}/delete`, {
+        method: 'POST', body: { confirm: t.id, override: { staff_id: ov.staff_id, pin: ov.pin } },
+      });
+      toast(`Tab #${t.id} deleted.`);
+      startNew();
+      refreshTabs();
+      loadMenu().catch(() => {});
+      return;
+    } catch (e) {
+      if (e.status === 403 && e.data && e.data.wrong_pin) { toast(e.message, 'error'); continue; }
       return toast(e.message, 'error');
     }
   }
@@ -1267,6 +1301,7 @@ function bind() {
   $('save-btn').addEventListener('click', () => submit(false));
   $('send-btn').addEventListener('click', () => submit(true));
   $('void-btn').addEventListener('click', voidTicket);
+  $('delete-btn').addEventListener('click', deleteTicket);
   $('new-btn').addEventListener('click', async () => {
     if (!P.t.id && P.t.lines.length) {
       const ok = await ask({ title: 'Drop this ticket?', lead: 'It has not been saved.', input: false, ok: 'Drop it', danger: true });
