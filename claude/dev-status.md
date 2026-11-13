@@ -607,6 +607,8 @@ amount, by any method.
   #12 was one, with an SC/PWD discount. Such orders, and discarded tabs,
   now show under Finished (`HELD_DONE` in `server/orders.js`) and count as
   completed / cancelled; open tabs and merged-away tabs stay off.
+- Live test order #12 was deleted by the owner on 2026-11-13 (v54), so it
+  is out of the sales and SC/PWD reports.
 
 ## Inventory: stock counts and ingredients (2026-11-10)
 
@@ -734,9 +736,6 @@ then a dry run on the live site. The owner ran the apply step.
   regroup above).
 - Dachel to set the real opening hours on Settings (still 10:00–20:00).
 - Owner notifications (Messenger / WhatsApp) were discussed and put on hold.
-- POS order #12 (a test takeout paid at the counter with an SC/PWD discount,
-  never sent) is still on the live site and in the reports: after the
-  deploy, Orders → Finished → #12 → Delete….
 - Check the POS item photos on the counter iPad.
 - SEO after #34 (owner):
   - **Google Business Profile:** primary category Café, plus Coffee shop,
