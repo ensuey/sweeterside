@@ -68,3 +68,14 @@ test('an owner PIN prompt keeps asking after a wrong PIN until it goes through o
     assert.ok(js.includes('askOverride'), `${f} asks for the owner's PIN`);
   }
 });
+
+test('the PIN screen opens above any open dialog, and locking closes what was open', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'admin', 'staff-gate.js'), 'utf8');
+  assert.match(js, /el = document\.createElement\('dialog'\);\s*el\.id = 'gate';/, 'a dialog, so it goes in the top layer');
+  assert.match(js, /if \(!el\.open\) el\.showModal\(\);/);
+  assert.ok(js.includes("el.addEventListener('close', () => { if (waiting) el.showModal(); });"), 'Escape cannot close it while locked');
+  assert.match(js, /for \(const d of document\.querySelectorAll\('dialog\[open\]:not\(\.gate\)'\)\) d\.close\(\);/, 'Lock closes the rest');
+  assert.match(js, /dlg\.addEventListener\('close', \(\) => done\(null\)\)/, 'an owner prompt closed by the lock approves nothing');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'admin', 'admin.css'), 'utf8');
+  assert.match(css, /body\.is-locked dialog\[open\]:not\(\.gate\) \{ visibility: hidden; \}/, 'nothing shows under the PIN screen');
+});

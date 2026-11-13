@@ -175,13 +175,16 @@ const staffGate = (() => {
   function lockScreen() {
     let el = document.getElementById('gate');
     if (el) return el;
-    el = document.createElement('div');
+    // A modal dialog, so it opens above any other dialog that is open (the top
+    // layer): a div under an open dialog could be neither seen nor tapped.
+    el = document.createElement('dialog');
     el.id = 'gate';
     el.className = 'gate';
-    el.setAttribute('role', 'dialog');
-    el.setAttribute('aria-modal', 'true');
     el.setAttribute('aria-labelledby', 'gate-title');
-    el.hidden = true;
+    // Escape does not close the PIN screen. The browser may close a dialog on
+    // Escape anyway, so while it is locked the screen opens again at once.
+    el.addEventListener('cancel', (e) => e.preventDefault());
+    el.addEventListener('close', () => { if (waiting) el.showModal(); });
     el.innerHTML = `
       <div class="gate__panel">
         <img class="gate__logo" src="/assets/Sweeter%20Side%20-%20PNG.png" alt="" width="64" height="64">
@@ -228,7 +231,7 @@ const staffGate = (() => {
         if (first) first.focus();
       };
 
-      el.hidden = false;
+      if (!el.open) el.showModal();
       locked(true);
       api('/api/pos/staff').then(({ staff, has_staff: hasStaff }) => {
         el.querySelector('#gate-setup').hidden = hasStaff;
@@ -249,10 +252,10 @@ const staffGate = (() => {
         pad = pinPad(pinBox, async (pin) => {
           const opened = await api('/api/pos/unlock', { method: 'POST', body: { staff_id: Number(b.dataset.id), pin } });
           pad.destroy();
-          el.hidden = true;
+          waiting = null; // unlocked: closing the screen now is not reopened
+          el.close();
           locked(false);
           save(opened);
-          waiting = null;
           resolve(opened);
         });
       };
@@ -264,6 +267,10 @@ const staffGate = (() => {
   async function lock() {
     const token = current && current.token;
     save(null);
+    // Locking on purpose (the Lock button, or idle) closes whatever was open,
+    // so the next person does not find it. A lock in the middle of a request
+    // (the server said 423) keeps it under the PIN screen, to finish after.
+    for (const d of document.querySelectorAll('dialog[open]:not(.gate)')) d.close();
     if (token) {
       try {
         await fetch('/api/pos/lock', { method: 'POST', headers: { 'X-Staff-Token': token, 'X-CSRF-Token': state.csrf } });
@@ -302,7 +309,15 @@ const staffGate = (() => {
           <div class="modal__foot"><button class="btn btn--ghost" type="button" data-cancel>Cancel</button></div>
         </div>`;
       document.body.appendChild(dlg);
-      const done = (value) => { pad.destroy(); dlg.close(); dlg.remove(); resolve(value); };
+      let finished = false;
+      const done = (value) => {
+        if (finished) return;
+        finished = true;
+        pad.destroy();
+        if (dlg.open) dlg.close();
+        dlg.remove();
+        resolve(value);
+      };
       const pad = pinPad(dlg.querySelector('.override__pin'), async (pin) => {
         const why = reason ? dlg.querySelector('#ov-reason').value.trim() : null;
         if (reason && !why) throw new Error('Give a reason first.');
@@ -310,6 +325,8 @@ const staffGate = (() => {
       });
       dlg.querySelector('[data-cancel]').onclick = () => done(null);
       dlg.addEventListener('cancel', (e) => { e.preventDefault(); done(null); });
+      // Closed some other way (the POS locked): nothing was approved.
+      dlg.addEventListener('close', () => done(null));
       dlg.showModal();
       (dlg.querySelector('#ov-reason') || dlg.querySelector('.pinpad__key')).focus();
     });
