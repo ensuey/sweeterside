@@ -109,6 +109,18 @@ test('counted items keep their count when a handed-over order is deleted; an ope
   stock.change(id, { action: 'off' }, null);
 });
 
+test('the POS ticket has a Delete… button for held tabs, which asks for the owner PIN', () => {
+  const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'admin', f), 'utf8');
+  const html = read('pos.html');
+  const js = read('pos.js');
+  assert.match(html, /id="delete-btn"[^>]*hidden/, 'the button starts hidden');
+  assert.match(js, /\$\('delete-btn'\)\.hidden = !\(t\.id && t\.held\)/, 'shown on held tabs only');
+  assert.match(js, /askOverride\(\['delete_orders'\]\)/, 'the owner PIN every time');
+  assert.match(js, /\/api\/orders\/\$\{t\.id\}\/delete/, 'the same route as the Orders page');
+  assert.match(js, /confirm: t\.id/, 'repeats the number');
+  assert.match(read('staff-gate.js'), /delete_orders:/, 'the approval dialog says what it is for');
+});
+
 test('the endpoint needs the session, CSRF, the matching number and an owner PIN', async () => {
   const { server } = require('../server/index');
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -140,6 +152,20 @@ test('the endpoint needs the session, CSRF, the matching number and an owner PIN
     assert.strictEqual((await ok.json()).deleted.id, o.id);
     assert.ok(!exists(o.id));
     assert.strictEqual((await del(o.id, { confirm: o.id, override: OWNER_OK })).status, 404);
+
+    // A held POS tab (saved, never sent) is left off the Orders page, so the
+    // POS deletes it through the same route, with the same owner PIN.
+    const held = pos.save(null, {
+      request_key: key(), type: 'pickup', customer_name: '', lines: [{ key: `k${++seq}`, item_id: item(SANDWICH).id, qty: 1 }],
+    }, cashier).order;
+    assert.ok(pos.open().some((x) => x.id === held.id && x.held), 'in the open tabs');
+    assert.ok(!orders.list('active').some((x) => x.id === held.id), 'not on the Orders page');
+    const heldWrong = await del(held.id, { confirm: held.id, override: { staff_id: owner.id, pin: '0000' } });
+    assert.strictEqual(heldWrong.status, 403);
+    assert.ok(exists(held.id), 'a wrong PIN keeps the tab');
+    assert.strictEqual((await del(held.id, { confirm: held.id, override: OWNER_OK })).status, 200);
+    assert.ok(!exists(held.id) && lineCount(held.id) === 0);
+    assert.ok(!pos.open().some((x) => x.id === held.id), 'gone from the open tabs');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

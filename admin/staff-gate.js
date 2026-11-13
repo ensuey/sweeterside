@@ -29,6 +29,7 @@ const staffGate = (() => {
     refund: 'A refund',
     custom_item: 'A custom item',
     correct_entries: 'Correcting a payment or a cash in / out',
+    delete_orders: 'Deleting a test order for good',
   };
 
   let current = null; // { token, staff, permissions, lock_minutes }
