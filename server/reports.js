@@ -182,6 +182,41 @@ function scPwdCsv(input, now) {
   ]));
 }
 
+/**
+ * Utang: what is owed now (every customer with a balance), and what was
+ * charged and paid back in the dates. Charges are already in the sales (on
+ * the day of the order); collections are not sales.
+ */
+function utang(input, now) {
+  const r = range(input, now);
+  const credit = require('./credit');
+  const accounts = credit.list().filter((a) => a.balance_cents !== 0)
+    .map((a) => ({ id: a.id, name: a.name, balance: a.balance_cents, limit: a.limit_cents, active: a.active }));
+  const charged = db.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(amount_cents), 0) AS amount FROM payments
+                              WHERE method = 'utang' AND at >= ? AND at < ?`).get(r.start, r.end);
+  const takenOff = db.prepare(`SELECT COALESCE(SUM(amount_cents), 0) AS amount FROM refunds
+                               WHERE method = 'utang' AND at >= ? AND at < ?`).get(r.start, r.end).amount;
+  const collected = db.prepare(`SELECT method, COUNT(*) AS count, SUM(amount_cents) AS amount FROM credit_collections
+                                WHERE at >= ? AND at < ? GROUP BY method ORDER BY amount DESC`).all(r.start, r.end);
+  return {
+    from: r.from, to: r.to,
+    outstanding: accounts.reduce((n, a) => n + Math.max(0, a.balance), 0),
+    accounts,
+    charged: { count: charged.count, amount: charged.amount },
+    taken_off: takenOff,
+    collected,
+    collected_total: collected.reduce((n, c) => n + c.amount, 0),
+  };
+}
+
+/** Who owes what, today, for the owner's spreadsheet. No phones. */
+function utangCsv(input, now) {
+  const report = utang(input, now);
+  const pesos = (c) => (c === null ? '' : Number((c / 100).toFixed(2)));
+  return toCsv(['Customer', 'Owes (Php)', 'Limit (Php)', 'On the list'],
+    report.accounts.map((a) => [a.name, pesos(a.balance), pesos(a.limit), a.active ? 'Yes' : 'No']));
+}
+
 /** Voucher use, and manual discounts with who gave and approved them. */
 function discounts(input, now) {
   const r = range(input, now);
@@ -239,4 +274,4 @@ function auditCsv(entries) {
       e.details ? JSON.stringify(e.details) : '']));
 }
 
-module.exports = { THRESHOLD_CENTS, range, summary, scPwd, scPwdCsv, discounts, threshold, auditCsv, manilaTime };
+module.exports = { THRESHOLD_CENTS, range, summary, scPwd, scPwdCsv, utang, utangCsv, discounts, threshold, auditCsv, manilaTime };

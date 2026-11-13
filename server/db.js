@@ -727,6 +727,42 @@ addMissingColumns('shifts', {
   corrected_by: 'INTEGER REFERENCES staff(id)',
 });
 
+/* Utang (customer credit). The owner keeps a list of customers allowed to
+   pay later, each with an optional limit. An order charged to one is paid
+   with method 'utang' (a sale that day); the payment row names the account.
+   They pay it back in any amount, by any method: credit_collections. The
+   balance is never stored: utang payments - utang refunds - collections. */
+db.exec(`
+CREATE TABLE IF NOT EXISTS credit_accounts (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  phone_norm  TEXT    NOT NULL DEFAULT '',
+  limit_cents INTEGER CHECK (limit_cents IS NULL OR limit_cents >= 0),
+  note        TEXT    NOT NULL DEFAULT '',
+  active      INTEGER NOT NULL DEFAULT 1,
+  created_by  INTEGER REFERENCES staff(id),
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS credit_collections (
+  id             INTEGER PRIMARY KEY,
+  account_id     INTEGER NOT NULL REFERENCES credit_accounts(id),
+  shift_id       INTEGER REFERENCES shifts(id),
+  method         TEXT    NOT NULL,
+  amount_cents   INTEGER NOT NULL CHECK (amount_cents > 0),
+  tendered_cents INTEGER,
+  change_cents   INTEGER NOT NULL DEFAULT 0,
+  reference      TEXT    NOT NULL DEFAULT '',
+  staff_id       INTEGER NOT NULL REFERENCES staff(id),
+  request_key    TEXT    UNIQUE,
+  at             TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_credit_collections_account ON credit_collections(account_id);
+CREATE INDEX IF NOT EXISTS idx_credit_collections_shift ON credit_collections(shift_id);`);
+addMissingColumns('payments', { credit_account_id: 'INTEGER REFERENCES credit_accounts(id)' });
+addMissingColumns('refunds', { credit_account_id: 'INTEGER REFERENCES credit_accounts(id)' });
+db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_credit ON payments(credit_account_id) WHERE credit_account_id IS NOT NULL;
+         CREATE INDEX IF NOT EXISTS idx_refunds_credit ON refunds(credit_account_id) WHERE credit_account_id IS NOT NULL;`);
+
 /* ---------- Items without a photo show the logo ---------- */
 
 const LOGO_IMAGE = 'assets/Sweeter Side - PNG.png';

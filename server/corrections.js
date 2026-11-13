@@ -62,6 +62,13 @@ function checkNotRefunded(p) {
   }
 }
 
+/** Taking utang off must not leave the customer owing less than nothing. */
+function checkUtangLeft(p, less) {
+  if (p.credit_account_id && less > require('./credit').balance(p.credit_account_id)) {
+    throw new ValidationError({ amount: 'They have already paid part of this back. Delete that payment back first, or ask for help.' });
+  }
+}
+
 /**
  * Change a payment's method, amount or reference. input: { method, amount
  * (pesos), reference, why, override }.
@@ -77,6 +84,10 @@ function correctPayment(id, input, actor) {
   const method = input.method === undefined ? p.method : String(input.method);
   const m = METHODS[method];
   if (!m) throw new ValidationError({ method: 'Choose how they paid.' });
+  // Utang names a customer: delete the payment and take it again instead.
+  if ((method === 'utang') !== (p.method === 'utang')) {
+    throw new ValidationError({ method: 'A payment cannot be changed to or from Utang. Delete it and take the payment again.' });
+  }
   const amount = input.amount === undefined ? p.amount_cents : shifts.cents(input.amount, 'amount', { min: 1 });
   const order = db.prepare('SELECT id, total_cents, paid_shift_id FROM orders WHERE id = ?').get(p.order_id);
   const others = db.prepare('SELECT COALESCE(SUM(amount_cents), 0) AS n FROM payments WHERE order_id = ? AND id <> ?')
@@ -84,6 +95,7 @@ function correctPayment(id, input, actor) {
   if (others + amount > order.total_cents) {
     throw new ValidationError({ amount: `That is more than the order's ${(order.total_cents / 100).toFixed(2)}.` });
   }
+  if (p.method === 'utang' && amount < p.amount_cents) checkUtangLeft(p, p.amount_cents - amount);
   const reference = input.reference === undefined ? p.reference : String(input.reference ?? '').trim();
   if (m.reference && !reference) throw new ValidationError({ reference: `Enter the ${m.label} reference.` });
   if (reference.length > REFERENCE_MAX) throw new ValidationError({ reference: 'That reference is too long.' });
@@ -120,6 +132,7 @@ function deletePayment(id, input, actor) {
   const approver = approve(actor, input.override);
   checkNotRefunded(p);
   const why = reasonOf(input.why);
+  if (p.method === 'utang') checkUtangLeft(p, p.amount_cents);
   const order = db.prepare('SELECT paid_shift_id FROM orders WHERE id = ?').get(p.order_id);
   return transaction(() => {
     db.prepare('DELETE FROM payments WHERE id = ?').run(p.id);

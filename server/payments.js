@@ -25,6 +25,7 @@ const staff = require('./staff');
 const audit = require('./audit');
 const settings = require('./settings');
 const pricing = require('./pricing');
+const credit = require('./credit');
 
 const METHODS = {
   cash: { label: 'Cash', reference: false, drawer: true },
@@ -34,6 +35,9 @@ const METHODS = {
   card: { label: 'Card (terminal)', reference: true },
   // Anything else (a bank transfer, a voucher from a partner): say what in the reference.
   other: { label: 'Other', reference: true, referenceLabel: 'what it was' },
+  // Pay later: charged to a customer on the Utang list (credit.js). A sale
+  // now; the money comes in later as a collection.
+  utang: { label: 'Utang', reference: false, credit: true },
 };
 const REFERENCE_MAX = 60;
 const REASON_MAX = 200;
@@ -110,6 +114,8 @@ function pay(orderId, body, actor) {
   if (due <= 0) throw httpError(409, 'Nothing is due on this order.');
   const shift = shifts.current();
   const rows = [];
+  // Utang goes to one customer per order.
+  let accountId = credit.accountOfOrder(o.id);
   for (const p of parts) {
     const method = String(p.method ?? '');
     const m = METHODS[method];
@@ -117,6 +123,14 @@ function pay(orderId, body, actor) {
     const amount = shifts.cents(p.amount, 'payments', { min: 1 });
     if (amount > due) {
       throw new ValidationError({ payments: `That is more than the ${(due / 100).toFixed(2)} still due.` });
+    }
+    if (m.credit) {
+      const id = Number(p.account_id);
+      if (!Number.isSafeInteger(id) || id < 1) throw new ValidationError({ account_id: 'Choose who the utang is for.' });
+      if (accountId && accountId !== id) {
+        throw new ValidationError({ account_id: 'Part of this order is already utang for someone else.' });
+      }
+      accountId = id;
     }
     let tendered = null;
     let change = 0;
@@ -131,18 +145,25 @@ function pay(orderId, body, actor) {
       throw new ValidationError({ reference: m.referenceLabel ? `For Other, say ${m.referenceLabel}.` : `Enter the ${m.label} reference number.` });
     }
     if (reference.length > REFERENCE_MAX) throw new ValidationError({ reference: 'That reference is too long.' });
-    rows.push({ method, amount, tendered, change, reference });
+    rows.push({ method, amount, tendered, change, reference: m.credit ? '' : reference, credit: !!m.credit });
     due -= amount;
   }
+  const utangCents = rows.filter((r) => r.credit).reduce((n, r) => n + r.amount, 0);
 
   return transaction(() => {
+    // The limit is checked here, so two tablets cannot both charge the last of it.
+    const charge = utangCents ? credit.checkCharge(accountId, utangCents, actor, body.override) : null;
     const insert = db.prepare(`INSERT INTO payments (order_id, shift_id, method, amount_cents, tendered_cents, change_cents,
-                                 reference, staff_id, request_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                                 reference, staff_id, request_key, credit_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
     // The request key goes on the first row only (it is unique).
     rows.forEach((r, i) => insert.run(o.id, shift ? shift.id : null, r.method, r.amount, r.tendered, r.change,
-      r.reference, actor.id, i === 0 ? key : null));
+      r.reference, actor.id, i === 0 ? key : null, r.credit ? accountId : null));
     if (approver) {
       audit.record({ action: 'override', staff: actor, approver, order_id: o.id, details: { permissions: ['take_payment'] } });
+    }
+    if (charge && charge.approver) {
+      audit.record({ action: 'override', staff: actor, approver: charge.approver, order_id: o.id, amount_cents: utangCents,
+        details: { permissions: [charge.over_limit ? 'credit_over_limit' : 'give_credit'], account_id: accountId } });
     }
     if (pos.paidCents(o.id) >= o.total_cents) {
       db.prepare("UPDATE orders SET paid_at = datetime('now'), paid_shift_id = ?, updated_at = datetime('now') WHERE id = ?")
@@ -212,13 +233,28 @@ function refund(orderId, body, actor) {
   if (m.drawer && amount > shifts.reading(shift).cash.expected_cents) {
     throw new ValidationError({ method: 'There is not enough cash in the drawer for that.' });
   }
+  // Back to utang: taken off what the customer owes, up to what was charged.
+  let accountId = null;
+  if (m.credit) {
+    accountId = credit.accountOfOrder(o.id);
+    if (!accountId) throw new ValidationError({ method: 'This order was not utang. Choose how the money goes back.' });
+    const onUtang = db.prepare(`SELECT
+        (SELECT COALESCE(SUM(amount_cents), 0) FROM payments WHERE order_id = ? AND method = 'utang')
+      - (SELECT COALESCE(SUM(amount_cents), 0) FROM refunds WHERE order_id = ? AND method = 'utang') AS n`).get(o.id, o.id).n;
+    if (amount > onUtang) {
+      throw new ValidationError({ method: `Only ${(onUtang / 100).toFixed(2)} of this order is still utang. Refund the rest another way.` });
+    }
+    if (amount > credit.balance(accountId)) {
+      throw new ValidationError({ method: 'They have already paid this back. Refund it another way.' });
+    }
+  }
 
   const approver = staff.authorise(actor, 'refund', body.override).approver;
   return transaction(() => {
     db.prepare(`INSERT INTO refunds (order_id, shift_id, method, amount_cents, reference, reason, lines, staff_id,
-                  approved_by, request_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+                  approved_by, request_key, credit_account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(o.id, shift ? shift.id : null, method, amount, reference, reason, lines ? JSON.stringify(lines) : '',
-        actor.id, approver ? approver.id : null, key);
+        actor.id, approver ? approver.id : null, key, accountId);
     db.prepare("UPDATE orders SET refunded_cents = refunded_cents + ?, updated_at = datetime('now') WHERE id = ?")
       .run(amount, o.id);
     audit.record({ action: 'refund', staff: actor, approver, order_id: o.id, amount_cents: amount, reason,
@@ -240,9 +276,13 @@ function receipt(orderId, actor) {
   const cashier = db.prepare(`SELECT s.name FROM payments p JOIN staff s ON s.id = p.staff_id
                               WHERE p.order_id = ? ORDER BY p.id DESC LIMIT 1`).get(o.id)
     || db.prepare('SELECT name FROM staff WHERE id = ?').get(o.staff_id) || { name: '' };
+  // Utang: who it is charged to and what they owe now, for the slip.
+  const accountId = credit.accountOfOrder(o.id);
+  const account = accountId ? db.prepare('SELECT id, name FROM credit_accounts WHERE id = ?').get(accountId) : null;
   return {
     order, payments: paymentsOf(o.id), refunds: refundsOf(o.id), balance: balance(o.id),
     cashier: cashier.name, settings: settings.receiptSettings(),
+    utang: account ? { name: account.name, balance_cents: credit.balance(account.id) } : null,
   };
 }
 

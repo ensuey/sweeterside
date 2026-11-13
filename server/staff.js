@@ -46,6 +46,12 @@ const PERMISSIONS = {
   manage_stock: ['owner', 'cashier'],
   // A line not on the menu (a custom cake, a deposit), named and priced at the counter.
   custom_item: ['owner', 'cashier'],
+  // Utang: charge an order to a customer on the list, and take their payments back.
+  give_credit: ['owner', 'cashier'],
+  collect_credit: ['owner', 'cashier'],
+  // The Utang list itself (who may, their limits), and going over a limit.
+  manage_credit: ['owner'],
+  credit_over_limit: ['owner'],
   // Correcting or deleting a payment or a cash in / out entered by mistake.
   correct_entries: ['owner'],
   void: ['owner'],
