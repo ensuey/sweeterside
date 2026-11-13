@@ -105,7 +105,7 @@ function flagsHtml(o) {
   }
   if (o.scheduled_label) flags.push(`<span class="flag flag--sched">Scheduled — ${esc(o.scheduled_label)}</span>`);
   const waited = minutesSince(waitingFrom(o));
-  if (o.status === 'new' && o.needs_confirm && waited >= WAITING_FLAG_MIN) {
+  if (o.status === 'new' && o.needs_confirm && waited >= WAITING_FLAG_MIN && !(o.source === 'pos' && !o.kitchen_sent_at)) {
     flags.push(`<span class="flag flag--wait">Waiting ${waited} min</span>`);
   }
   if (o.status === 'cancelled' && o.cancel_reason) {
@@ -118,7 +118,9 @@ function flagsHtml(o) {
     and a quiet Block number link (orders with a mobile number). */
 function actionsHtml(o) {
   const actions = [];
-  if (o.status === 'new') {
+  // A counter order paid without going to the kitchen has nothing to confirm.
+  const heldPos = o.source === 'pos' && !o.kitchen_sent_at;
+  if (o.status === 'new' && !heldPos) {
     actions.push(`<button class="btn btn--primary btn--sm" type="button" data-confirm>Confirm</button>`);
   }
   if (!orderPaid(o) && o.status !== 'cancelled') {

@@ -109,6 +109,39 @@ test('counted items keep their count when a handed-over order is deleted; an ope
   stock.change(id, { action: 'off' }, null);
 });
 
+test('a counter order paid or discarded without going to the kitchen shows under Finished, so it can be deleted', () => {
+  const finished = () => orders.list('finished').map((o) => o.id);
+  const before = orders.counts();
+  // Paid at the counter with an SC discount, never sent (live order #12).
+  const pasta = { key: `k${++seq}`, item_id: item('Beef Penne Pasta').id, qty: 1 };
+  const paid = pos.save(null, {
+    request_key: key(), type: 'pickup', customer_name: '', lines: [pasta],
+    discounts: { claimants: [{ type: 'sc', name: 'Lola', id_no: 'OSCA-12121212', mode: 'exclusive', lines: { [pasta.key]: 1 } }] },
+  }, cashier).order;
+  payCash(paid);
+  const held = (lines) => pos.save(null, { request_key: key(), type: 'pickup', customer_name: '', lines }, cashier).order;
+  const sandwich = () => [{ key: `k${++seq}`, item_id: item(SANDWICH).id, qty: 1 }];
+  const discarded = held(sandwich());
+  pos.voidOrder(discarded.id, {}, cashier);
+  const open = held(sandwich());
+
+  assert.ok(reports.scPwd({}).rows.some((r) => r.order_id === paid.id), 'a sale in the SC/PWD report');
+  assert.ok(!pos.open().some((o) => o.id === paid.id), 'not an open tab');
+  assert.ok(!orders.list('active').some((o) => o.id === paid.id), 'not in the To do queue');
+  assert.ok(finished().includes(paid.id), 'paid: under Finished');
+  assert.ok(finished().includes(discarded.id), 'discarded: under Finished');
+  assert.ok(!finished().includes(open.id), 'an open tab stays off the Orders page');
+  const after = orders.counts();
+  assert.deepStrictEqual([after.completed - before.completed, after.cancelled - before.cancelled, after.new - before.new],
+    [1, 1, 0], 'counted as finished, never as a new order to confirm');
+
+  orders.remove(paid.id, owner);
+  assert.ok(!reports.scPwd({}).rows.some((r) => r.order_id === paid.id), 'deleted: out of the SC/PWD report');
+  assert.ok(!finished().includes(paid.id));
+  orders.remove(discarded.id, owner);
+  orders.remove(open.id, owner);
+});
+
 test('the POS ticket has a Delete… button for held tabs, which asks for the owner PIN', () => {
   const read = (f) => fs.readFileSync(path.join(__dirname, '..', 'admin', f), 'utf8');
   const html = read('pos.html');
