@@ -108,6 +108,10 @@ behaviour are in `README.md`.
   - Fly app `sweeterside`, region `sin`, volume at `/data` (`/data/app.db`).
   - Before any one-way migration, back up the live database on the volume
     with `VACUUM INTO` (run through `flyctl ssh console`).
+- **Staging:** `https://staging.sweeterside.ph`, app `sweeterside-staging`.
+  Deploy with `--config fly.staging.toml`. Pass `-a sweeterside-staging` to
+  every other flyctl command for it. Never copy personal data there; use
+  `scripts/staging-seed.js`.
 - **After deploying:**
   - check `/healthz`;
   - check `flyctl status` (health check passing);

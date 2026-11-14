@@ -225,7 +225,8 @@ const TRACKING = {
 function tracking() {
   const t = {};
   for (const [key, rule] of Object.entries(TRACKING)) {
-    const v = getSetting(key, '');
+    // Staging never sends visits or test orders to the shop's ad accounts.
+    const v = require('./staging').on() ? '' : getSetting(key, '');
     t[key] = rule.re.test(v) ? v : '';
   }
   if (!t.gads_id) t.gads_purchase_label = t.gads_lead_label = '';

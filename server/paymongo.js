@@ -32,6 +32,8 @@ const liveMode = () => secretKey().startsWith('sk_live_');
 
 /** The keys are set on the server (not whether they work). */
 function configured() {
+  // Staging takes test keys only: a live key there could take real money.
+  if (require('./staging').on() && liveMode()) return false;
   return /^sk_(test|live)_[A-Za-z0-9]+$/.test(secretKey());
 }
 

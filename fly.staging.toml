@@ -1,0 +1,43 @@
+# The staging site: a test copy of the shop at staging.sweeterside.ph.
+# Deploy with:
+#   flyctl deploy --remote-only --config fly.staging.toml
+# It has its own volume, database and secrets. Nothing here touches the live
+# app. STAGING=1 hides it from search engines, turns tracking off, refuses a
+# live PayMongo key and shows a Staging badge on every page.
+app = "sweeterside-staging"
+primary_region = "sin"
+
+[build]
+
+[env]
+  PORT = "8080"
+  HOST = "0.0.0.0"
+  DATA_DIR = "/data"
+  DB_PATH = "/data/app.db"
+  UPLOAD_DIR = "/data/uploads"
+  FORCE_SECURE_COOKIES = "1"
+  STAGING = "1"
+
+[[mounts]]
+  source = "sweeterside_staging_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_start_machines = true
+  # Sleeps when nobody is using it, so it costs almost nothing.
+  auto_stop_machines = "stop"
+  # SQLite tolerates exactly one writer. Keep this at one machine.
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
