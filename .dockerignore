@@ -9,3 +9,4 @@ README.md
 fly.toml
 Dockerfile
 .dockerignore
+fly.staging.toml

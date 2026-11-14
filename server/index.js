@@ -34,6 +34,7 @@ const reports = require('./reports');
 const audit = require('./audit');
 const stock = require('./stock');
 const paymongo = require('./paymongo');
+const staging = require('./staging');
 const corrections = require('./corrections');
 const credit = require('./credit');
 const render = require('./render');
@@ -133,6 +134,7 @@ function baseHeaders(extra = {}) {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'same-origin',
     'X-Frame-Options': 'DENY',
+    ...(staging.on() ? { 'X-Robots-Tag': 'noindex, nofollow' } : {}),
     ...extra,
   };
 }
@@ -148,7 +150,7 @@ function sendJson(res, status, obj, headers = {}) {
 }
 
 function sendHtml(res, status, html, headers = {}) {
-  send(res, status, html,
+  send(res, status, staging.badge(html),
     { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', ...headers });
 }
 
@@ -545,6 +547,7 @@ async function route(req, res) {
   };
   if (adminPages[pathname] && method === 'GET') {
     if (!currentSession(req)) return redirect(res, '/admin/login');
+    if (staging.on()) return sendHtml(res, 200, fs.readFileSync(path.join(ROOT, 'admin', adminPages[pathname]), 'utf8'));
     return serveFile(req, res, path.join(ROOT, 'admin', adminPages[pathname]), { cache: 'no-store' })
       || send(res, 404, 'Not found');
   }
@@ -1604,7 +1607,7 @@ async function route(req, res) {
   /* ---- for search engines and AI assistants (public facts only) ---- */
   if ((pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt')
       && (method === 'GET' || method === 'HEAD')) {
-    const [type, body] = pathname === '/robots.txt' ? ['text/plain; charset=utf-8', seo.robotsTxt()]
+    const [type, body] = pathname === '/robots.txt' ? ['text/plain; charset=utf-8', staging.on() ? staging.ROBOTS : seo.robotsTxt()]
       : pathname === '/sitemap.xml' ? ['application/xml; charset=utf-8', seo.sitemapXml()]
       : ['text/markdown; charset=utf-8', seo.llmsTxt(render.menuGroups().groups)];
     return send(res, 200, method === 'HEAD' ? '' : body, { 'Content-Type': type, 'Cache-Control': 'public, max-age=3600' });

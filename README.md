@@ -853,6 +853,32 @@ fly ssh console -C "node scripts/create-admin.js --email you@example.com"
 Your menu is then at `https://<app>.fly.dev/` and the admin at
 `https://<app>.fly.dev/admin`.
 
+### Staging site
+
+A test copy of the shop runs at `https://staging.sweeterside.ph` (Fly app
+`sweeterside-staging`, config `fly.staging.toml`). It has its own volume,
+database and secrets, so nothing done there touches the live shop. Try a
+change there before it goes live:
+
+```sh
+flyctl deploy --remote-only --config fly.staging.toml
+```
+
+`STAGING=1` (set in `fly.staging.toml`) makes sure it is never taken for the
+real shop:
+
+- search engines are told to stay away (`robots.txt` and `X-Robots-Tag`);
+- tracking is off, even if the IDs are set;
+- a live PayMongo key is refused. Use test keys (`sk_test_…`);
+- every page shows a red **STAGING** badge.
+
+**Its data.** `scripts/staging-seed.js` makes a starting database from the
+live one with the menu and set-up only: categories, items, options,
+ingredients, delivery areas, vouchers, the cake gallery and settings. It
+copies nothing about people (customers, orders, bookings, payments, shifts,
+staff, admin accounts, Utang, blocked phones, reviews, audit log), and no
+tracking IDs or secrets. Staging has its own admin account and staff PINs.
+
 ### Other hosts
 
 - **Railway** — add a volume mounted at `/data`, set the same env vars as
@@ -885,6 +911,7 @@ Your menu is then at `https://<app>.fly.dev/` and the admin at
 | `ADMIN_PASSWORD` | unset | Skips the prompt in `create-admin` |
 | `CHECKOUT_SECRET` | generated | Key that signs checkout tokens. If unset, one is generated on first use and kept in the database |
 | `CANONICAL_HOST` | unset | The shop's own address, e.g. `sweeterside.ph`. When set, page visits to `www.` and the `.fly.dev` address move there (301). Saves and `/healthz` never move. Set it only once that address serves HTTPS |
+| `STAGING` | unset | Set to `1` on the staging site only: noindex, no tracking, no live PayMongo key, a STAGING badge |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | unset | Keys that sign order alerts (Web Push). Make them with `node scripts/vapid-keys.js \| flyctl secrets import -a sweeterside`. Unset, alerts are off |
 
 ## Still to fill in
