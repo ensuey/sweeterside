@@ -222,6 +222,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-14: Staging noindex tightened. Pages also carry `<meta name="robots" content="noindex, nofollow">`; `robots.txt` now allows crawling so the noindex can be seen; `sitemap.xml` and `llms.txt` answer 404 on staging. No change on live.
 - 2026-11-14: Staging site (`STAGING=1`, app `sweeterside-staging`). No new endpoint. On staging: `X-Robots-Tag: noindex, nofollow` on every response, `robots.txt` disallows all, tracking off, a live PayMongo key is refused, pages carry a badge. `scripts/staging-seed.js` copies an allow-list of menu and set-up tables only; no personal data, tracking IDs or secrets (`checkout_secret`).
 - 2026-11-13: Utang (customer credit) routes added under `/api/pos/credit`, and `/api/reports/utang` (+ `.csv`).
 - 2026-11-03: Settings gain confirm_call_minutes, facebook_url and share_image (PR A). No new endpoint.
