@@ -302,6 +302,16 @@ test('coming back from GCash after closing still shows whether it was paid', () 
   assert.match(cart, /We are closed now, so your cart is kept for next time\./);
 });
 
+test('a delivery paid with GCash is not told to pay in cash when it arrives', () => {
+  // Bug: the confirmation said "Paid with GCash" and, under it, "Pay in cash
+  // when it arrives."
+  const cart = fs.readFileSync(path.join(__dirname, '..', 'assets', 'js', 'cart.js'), 'utf8');
+  const delivery = cart.slice(cart.indexOf("when = 'Delivery · '"), cart.indexOf("$('done-when')"));
+  assert.match(delivery, /next = paid \? 'Already paid with GCash\. Nothing to pay when it arrives\.'/, 'paid comes first');
+  const firstCash = delivery.indexOf('Pay in cash when it arrives');
+  assert.ok(firstCash > delivery.indexOf('next = paid ?'), 'cash only when not paid');
+});
+
 test('Other area stays cash; the POS will not take a second payment for a GCash order', async () => {
   // "Other area": the fee is agreed by phone, so there is nothing to pay online yet.
   deliveryAreas.create({ name: 'Near Barangay', fee: 30, eta_min: 30, eta_max: 60 }); // delivery needs an area set up
