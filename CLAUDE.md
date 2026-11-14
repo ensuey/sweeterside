@@ -98,8 +98,23 @@ behaviour are in `README.md`.
 - **Branches:** work on a feature branch, never directly on `main`. Commit in
   logical steps. End every commit message with the co-author line from the
   session.
-- **PRs:** open one with `gh pr create`, then wait. The user says "merge" or
-  "merge and deploy".
+- **Staging first, then live.** Every change goes through staging before the
+  live site:
+  1. Make the change on a feature branch and run `npm test`.
+  2. Open a PR with `gh pr create`.
+  3. Deploy that branch to staging (no need to ask), run the after-deploy
+     checks there, and tell the user what to try on
+     `https://staging.sweeterside.ph`.
+  4. Wait. If the user asks for changes, push them to the same branch and
+     deploy to staging again.
+  5. When the user says "merge" or "merge and deploy", merge the PR. Then
+     deploy `main` to live and to staging, so both run the same code.
+  - Staging runs one branch at a time. Before deploying another branch
+    there, say which one it replaces.
+  - Never deploy to live from a branch, and never deploy to live what
+    staging hasn't run, unless the user asks for an urgent live fix.
+  - A change with a migration runs on staging first. The live backup with
+    `VACUUM INTO` is still needed before the live deploy.
 - **Stacked PRs:** do not merge them with `--delete-branch`. Deleting a base
   branch closes the PRs stacked on it. Retarget each to `main` first, or merge
   without deleting.
