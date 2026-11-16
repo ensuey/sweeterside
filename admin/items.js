@@ -709,8 +709,98 @@ function openStock(item) {
     $('stock-count-hint').textContent = 'Include any set aside for orders.';
     $('stock-count-btn').textContent = 'Start counting';
   }
+  const byFlavor = !!(item.stock && item.stock.flavors);
+  $('stock-count-form').hidden = byFlavor;
+  if (byFlavor) $('stock-add-form').hidden = true;
+  renderFlavorStock(item);
   if (!stockDialog.open) stockDialog.showModal();
-  (counted ? $('stock-add') : $('stock-count')).focus();
+  const first = byFlavor ? $('stock-flavors').querySelector('input') : counted ? $('stock-add') : $('stock-count');
+  if (first) first.focus();
+}
+
+/** A number box for a count. */
+function countInput(label, min) {
+  const input = document.createElement('input');
+  Object.assign(input, { type: 'number', min: String(min), max: '9999', step: '1', inputMode: 'numeric' });
+  input.setAttribute('aria-label', label);
+  return input;
+}
+
+function smallBtn(text, cls) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = `btn ${cls} btn--sm`;
+  b.textContent = text;
+  return b;
+}
+
+/* Counting by flavor. Counted by flavor: a row per flavor to add a batch or
+   set its count. Not yet: each required "choose one" group on the item can
+   start it, with a count for every option. */
+function renderFlavorStock(item) {
+  const box = $('stock-flavors');
+  box.replaceChildren();
+  const groups = state.optionGroups.filter((g) => (item.option_groups || []).includes(g.id)
+    && g.kind === 'single' && g.required);
+  if (item.stock && item.stock.flavors) {
+    const g = groups.find((x) => x.id === item.stock.group_id);
+    const lefts = new Map(item.stock.flavors.map((f) => [f.option_id, Math.max(0, f.left)]));
+    const block = document.createElement('div');
+    block.className = 'stock__block';
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = `Counted by ${g ? g.name.toLowerCase() : 'flavor'}. Add a batch or set the count of each.`;
+    block.append(p);
+    for (const o of g ? g.options : item.stock.flavors.map((f) => ({ id: f.option_id, name: f.name }))) {
+      const row = document.createElement('div');
+      row.className = 'stock__row';
+      const name = document.createElement('span');
+      name.textContent = `${o.name}: ${lefts.get(o.id) ?? 0} left`;
+      const input = countInput(`How many ${o.name}`, 0);
+      const add = smallBtn('Add', 'btn--primary');
+      const set = smallBtn('Set count', 'btn--ghost');
+      add.addEventListener('click', () => {
+        const qty = input.value.trim();
+        changeStock({ action: 'add', qty, option_id: o.id }, (d) => `Added ${qty} ${o.name}. ${Math.max(0, d.level.left)} left in all.`);
+      });
+      set.addEventListener('click', () => {
+        changeStock({ action: 'count', flavors: [{ option_id: o.id, qty: input.value.trim() }] },
+          (d) => `${o.name} counted. ${Math.max(0, d.level.left)} free to sell in all.`);
+      });
+      row.append(name, input, add, set);
+      block.append(row);
+    }
+    box.append(block);
+    return;
+  }
+  for (const g of groups) {
+    const block = document.createElement('div');
+    block.className = 'stock__block';
+    const label = document.createElement('p');
+    label.textContent = `Or count by ${g.name.toLowerCase()}`;
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.textContent = 'The website then stops taking orders for each one when it runs out. Include any set aside for orders.';
+    block.append(label, hint);
+    const inputs = g.options.map((o) => {
+      const row = document.createElement('div');
+      row.className = 'stock__row';
+      const name = document.createElement('span');
+      name.textContent = o.name;
+      const input = countInput(`How many ${o.name}`, 0);
+      input.placeholder = '0';
+      row.append(name, input);
+      block.append(row);
+      return [o, input];
+    });
+    const go = smallBtn(`Count by ${g.name.toLowerCase()}`, 'btn--ghost');
+    go.addEventListener('click', () => {
+      const flavors = inputs.map(([o, input]) => ({ option_id: o.id, qty: input.value.trim() || '0' }));
+      changeStock({ action: 'count', flavors }, (d) => `Counted by ${g.name.toLowerCase()}. ${Math.max(0, d.level.left)} free to sell.`);
+    });
+    block.append(go);
+    box.append(block);
+  }
 }
 
 async function changeStock(body, done) {

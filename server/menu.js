@@ -218,12 +218,15 @@ function withStock(item, { sold, levels, missing }) {
   const dayLeft = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
   const level = levels.get(item.id);
   const stock_left = level ? Math.max(0, level.left) : null;
+  // Counted by flavor: how many of each are left ({ option_id: n }).
+  const flavor_left = level && level.flavors
+    ? Object.fromEntries(level.flavors.map((f) => [f.option_id, Math.max(0, f.left)])) : null;
   const remaining = dayLeft === null ? stock_left : stock_left === null ? dayLeft : Math.min(dayLeft, stock_left);
   const missing_ingredients = missing.get(item.id) || [];
   return {
     ...item, best_seller: item.best_seller === 1, must_try: item.must_try === 1, trending: item.trending === 1, sc_eligible: item.sc_eligible !== 0, sale_price: salePrice(item),
     sold_today, remaining, stock_left, left_by: remaining !== null && remaining === stock_left ? 'stock' : 'day',
-    missing_ingredients,
+    missing_ingredients, flavor_group: flavor_left ? level.group_id : null, flavor_left,
     sold_out: item.availability === 'sold_out' || remaining === 0 || missing_ingredients.length > 0,
   };
 }

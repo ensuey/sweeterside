@@ -214,11 +214,13 @@ function el(tag, cls, text) {
 function renderStock() {
   const counted = P.menu.filter((i) => i.counted);
   $('stock-none').hidden = counted.length > 0;
-  $('stock-items').replaceChildren(...counted.map((i) => {
-    const li = el('li', `srow${i.stock_left === 0 ? ' is-out' : ''}`);
+  // One row per counted item; an item counted by flavor has a row per flavor.
+  const row = (i, label, left, optionId) => {
+    const li = el('li', `srow${left === 0 ? ' is-out' : ''}`);
     li.dataset.item = String(i.id);
+    if (optionId) li.dataset.option = String(optionId);
     const head = el('div', 'srow__head');
-    head.append(el('span', 'srow__name', i.name), el('span', 'srow__left', `${i.stock_left} left`));
+    head.append(el('span', 'srow__name', label), el('span', 'srow__left', `${left} left`));
     const act = el('div', 'srow__act');
     const input = el('input');
     input.type = 'number';
@@ -227,7 +229,7 @@ function renderStock() {
     input.step = '1';
     input.inputMode = 'numeric';
     input.placeholder = 'How many';
-    input.setAttribute('aria-label', `How many ${i.name}`);
+    input.setAttribute('aria-label', `How many ${label}`);
     const add = el('button', 'btn btn--primary btn--sm', 'Add');
     add.type = 'button';
     add.dataset.do = 'add';
@@ -237,7 +239,10 @@ function renderStock() {
     act.append(input, add, count);
     li.append(head, act);
     return li;
-  }));
+  };
+  $('stock-items').replaceChildren(...counted.flatMap((i) => (i.flavors
+    ? i.flavors.map((f) => row(i, `${i.name} (${f.name})`, f.left, f.option_id))
+    : [row(i, i.name, i.stock_left, null)])));
 
   const ings = P.settings.ingredients || [];
   $('ing-none').hidden = ings.length > 0;
@@ -273,19 +278,23 @@ function openStock(itemId) {
 
 async function changeStock(row, action) {
   const id = Number(row.dataset.item);
+  const optionId = row.dataset.option ? Number(row.dataset.option) : null;
   const qty = row.querySelector('input').value.trim();
-  const item = P.menu.find((i) => i.id === id);
+  const name = row.querySelector('.srow__name').textContent;
   stockError('');
   row.querySelectorAll('button, input').forEach((x) => { x.disabled = true; });
+  // A flavor: a batch adds to it; a count sets that flavor only.
+  const body = { item_id: id, action, request_key: newKey() };
+  if (optionId && action === 'count') body.flavors = [{ option_id: optionId, qty }];
+  else Object.assign(body, { qty }, optionId ? { option_id: optionId } : {});
   try {
-    const data = await staffGate.call('/api/pos/stock', {
-      method: 'POST', body: { item_id: id, action, qty, request_key: newKey() },
-    });
+    const data = await staffGate.call('/api/pos/stock', { method: 'POST', body });
     P.menu = data.items;
     renderGrid();
     renderStock();
-    const left = Math.max(0, data.level.left);
-    toast(action === 'add' ? `Added ${qty} ${item.name}. ${left} left.` : `${item.name} counted. ${left} free to sell.`);
+    const now = optionId && (P.menu.find((i) => i.id === id)?.flavors || []).find((f) => f.option_id === optionId);
+    const left = now ? now.left : Math.max(0, data.level.left);
+    toast(action === 'add' ? `Added ${qty} ${name}. ${left} left.` : `${name} counted. ${left} free to sell.`);
   } catch (e) {
     stockError(e.fields ? Object.values(e.fields).join(' ') : e.message);
     row.querySelectorAll('button, input').forEach((x) => { x.disabled = false; });
@@ -425,7 +434,9 @@ function openOptions(item) {
       input.disabled = !o.available;
       if (o.id === '' && i === 0) input.checked = true;
       const name = document.createElement('span');
-      name.textContent = o.available ? o.name : `${o.name} (not available)`;
+      // A flavor counted on its own shows how many are left.
+      name.textContent = o.left === 0 ? `${o.name} (sold out)` : !o.available ? `${o.name} (not available)`
+        : o.left != null ? `${o.name} (${o.left} left)` : o.name;
       const price = document.createElement('span');
       price.className = 'opts__price';
       price.textContent = o.price > 0 ? `+${money(o.price)}` : '';

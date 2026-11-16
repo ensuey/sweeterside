@@ -65,10 +65,22 @@ function groupsForItem(itemId) {
     .map(shapeGroup).filter((g) => g.options.length > 0);
 }
 
+/** The ids of a group's options. */
+function groupOptionIds(groupId) {
+  return db.prepare('SELECT id FROM options WHERE group_id = ?').all(Number(groupId)).map((r) => r.id);
+}
+
+function optionName(id) {
+  const row = db.prepare('SELECT name FROM options WHERE id = ?').get(Number(id));
+  return row ? row.name : '';
+}
+
 /**
  * The options of every item that has some, for the menu and the POS:
  * { item_id: { price, sale_type, sale_value, groups } }. Unavailable options
- * are kept (shown greyed out) so the choices do not jump around.
+ * are kept (shown greyed out) so the choices do not jump around. On an item
+ * counted by flavor, each option of that group has left (else null), and a
+ * flavor with none left is not available.
  */
 function menuOptions(items) {
   const out = {};
@@ -79,7 +91,10 @@ function menuOptions(items) {
         price: item.price, sale_type: item.sale_type || '', sale_value: item.sale_value ?? null,
         groups: groups.map((g) => ({
           id: g.id, name: g.name, kind: g.kind, required: g.required, min: g.min, max: g.max,
-          options: g.options.map((o) => ({ id: o.id, name: o.name, price: o.price, available: o.available })),
+          options: g.options.map((o) => {
+            const left = item.flavor_group === g.id ? (item.flavor_left[o.id] ?? 0) : null;
+            return { id: o.id, name: o.name, price: o.price, available: o.available && left !== 0, left };
+          }),
         })),
       };
     }
@@ -282,6 +297,6 @@ function setItemGroups(itemId, ids) {
 }
 
 module.exports = {
-  KINDS, listGroups, getGroup, itemGroupIds, groupsForItem, menuOptions, linePrices, optionsText,
+  KINDS, listGroups, getGroup, itemGroupIds, groupsForItem, groupOptionIds, optionName, menuOptions, linePrices, optionsText,
   choose, createGroup, updateGroup, removeGroup, parseItemGroups, setItemGroups,
 };

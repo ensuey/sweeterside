@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 301 (`npm test`):
+**Tests:** 308 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -34,6 +34,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 7 in `test/corrections.test.js`
 - 10 in `test/credit.test.js`
 - 6 in `test/staging.test.js`
+- 6 in `test/flavor-stock.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -646,6 +647,28 @@ amount, by any method.
   `ingredient_change`.
 - Owner to do after deploy: start counting the baked goods (Items → In
   stock), add the frappe ingredients and tick them on each frappe.
+
+### Counting by flavor (2026-11-16, branch `flavor-stock`)
+
+- A counted item can be counted per option of one required "choose one"
+  group (Tres leches: Mango 1, Ube 7, Moca 6; cinnamon rolls: Plain,
+  Biscoff). The item's left is the sum of its flavors (each below zero
+  counts as 0). A flavor of that group with no count has none left.
+- Each flavor has its own moves (`stock_moves.option_id`) and the same
+  formula, over the lines that chose it. Lines now keep the chosen option
+  ids (`order_items.option_ids`, JSON; older lines keep `'[]'` and count
+  only against the item). Both columns are additive.
+- Checkout: more of a flavor than it has (over all lines) is a 409 with
+  `quote.flavor_limits` (`{ 'item:option': left }`); the cart trims to it.
+  POS save: the same check on new lines and on more of a saved line.
+- Menu, cart and POS picker: "N left" (menu: 5 or fewer), and a flavor at 0
+  shows "(sold out)" and cannot be chosen. The cart's + stops at a
+  flavor's count.
+- Items page stock dialog: "Or count by <group>" starts it (one box per
+  option, blank = 0); then a row per flavor (Add, Set count). POS stock
+  dialog: a row per flavor. Stop counting ends the flavors too. Once
+  counted by flavor, the item cannot be counted as a whole.
+- Audit: `stock_count` carries `flavors`, `stock_add` carries `flavor`.
 
 ## Menu regroup (2026-11-04, live data, no PR)
 
