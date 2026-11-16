@@ -244,10 +244,23 @@ function renderOnline() {
     o.sc_pwd_discount > 0 && ['SC/PWD 20%', -o.sc_pwd_discount],
     o.vat_exempt > 0 && ['VAT exempt', -o.vat_exempt],
     o.discount > 0 && [`Voucher ${o.voucher_code}`, -o.discount],
-    o.delivery_fee > 0 && ['Delivery fee', o.delivery_fee],
+    o.delivery_fee > 0 && [o.fee_to_confirm ? 'Delivery fee (to confirm)' : 'Delivery fee', o.delivery_fee],
   ].filter(Boolean).map(([label, v]) => `<div><dt>${esc(label)}</dt><dd>${v < 0 ? `−${money(-v)}` : money(v)}</dd></div>`).join('');
   const cash = o.order_type === 'delivery' && !orderPaid(o) && o.cash > 0
     ? `<p class="od__cash">Customer pays with ${money(o.cash)}${o.change_due > 0 ? ` · bring ${money(o.change_due)} change` : ' · exact amount'}</p>` : '';
+  // "Other area": set the fee agreed on the call (the starting fee, another, or waived).
+  const feeBox = o.order_type === 'delivery' && o.fee_to_confirm && !orderPaid(o) && staffGate.can('change_delivery_fee') ? `
+    <div class="od__fee">
+      <p><strong>Delivery fee to confirm.</strong> Call the customer, then set the fee you agreed.</p>
+      <div class="field"><label for="od-fee">Delivery fee (₱)</label>
+        <input id="od-fee" type="number" min="0" max="10000" step="1" inputmode="numeric" value="${Number(o.delivery_fee) || 0}"></div>
+      <div class="field"><label for="od-fee-reason">Note <span class="hint">(needed to waive it)</span></label>
+        <input id="od-fee-reason" maxlength="200" autocomplete="off" placeholder="e.g. regular customer, nearby"></div>
+      <div class="od__fee-act">
+        <button class="btn btn--primary btn--sm" type="button" data-od-fee>Set fee</button>
+        <button class="btn btn--ghost btn--sm" type="button" data-od-waive>Waive fee</button>
+      </div>
+    </div>` : '';
   const flags = [
     o.blocked && '<span class="flag flag--bad">Blocked number</span>',
     o.history && `<span class="flag">${o.history.orders === 0 ? 'First order' : `${o.history.completed} completed${o.history.no_show ? ` · ${o.history.no_show} no-show` : ''}${o.history.fake ? ` · ${o.history.fake} fake` : ''}`}</span>`,
@@ -266,6 +279,7 @@ function renderOnline() {
     <dl class="paysum od__lines">${lines}</dl>
     <dl class="paysum">${sum}<div class="is-total"><dt>Total</dt><dd>${money(o.total)}</dd></div></dl>
     ${cash}
+    ${feeBox}
     <details class="od__cancel">
       <summary>Cancel this order…</summary>
       <div class="field">
@@ -317,6 +331,22 @@ async function moveOnline(status, reason) {
   }
 }
 
+/** "Other area": save the fee agreed on the call; 0 waives it (with a note). */
+async function setFee(fee) {
+  const id = ONLINE.current;
+  const reason = $('od-fee-reason').value.trim();
+  if (fee === '0' && !reason) return onlineError(new Error('Say why the fee is waived.'));
+  try {
+    const { order } = await staffGate.call(`/api/pos/online/${id}/fee`, { method: 'POST', body: { fee, reason } });
+    toast(order.delivery_fee > 0 ? `Order #${id}: delivery fee ${money(order.delivery_fee)}. Total ${money(order.total)}.`
+      : `Order #${id}: delivery fee waived. Total ${money(order.total)}.`);
+    await loadOnlineList();
+    renderOnline();
+  } catch (e) {
+    onlineError(e);
+  }
+}
+
 /* ---------------------------- start ---------------------------- */
 
 function bindOnline() {
@@ -328,8 +358,10 @@ function bindOnline() {
     if (row) openOnline(Number(row.dataset.onlineId)).catch((err) => toast(err.message, 'error'));
   });
   $('online-detail').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-od-step], [data-od-pay], [data-od-kitchen], [data-od-cancel]');
+    const b = e.target.closest('[data-od-step], [data-od-pay], [data-od-kitchen], [data-od-cancel], [data-od-fee], [data-od-waive]');
     if (!b) return;
+    if (b.matches('[data-od-fee]')) return setFee($('od-fee').value.trim());
+    if (b.matches('[data-od-waive]')) return setFee('0');
     if (b.matches('[data-od-step]')) return moveOnline(b.dataset.odStep);
     if (b.matches('[data-od-kitchen]')) return printKitchen(ONLINE.current).catch((err) => toast(err.message, 'error'));
     if (b.matches('[data-od-pay]')) {

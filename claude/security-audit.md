@@ -170,6 +170,7 @@ to or from utang.
 |---|---|---|---|---|
 | `GET /api/pos/online/pending` | **S only** | | | The bell feed: `{ id, order_type, status }` only, **no customer details**. Has no PIN so it works while the POS is locked. |
 | `GET /api/pos/online` | P | | | Active online orders. Waiters (no `takeout_and_delivery`) get **dine-in only**. No `pos_input`. |
+| `POST /api/pos/online/:id/fee` | P | ✓ | | `{ fee, reason }`: "Other area" fee agreed on the call (`change_delivery_fee`). Online delivery with `fee_to_confirm` only, open and unpaid (else 409); whole pesos 0–10000; waiving (0) needs a reason. Total, cash and change recomputed on the server. Audited as `delivery_fee_changed`. |
 | `PATCH /api/pos/online/:id` | P | ✓ | | `{ status, reason? }` through `orders.setStatus`. Online orders only (a POS id is 404). Waiters dine-in only (403). Cancel needs a reason; audited as `order_cancel`. |
 
 ### Order alerts (Web Push, PR #29)
@@ -222,6 +223,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-16: "Other area" starting fee (setting `other_area_fee`) and `POST /api/pos/online/:id/fee` to confirm, change or waive it after the call. Staff session, CSRF, `change_delivery_fee`; the server recomputes the total; audited. No personal data in logs (order id and staff id only).
 - 2026-11-16: Counting by flavor. No new endpoint: `POST /api/items/:id/count` and `POST /api/pos/stock` (same auth, CSRF, `manage_stock`) accept `flavors` and `option_id`, checked against the item's own required single groups. The server enforces each flavor's count on checkout and POS save; the browser's counts are display only. No personal data involved.
 - 2026-11-14: Staging noindex tightened. Pages also carry `<meta name="robots" content="noindex, nofollow">`; `robots.txt` now allows crawling so the noindex can be seen; `sitemap.xml` and `llms.txt` answer 404 on staging. No change on live.
 - 2026-11-14: Staging site (`STAGING=1`, app `sweeterside-staging`). No new endpoint. On staging: `X-Robots-Tag: noindex, nofollow` on every response, `robots.txt` disallows all, tracking off, a live PayMongo key is refused, pages carry a badge. `scripts/staging-seed.js` copies an allow-list of menu and set-up tables only; no personal data, tracking IDs or secrets (`checkout_secret`).

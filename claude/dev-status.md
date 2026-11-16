@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 308 (`npm test`):
+**Tests:** 313 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -35,6 +35,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 10 in `test/credit.test.js`
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
+- 5 in `test/other-area-fee.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -374,6 +375,17 @@ deployed (Fly v29–v35).
   - **Other area:** ₱0 at order time, `fee_to_confirm = 1`, a "Fee to
     confirm" flag on the Orders card and in the POS; the customer reads
     "Delivery fee: to be confirmed".
+  - **Other area starting fee (2026-11-16, branch `other-area-fee`):**
+    Settings → "Other area: starting delivery fee" (`other_area_fee`, whole
+    pesos, blank = none as before). It is added at checkout and in the POS
+    as a tentative fee, still `fee_to_confirm = 1`; the dropdown reads
+    "Other area · from ₱X, we call to confirm". Free delivery never applies.
+    After the call, POS → Online orders → the order: "Set fee" (any amount)
+    or "Waive fee" (needs a note). `orders.confirmFee` recomputes total,
+    cash (raised to the total if short) and change, updates the pricing
+    JSON, clears the flag and audits `delivery_fee_changed`. Only for open,
+    unpaid online "Other area" deliveries; POS tabs change the fee on the
+    ticket as before.
   - **Orders** gain `delivery_area_id`, `delivery_area` (name snapshot) and
     `fee_to_confirm` (additive columns). The single `delivery_fee` setting
     and the Orders-page fee field are gone (the old row stays, unread).

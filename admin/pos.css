@@ -267,6 +267,11 @@ body.pos {
 .od__lines { padding-bottom: .5rem; margin-bottom: .5rem; border-bottom: 1px dashed var(--line); }
 .od__lines dt { font-weight: 600; }
 .od__cash { margin: .6rem 0 0; padding: .5rem .7rem; border-radius: var(--r-sm); background: #EEF6F0; }
+/* "Other area": the fee agreed on the call. */
+.od__fee { margin-top: .8rem; padding: .7rem; border: 1.5px solid #F0D9A8; border-radius: var(--r-sm); background: #FFF9EC; display: flex; flex-direction: column; gap: .5rem; }
+.od__fee p { margin: 0; }
+.od__fee .field { margin: 0; }
+.od__fee-act { display: flex; gap: .5rem; flex-wrap: wrap; }
 .od__cancel { margin-top: 1rem; }
 .od__cancel summary { cursor: pointer; color: var(--ink-soft); font-size: .875rem; }
 .od__cancel[open] { display: flex; flex-direction: column; align-items: flex-start; gap: .5rem; }
