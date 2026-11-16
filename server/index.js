@@ -1607,6 +1607,8 @@ async function route(req, res) {
   /* ---- for search engines and AI assistants (public facts only) ---- */
   if ((pathname === '/robots.txt' || pathname === '/sitemap.xml' || pathname === '/llms.txt')
       && (method === 'GET' || method === 'HEAD')) {
+    // Staging lists nothing: no sitemap and no llms.txt.
+    if (staging.on() && pathname !== '/robots.txt') return send(res, 404, 'Not found');
     const [type, body] = pathname === '/robots.txt' ? ['text/plain; charset=utf-8', staging.on() ? staging.ROBOTS : seo.robotsTxt()]
       : pathname === '/sitemap.xml' ? ['application/xml; charset=utf-8', seo.sitemapXml()]
       : ['text/markdown; charset=utf-8', seo.llmsTxt(render.menuGroups().groups)];

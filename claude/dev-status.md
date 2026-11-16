@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 300 (`npm test`):
+**Tests:** 301 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -33,7 +33,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 11 in `test/paymongo.test.js`
 - 7 in `test/corrections.test.js`
 - 10 in `test/credit.test.js`
-- 5 in `test/staging.test.js`
+- 6 in `test/staging.test.js`
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
@@ -509,12 +509,14 @@ After deploying (owner, once):
 
 - **Where:** `https://staging.sweeterside.ph`, Fly app `sweeterside-staging`,
   config `fly.staging.toml`, its own volume `sweeterside_staging_data`.
-- **Guards (`STAGING=1`):** noindex on every response, `robots.txt`
-  disallows all, tracking off, a live PayMongo key refused, a STAGING badge
-  on every page. Code in `server/staging.js`.
+- **Guards (`STAGING=1`):** `X-Robots-Tag: noindex` on every response and
+  a robots noindex tag on every page. `robots.txt` allows crawling, so
+  search engines can see the noindex. No sitemap or llms.txt (404). Tracking
+  off, a live PayMongo key refused, a STAGING badge on every page. Code in
+  `server/staging.js`.
 - **Data:** `scripts/staging-seed.js` copies the menu and set-up from live,
   and nothing about people. Staging has its own admin and staff PINs.
-- **Tests:** `test/staging.test.js` (5).
+- **Tests:** `test/staging.test.js` (6).
 
 ## Utang: customers who pay later (2026-11-13)
 
