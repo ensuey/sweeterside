@@ -974,9 +974,11 @@
     } else {
       when = 'Delivery · ' + (order.delivery_area || 'today') + (order.scheduled_label ? ' · ' + order.scheduled_label
         : order.eta ? ' · ' + order.eta.charAt(0).toLowerCase() + order.eta.slice(1) : '');
-      next = order.fee_to_confirm
-        ? 'Delivery fee: to be confirmed. We will call you with it before we send your order. Pay in cash when it arrives.'
-        : 'Pay in cash when it arrives.';
+      // A GCash order is already paid: nothing is due when it arrives.
+      next = paid ? 'Already paid with GCash. Nothing to pay when it arrives.'
+        : order.fee_to_confirm
+          ? 'Delivery fee: to be confirmed. We will call you with it before we send your order. Pay in cash when it arrives.'
+          : 'Pay in cash when it arrives.';
     }
     $('done-when').textContent = when;
     $('done-next').textContent = next;
