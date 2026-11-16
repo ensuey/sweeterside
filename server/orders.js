@@ -13,6 +13,7 @@ const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
+const stock = require('./stock');
 const schedule = require('./schedule');
 
 const { ValidationError } = menu;
@@ -519,6 +520,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const short = [];
 
   const perItem = new Map(); // item_id -> qty over all its lines
+  const perFlavor = new Map(); // 'item:option' -> { item, flavor, qty }, for items counted by flavor
   for (const { id, qty, options, suggested } of cartLines(rawItems)) {
     const item = menu.get(id, { now, date: date || undefined });
     if (!item || item.availability === 'unavailable' || item.sold_out) {
@@ -529,10 +531,15 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
     const chosen = itemOptions.choose(item, options);
     const prices = itemOptions.linePrices(item, chosen.options_cents);
     perItem.set(item.id, { item, qty: (perItem.has(item.id) ? perItem.get(item.id).qty : 0) + qty });
+    const flavor = stock.flavorOf(item, chosen.ids);
+    if (flavor) {
+      const fkey = `${item.id}:${flavor.id}`;
+      perFlavor.set(fkey, { item, flavor, qty: (perFlavor.has(fkey) ? perFlavor.get(fkey).qty : 0) + qty });
+    }
     lines.push({
       item_id: item.id, name: item.name, price: prices.sale_cents / 100, regular: prices.unit_cents / 100,
       sc_eligible: item.sc_eligible, qty, key: chosen.key, options: chosen.snapshot, options_cents: chosen.options_cents,
-      source: suggested ? 'suggested' : '',
+      option_ids: chosen.ids, source: suggested ? 'suggested' : '',
     });
   }
   // Today's limit counts the item, whatever options each line has.
@@ -540,6 +547,11 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
     if (item.remaining !== null && qty > item.remaining) {
       short.push({ id: item.id, name: item.name, remaining: item.remaining, left: menu.leftText(item) });
     }
+  }
+  // A flavor counted on its own: no more than it has left, over all lines.
+  const flavorShort = [];
+  for (const [key, { item, flavor, qty }] of perFlavor) {
+    if (qty > flavor.left) flavorShort.push({ key, name: `${item.name} (${flavor.name})`, remaining: flavor.left });
   }
 
   let found = null;
@@ -571,8 +583,9 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const discount = t.voucher_discount / 100;
   const voucher = found ? { code: found.code, label: found.label, discount } : null;
   const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
+  const flavorLimits = Object.fromEntries(flavorShort.map((s) => [s.key, s.remaining]));
   return {
-    lines, unavailable, limits, short, subtotal: t.subtotal / 100, discount, voucher, voucherError,
+    lines, unavailable, limits, short, flavorLimits, flavorShort, subtotal: t.subtotal / 100, discount, voucher, voucherError,
     delivery_fee: t.delivery_fee / 100, total: t.total / 100, priced, area,
     delivery_free: !!(priced && priced.delivery && priced.delivery.free),
   };
@@ -588,6 +601,7 @@ function staleCart(message, q) {
         items: q.lines.map((l) => ({ id: l.item_id, key: l.key, name: l.name, price: l.price })),
         unavailable: q.unavailable,
         limits: q.limits,
+        flavor_limits: q.flavorLimits,
         voucher: q.voucher,
         delivery_fee: q.delivery_fee,
         total: q.total,
@@ -729,6 +743,13 @@ function create(input, { now = new Date(), admin = false } = {}) {
       : 'Some items have only a few left. Your cart has been updated.';
     throw staleCart(message, q);
   }
+  if (q.flavorShort.length) {
+    const f = q.flavorShort[0];
+    const message = q.flavorShort.length > 1 ? 'Some flavors have only a few left. Your cart has been updated.'
+      : f.remaining === 0 ? `${f.name} is sold out. Your cart has been updated.`
+        : `Only ${f.remaining} ${f.name} left. Your cart has been updated.`;
+    throw staleCart(message, q);
+  }
   // The code worked when applied but not now (expired, or turned off since):
   // drop it and let the customer see the new total before ordering.
   if (q.voucherError) throw staleCart(q.voucherError, q);
@@ -770,14 +791,14 @@ function create(input, { now = new Date(), admin = false } = {}) {
 function insertLines(orderId, lines, quoted = []) {
   const line = db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty,
-                             options, options_cents, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                             options, options_cents, option_ids, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // The engine's lines are keyed by their place in the quote.
   lines.forEach((l) => {
     const q = quoted[Number(l.key)] || {};
     line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty,
       q.options && q.options.length ? JSON.stringify(q.options) : '', q.options_cents || 0,
-      q.source === 'suggested' ? 'suggested' : '');
+      JSON.stringify(q.option_ids || []), q.source === 'suggested' ? 'suggested' : '');
   });
 }
 
@@ -802,6 +823,11 @@ function parseOptions(raw) {
   } catch {
     return [];
   }
+}
+
+/** A line's chosen option ids, or [] (lines from before they were kept). */
+function parseOptionIds(raw) {
+  return parseOptions(raw).filter((id) => Number.isInteger(id));
 }
 
 function withLines(order, { fullIds = false } = {}) {
@@ -969,7 +995,7 @@ function remove(id, by) {
 }
 
 module.exports = {
-  parseOptions, remove,
+  parseOptions, parseOptionIds, remove,
   STATUSES, CANCEL_REASONS, ORDER_TYPES, PESO_FIELDS, enabledTypes, pickupHours,
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,

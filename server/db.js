@@ -694,6 +694,15 @@ CREATE TABLE IF NOT EXISTS item_ingredients (
 );
 CREATE INDEX IF NOT EXISTS idx_item_ingredients_ingredient ON item_ingredients(ingredient_id);`);
 
+/* Counting by flavor: a counted item can be counted per option of one
+   "choose one" group (Mango 1, Ube 7). A move with option_id is that
+   flavor's; one without is the item's. A line keeps the ids of the options
+   chosen (JSON), so each flavor knows what it sold. Lines from before keep
+   '[]' and count only against the item. */
+addMissingColumns('stock_moves', { option_id: 'INTEGER REFERENCES options(id) ON DELETE CASCADE' });
+db.exec('CREATE INDEX IF NOT EXISTS idx_stock_moves_option ON stock_moves(option_id, id)');
+addMissingColumns('order_items', { option_ids: "TEXT NOT NULL DEFAULT '[]'" });
+
 /* Paying online with GCash through PayMongo (server/paymongo.js). Every
    earlier order was paid in person: pay_method '' and pay_status ''.
    pay_status 'awaiting' while the customer is on PayMongo's page (the order

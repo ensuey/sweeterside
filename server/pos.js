@@ -29,6 +29,7 @@ const menu = require('./menu');
 const orders = require('./orders');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
+const stock = require('./stock');
 const vouchers = require('./vouchers');
 const pricing = require('./pricing');
 const settings = require('./settings');
@@ -128,6 +129,12 @@ function open() {
     .map((o) => ({ ...o, total: o.total_cents / 100, held: !o.kitchen_sent_at }));
 }
 
+/** The flavors of an item counted by flavor: every option of that group. */
+function flavorRows(item, opts) {
+  const g = opts && opts.groups.find((x) => x.id === item.flavor_group);
+  return g ? g.options.map((o) => ({ option_id: o.id, name: o.name, left: o.left })) : [];
+}
+
 /** The menu for the item grid: everything not hidden, with today's stock.
     Sold out items come last, so the counter sees what it can sell first. */
 function posMenu() {
@@ -142,6 +149,8 @@ function posMenu() {
     // The count (null when not counted) and any ingredient that is out, so
     // the counter sees why an item is sold out and can fix the count.
     counted: i.stock_left !== null, stock_left: i.stock_left, missing_ingredients: i.missing_ingredients,
+    // Counted by flavor: each flavor with how many are left, in menu order.
+    flavors: i.flavor_group ? flavorRows(i, opts[i.id]) : null,
     marked_sold_out: i.availability === 'sold_out',
     sc_eligible: i.sc_eligible, best_seller: i.best_seller, size_label: i.size_label,
     sale_type: i.sale_type, sale_value: i.sale_value,
@@ -363,6 +372,12 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
   const voids = [];
   const priceChanges = [];
   const increase = new Map(); // item_id -> extra units today
+  const flavorIncrease = new Map(); // item_id -> Map(option_id -> extra units), for counting by flavor
+  const addFlavors = (itemId, optionIds, n) => {
+    if (!flavorIncrease.has(itemId)) flavorIncrease.set(itemId, new Map());
+    const m = flavorIncrease.get(itemId);
+    for (const id of optionIds) m.set(id, (m.get(id) || 0) + n);
+  };
   const seen = new Set();
   const result = []; // the lines after the save, for the engine
 
@@ -392,7 +407,10 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
       const charged = units - voided;
       if (qty > charged) {
         if (o.item_id === null && !o.custom) errors.lines = `${o.name} is no longer on the menu; add it as a new line.`;
-        else if (o.item_id !== null) increase.set(o.item_id, (increase.get(o.item_id) || 0) + qty - charged);
+        else if (o.item_id !== null) {
+          increase.set(o.item_id, (increase.get(o.item_id) || 0) + qty - charged);
+          addFlavors(o.item_id, orders.parseOptionIds(o.option_ids), qty - charged);
+        }
         units += qty - charged;
       } else if (qty < charged) {
         const off = charged - qty;
@@ -474,6 +492,7 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
       const engineKey = `new-${key}`;
       keyMap.set(key, engineKey);
       increase.set(item.id, (increase.get(item.id) || 0) + qty);
+      addFlavors(item.id, chosen.ids, qty);
       if (override !== null) {
         need('price_override');
         if (!overrideReason) errors.lines = 'Give a reason for the price change.';
@@ -483,7 +502,7 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
         key: engineKey, item_id: item.id, name: item.name, qty,
         menu_price_cents: prices.unit_cents, menu_sale_cents: prices.sale_cents,
         options: chosen.snapshot, options_cents: chosen.options_cents, options_text: itemOptions.optionsText(chosen.snapshot),
-        override_cents: override, override_reason: override === null ? '' : overrideReason,
+        option_ids: chosen.ids, override_cents: override, override_reason: override === null ? '' : overrideReason,
         sc_eligible: item.sc_eligible, note,
       };
       ops.push({ op: 'insert', clientKey: key, line });
@@ -513,6 +532,15 @@ function plan(existing, body, actor, now = new Date(), { preview = false } = {})
     if (!item || item.sold_out) errors.lines = `${item ? item.name : 'An item'} is sold out.`;
     else if (item.remaining !== null && extra > item.remaining) {
       errors.lines = `Only ${item.remaining} ${item.name} ${menu.leftText(item)}.`;
+    } else if (flavorIncrease.has(itemId)) {
+      // Counted by flavor: each flavor this save adds to has to have enough left.
+      for (const [optionId, n] of flavorIncrease.get(itemId)) {
+        const flavor = stock.flavorOf(item, [optionId]);
+        if (flavor && n > flavor.left) {
+          errors.lines = flavor.left === 0 ? `${item.name} (${flavor.name}) is sold out.`
+            : `Only ${flavor.left} ${item.name} (${flavor.name}) left.`;
+        }
+      }
     }
   }
 
@@ -609,11 +637,12 @@ function insertLine(orderId, l) {
   return db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty, note,
                              menu_price_cents, menu_sale_cents, override_cents, override_reason, sc_eligible,
-                             options, options_cents, custom)
-    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                             options, options_cents, option_ids, custom)
+    VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     orderId, l.item_id, l.name, l.menu_sale_cents, l.menu_price_cents, l.qty, l.note,
     l.menu_price_cents, l.menu_sale_cents, l.override_cents, l.override_reason, l.sc_eligible ? 1 : 0,
-    l.options && l.options.length ? JSON.stringify(l.options) : '', l.options_cents || 0, l.custom ? 1 : 0,
+    l.options && l.options.length ? JSON.stringify(l.options) : '', l.options_cents || 0,
+    JSON.stringify(l.option_ids || []), l.custom ? 1 : 0,
   ).lastInsertRowid;
 }
 
