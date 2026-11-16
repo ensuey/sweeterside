@@ -104,6 +104,11 @@ async function showShift() {
   $('entries-btn').hidden = !staffGate.can('manage_shift');
   $('cash-form').hidden = !staffGate.can('cash_movement');
   $('close-form').hidden = !staffGate.can('manage_shift');
+  // Opened again: start from the Close shift button, not a half-asked confirm.
+  $('close-confirm').hidden = true;
+  $('close-ask').hidden = false;
+  $('close-counted').disabled = false;
+  $('close-note').disabled = false;
   if (shift) {
     PAY.report = shift;
     $('reading').innerHTML = readingHtml(shift);
@@ -705,8 +710,31 @@ function bindPay() {
       await showShift();
     } catch (err) { shiftError(err); }
   });
+  // Closing a shift cannot be undone: the first press asks, showing the count.
+  const askClose = (show) => {
+    $('close-confirm').hidden = !show;
+    $('close-ask').hidden = show;
+    $('close-counted').disabled = show;
+    $('close-note').disabled = show;
+  };
+  $('close-back').addEventListener('click', () => { askClose(false); $('close-counted').focus(); });
   $('close-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if ($('close-confirm').hidden) {
+      const raw = $('close-counted').value.trim();
+      if (raw === '') return shiftError(new Error('Enter the cash counted in the drawer.'));
+      const counted = Math.round(Number(raw) * 100);
+      const expected = PAY.shift ? PAY.shift.cash.expected_cents : null;
+      const diff = expected === null ? 0 : counted - expected;
+      $('close-confirm-text').textContent = `Close the shift? Cash counted ${moneyC(counted)}`
+        + (expected === null ? '.' : `, expected ${moneyC(expected)}${diff === 0 ? ', exact.' : diff > 0 ? `, over by ${moneyC(diff)}.` : `, short by ${moneyC(-diff)}.`}`)
+        + ' A closed shift cannot be opened again.';
+      $('shift-err').hidden = true;
+      askClose(true);
+      $('close-yes').focus();
+      return;
+    }
+    askClose(false);
     try {
       const { report } = await staffGate.call('/api/pos/shift/close', {
         method: 'POST', body: { counted_cash: $('close-counted').value, note: $('close-note').value },
