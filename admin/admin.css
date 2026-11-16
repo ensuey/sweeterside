@@ -369,6 +369,12 @@ a { color: var(--navy); }
   border: 1.5px solid var(--line); border-radius: var(--r-sm);
 }
 .stock__row input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(62,94,126,.16); }
+/* Counting by flavor: the name, then the box and buttons. */
+#stock-flavors { display: flex; flex-direction: column; gap: 1rem; }
+#stock-flavors .stock__row { align-items: center; }
+#stock-flavors .stock__row > span { flex: 0 0 9rem; font-variant-numeric: tabular-nums; }
+#stock-flavors p:not(.hint) { margin: 0; font-weight: 700; }
+#stock-flavors .stock__block > .btn { align-self: flex-start; }
 .stock__off { align-self: flex-start; }
 .stock__off[hidden] { display: none; }
 

@@ -67,7 +67,7 @@
   function optionMap(item) {
     var map = {};
     if (item.options) item.options.groups.forEach(function (g) {
-      g.options.forEach(function (o) { map[o.id] = { id: o.id, name: o.name, price: o.price, available: o.available, group: g }; });
+      g.options.forEach(function (o) { map[o.id] = { id: o.id, name: o.name, price: o.price, available: o.available, left: o.left, group: g }; });
     });
     return map;
   }
@@ -121,6 +121,29 @@
   /** Units of an item over all its lines: today's limit counts the item. */
   function itemQty(id) {
     return lines.reduce(function (sum, l) { return sum + (l.id === id ? l.qty : 0); }, 0);
+  }
+  /** The flavor of these options that is counted on its own (it has left), or null. */
+  function flavorOf(id, opts) {
+    var item = catalog[id];
+    if (!item || !item.options) return null;
+    var map = optionMap(item);
+    for (var i = 0; i < (opts || []).length; i++) {
+      var o = map[opts[i]];
+      if (o && o.left != null) return o;
+    }
+    return null;
+  }
+  /** Units of this item with this flavor, over all its lines. */
+  function flavorQty(id, optId) {
+    return lines.reduce(function (sum, l) {
+      return sum + (l.id === id && (l.opts || []).indexOf(optId) > -1 ? l.qty : 0);
+    }, 0);
+  }
+  /** How many more of a line can go in the cart: today's limit and its flavor's count. */
+  function room(id, opts) {
+    var n = catalog[id].max - itemQty(id);
+    var f = flavorOf(id, opts);
+    return f ? Math.min(n, f.left - flavorQty(id, f.id)) : n;
   }
   // Delivery areas (fee and usual time) and the free delivery threshold, from
   // Settings. The server prices the order again; this is so the total shown
@@ -522,6 +545,11 @@
         : 'Order at most ' + MAX_QTY + ' of any one item.');
       return;
     }
+    if (room(id, opts) <= 0) {
+      live.textContent = '';
+      notice('That is all the ' + catalog[id].name + ' (' + flavorOf(id, opts).name + ') we have left.');
+      return;
+    }
     if (line) line.qty += 1;
     else lines.push({ id: id, qty: 1, opts: opts, key: key, src: src || '' });
     save();
@@ -539,7 +567,7 @@
     var line = find(key);
     if (!line) return;
     if (qty <= 0) lines.splice(lines.indexOf(line), 1);
-    else line.qty = Math.min(catalog[line.id].max - itemQty(line.id) + line.qty, qty);
+    else line.qty = Math.min(room(line.id, line.opts) + line.qty, qty);
     save();
     render();
   }
@@ -587,7 +615,7 @@
     var plus = el('button', 'stepper__btn', '+');
     plus.type = 'button';
     plus.dataset.step = '1';
-    plus.disabled = itemQty(line.id) >= item.max;
+    plus.disabled = room(line.id, line.opts) <= 0;
     plus.setAttribute('aria-label', 'One more ' + item.name);
     stepper.appendChild(minus);
     stepper.appendChild(qty);
@@ -833,6 +861,26 @@
       for (var i = lines.length - 1; i >= 0 && itemQty(id) > catalog[id].max; i--) {
         if (lines[i].id !== id) continue;
         lines[i].qty -= Math.min(lines[i].qty, itemQty(id) - catalog[id].max);
+        if (lines[i].qty === 0) lines.splice(i, 1);
+      }
+    });
+    // Fewer of a flavor than the cart held: the same, for that flavor ('item:option').
+    Object.keys(quote.flavor_limits || {}).forEach(function (k) {
+      var id = k.split(':')[0];
+      var optId = Number(k.split(':')[1]);
+      var item = catalog[id];
+      if (!item || !item.options) return;
+      var n = quote.flavor_limits[k];
+      item.options.groups.forEach(function (g) {
+        g.options.forEach(function (o) {
+          if (o.id !== optId) return;
+          o.left = Math.min(o.left == null ? n : o.left, n);
+          if (o.left === 0) o.available = false;
+        });
+      });
+      for (var i = lines.length - 1; i >= 0 && flavorQty(id, optId) > n; i--) {
+        if (lines[i].id !== id || (lines[i].opts || []).indexOf(optId) < 0) continue;
+        lines[i].qty -= Math.min(lines[i].qty, flavorQty(id, optId) - n);
         if (lines[i].qty === 0) lines.splice(i, 1);
       }
     });

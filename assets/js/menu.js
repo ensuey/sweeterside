@@ -177,7 +177,9 @@
           input.disabled = !o.available;
           if (o.id === '' && i === 0) input.checked = true;
           var name = document.createElement('span');
-          name.textContent = o.name + (o.available ? '' : ' (not available)');
+          // A flavor counted on its own says when it is gone or nearly gone.
+          name.textContent = o.name + (o.left === 0 ? ' (sold out)' : !o.available ? ' (not available)'
+            : o.left != null && o.left <= 5 ? ' (' + o.left + ' left)' : '');
           var price = document.createElement('span');
           price.className = 'opts__price';
           price.textContent = o.price > 0 ? '+₱' + o.price : '';
