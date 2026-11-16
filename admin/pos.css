@@ -304,6 +304,11 @@ body.pos {
 .paid-done__title { margin: 0; font: 600 2rem "Fredoka", sans-serif; color: var(--ok); }
 .paid-done__change { margin: .2rem 0 0; font: 600 1.5rem "Fredoka", sans-serif; }
 
+/* Closing a shift: asked once more, with the count. */
+.close-confirm { padding: .7rem; border: 1.5px solid #F0D2CC; border-radius: var(--r-sm); background: #FFF7F5; display: flex; flex-direction: column; gap: .6rem; }
+.close-confirm[hidden] { display: none; }
+.close-confirm p { margin: 0; font-weight: 600; }
+.close-confirm__act { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
 .reading { display: flex; flex-direction: column; gap: .4rem; }
 .reading h4 { margin: .6rem 0 .1rem; font-size: .9375rem; }
 .reading__kind { margin: 0; font-weight: 700; color: var(--navy); }

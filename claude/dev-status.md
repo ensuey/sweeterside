@@ -5,13 +5,13 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 314 (`npm test`):
+**Tests:** 315 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
 - 12 in `test/pos-data.test.js`
 - 13 in `test/pos-orders.test.js`
-- 12 in `test/pos-payments.test.js`
+- 13 in `test/pos-payments.test.js`
 - 7 in `test/pos-reports.test.js`
 - 5 in `test/pos-online.test.js`
 - 3 in `test/canonical.test.js`

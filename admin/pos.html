@@ -430,7 +430,14 @@
           <h3 class="panel__sub field--full">Close the shift</h3>
           <div class="field field--xs"><label for="close-counted">Cash counted (₱)</label><input id="close-counted" type="number" min="0" step="0.01" inputmode="decimal"></div>
           <div class="field field--xs field--grow"><label for="close-note">Note (needed if it is off)</label><input id="close-note" maxlength="300" autocomplete="off"></div>
-          <button class="btn btn--danger" type="submit">Close shift</button>
+          <button class="btn btn--danger" type="submit" id="close-ask">Close shift</button>
+          <div class="close-confirm field--full" id="close-confirm" role="alertdialog" aria-labelledby="close-confirm-text" hidden>
+            <p id="close-confirm-text"></p>
+            <div class="close-confirm__act">
+              <button class="btn btn--ghost" type="button" id="close-back">Go back</button>
+              <button class="btn btn--danger" type="submit" id="close-yes">Yes, close the shift</button>
+            </div>
+          </div>
         </form>
       </div>
       <p class="field__err" id="shift-err" hidden></p>

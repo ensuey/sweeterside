@@ -262,3 +262,17 @@ test('a paid order cannot be cancelled until it is refunded', () => {
   payments.refund(o.id, { request_key: key(), method: 'maya', reference: 'MY-R1', reason: 'Customer changed mind' }, owner);
   assert.strictEqual(orders.setStatus(o.id, 'cancelled', { reason: 'customer' }).status, 'cancelled');
 });
+
+test('closing a shift asks once more, with the count, before it closes', () => {
+  // The POS page: the first press shows the count and asks; only "Yes" closes.
+  const root = path.join(__dirname, '..', 'admin');
+  const html = fs.readFileSync(path.join(root, 'pos.html'), 'utf8');
+  const js = fs.readFileSync(path.join(root, 'pos-pay.js'), 'utf8');
+  assert.match(html, /id="close-confirm"[^>]*hidden/, 'the question starts hidden');
+  assert.match(html, /id="close-yes"[^>]*>Yes, close the shift</);
+  const handler = js.slice(js.indexOf("$('close-form').addEventListener('submit'"));
+  const ask = handler.indexOf("if ($('close-confirm').hidden)");
+  const close = handler.indexOf('/api/pos/shift/close');
+  assert.ok(ask > -1 && close > ask, 'the close call comes only after the question');
+  assert.ok(handler.slice(ask, close).includes('return;'), 'the first press returns without closing');
+});
