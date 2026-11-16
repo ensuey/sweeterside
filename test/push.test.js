@@ -197,6 +197,31 @@ function capture(status = 201) {
   return sent;
 }
 
+test('the Topic header is one Apple accepts for any tag: base64url, a multiple of 4, at most 32', async () => {
+  // Apple refused "order-110" (9 characters) with BadWebPushTopic, so from
+  // order #100 no order alert reached an iPhone; "order-99" and "test" passed.
+  withKeys();
+  db.exec('DELETE FROM push_subscriptions');
+  push.subscribe(device().subscription, 'owner@example.com');
+  const sent = capture(201);
+  try {
+    const topics = [];
+    for (const tag of ['test', 'order-99', 'order-110', 'order-1000', 'cake-7', `order-${'9'.repeat(40)}`]) {
+      await push.notifyAll({ title: 'T', body: 'B', url: '/admin', tag });
+      topics.push(sent.at(-1).init.headers.Topic);
+    }
+    for (const t of topics) {
+      assert.match(t, /^[A-Za-z0-9_-]+$/, t);
+      assert.ok(t.length <= 32 && t.length % 4 === 0, `${t} (${t.length})`);
+    }
+    assert.strictEqual(new Set(topics).size, topics.length, 'each tag has its own topic');
+    await push.notifyAll({ title: 'T', body: 'B', url: '/admin', tag: 'order-110' });
+    assert.strictEqual(sent.at(-1).init.headers.Topic, topics[2], 'the same order, the same topic (it replaces)');
+  } finally {
+    withoutKeys();
+  }
+});
+
 const waitFor = async (check) => {
   for (let i = 0; i < 50 && !check(); i++) await new Promise((r) => setTimeout(r, 20));
 };

@@ -207,7 +207,9 @@ async function sendTo(sub, message, k) {
         'Content-Type': 'application/octet-stream',
         TTL: String(TTL_SECONDS),
         Urgency: 'high',
-        ...(message.tag ? { Topic: message.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) } : {}),
+        // Apple refuses a Topic that is not whole base64url (BadWebPushTopic), e.g.
+        // "order-110"; a 32-character hash of the tag always fits and still replaces.
+        ...(message.tag ? { Topic: crypto.createHash('sha256').update(message.tag).digest('base64url').slice(0, 32) } : {}),
       },
       body,
       signal: AbortSignal.timeout(10 * 1000),
