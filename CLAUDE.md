@@ -6,7 +6,8 @@ bookings, and an in-store POS. Live at https://sweeterside.ph (`www.` and
 
 Read `claude/dev-status.md` first: it says what is shipped, what is live and
 what is still open. The POS design is in `claude/pos-plan.md`, and setup and
-behaviour are in `README.md`.
+behaviour are in `README.md`. `claude/architecture.md` has diagrams of the
+structure and the order and POS flows.
 
 ## Hard rules
 
