@@ -96,6 +96,16 @@
     </form>
     <p class="hint">The cart shows "Add ₱X more for free delivery" until the order reaches it. Not for "Other area".</p>
     <p class="field__err" id="free-err" role="alert" hidden></p>
+
+    <form class="hours__form" id="other-fee-form" novalidate>
+      <div class="field field--wide">
+        <label for="other-fee">"Other area": starting delivery fee (₱)</label>
+        <input id="other-fee" type="number" min="0" max="10000" step="1" inputmode="numeric" placeholder="Blank: no fee until you call">
+      </div>
+      <button class="btn btn--ghost" type="submit" id="other-fee-save">Save</button>
+    </form>
+    <p class="hint">Added to an "Other area" order as a starting fee. After the call, set the real fee or waive it in the POS (Online orders).</p>
+    <p class="field__err" id="other-fee-err" role="alert" hidden></p>
   </section>
 
   <!-- "Goes well with" in the cart. -->

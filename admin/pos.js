@@ -130,7 +130,7 @@ function feeWaived(d) {
 /** The fee the chosen area charges, before free delivery: the placeholder for the fee field. */
 function areaFee(t) {
   const a = (P.settings.delivery_areas || []).find((x) => String(x.id) === t.delivery_area);
-  return a ? a.fee : t.delivery_area === 'other' ? 0 : '';
+  return a ? a.fee : t.delivery_area === 'other' ? (P.settings.other_area_fee || 0) : '';
 }
 
 async function loadMenu() {

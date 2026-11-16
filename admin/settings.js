@@ -349,6 +349,23 @@ async function saveFree(event) {
   }
 }
 
+async function saveOtherFee(event) {
+  event.preventDefault();
+  const err = $('other-fee-err');
+  err.hidden = true;
+  $('other-fee-save').disabled = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { other_area_fee: $('other-fee').value } });
+    $('other-fee').value = s.other_area_fee ?? '';
+    toast(s.other_area_fee !== null ? `"Other area" starts at ${money(s.other_area_fee)}.` : '"Other area" has no starting fee.');
+  } catch (e) {
+    err.textContent = errorText(e);
+    err.hidden = false;
+  } finally {
+    $('other-fee-save').disabled = false;
+  }
+}
+
 /* ---------------------------- cart suggestions ---------------------------- */
 
 const SUGGEST_MAX = 3;
@@ -524,6 +541,7 @@ $('rating-form').addEventListener('submit', saveRating);
 $('suggest-form').addEventListener('submit', saveSuggestions);
 $('area-add').addEventListener('submit', addArea);
 $('free-form').addEventListener('submit', saveFree);
+$('other-fee-form').addEventListener('submit', saveOtherFee);
 $('trust-form').addEventListener('submit', saveTrust);
 $('hours-form').addEventListener('submit', saveHours);
 $('confirm-form').addEventListener('submit', saveConfirm);
@@ -541,6 +559,7 @@ adminBoot(async () => {
   showTracking(s);
   showGcash(s);
   $('free-min').value = s.free_delivery_min ?? '';
+  $('other-fee').value = s.other_area_fee ?? '';
   showAreas((await api('/api/delivery-areas')).areas);
   await loadSuggestions();
   const t = await api('/api/testimonials');

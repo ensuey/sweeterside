@@ -152,6 +152,8 @@
   try { deliveryInfo = JSON.parse(document.body.dataset.delivery || '{}'); } catch (e) { /* keep the empty default */ }
   var areas = deliveryInfo.areas || [];
   var freeMin = deliveryInfo.free_min || null;
+  // "Other area": the starting fee, added until the call confirms it (null: none).
+  var otherFee = typeof deliveryInfo.other_fee === 'number' ? deliveryInfo.other_fee : null;
   // The order types turned on in the admin, e.g. "delivery pickup dinein".
   var enabledTypes = (document.body.dataset.orderTypes || '').split(' ').filter(Boolean);
   var pickupOpen = toMinutes(document.body.dataset.pickupOpen);
@@ -214,7 +216,9 @@
   function fee() {
     if (type !== 'delivery') return 0;
     var a = area();
-    if (!a || a.other || freeDelivery()) return 0;
+    if (!a) return 0;
+    if (a.other) return otherFee || 0;
+    if (freeDelivery()) return 0;
     return a.fee;
   }
   // A voucher comes off the items only, never the delivery fee.
@@ -726,13 +730,16 @@
     }
     $('cart-fee-row').hidden = type !== 'delivery';
     var a = area();
-    $('cart-fee').textContent = !a ? 'Choose your area' : a.other ? 'To be confirmed'
+    $('cart-fee').textContent = !a ? 'Choose your area'
+      : a.other ? (otherFee ? money(otherFee) + ' (to confirm)' : 'To be confirmed')
       : freeDelivery() ? 'Free' : a.fee === 0 ? 'Free' : money(a.fee);
     // "Add ₱X more for free delivery": only for an area with a fee, under the threshold.
     var short = freeMin && type === 'delivery' && a && !a.other && a.fee > 0 ? freeMin - (subtotal() - discount()) : 0;
     $('cart-free').hidden = !(short > 0);
     if (short > 0) $('cart-free').textContent = 'Add ' + money(short) + ' more for free delivery.';
-    $('o-area-eta').textContent = a && a.eta ? a.eta + '.' : a && a.other ? 'We will call you with the fee before we send it.' : '';
+    $('o-area-eta').textContent = a && a.eta ? a.eta + '.' : a && a.other
+      ? (otherFee ? 'We will call you to confirm the fee before we send it. It may change.'
+        : 'We will call you with the fee before we send it.') : '';
     $('cart-total').textContent = money(total());
     renderPay();
     var gcash = payMethod() === 'gcash';
@@ -1025,7 +1032,9 @@
       // A GCash order is already paid: nothing is due when it arrives.
       next = paid ? 'Already paid with GCash. Nothing to pay when it arrives.'
         : order.fee_to_confirm
-          ? 'Delivery fee: to be confirmed. We will call you with it before we send your order. Pay in cash when it arrives.'
+          ? (order.delivery_fee > 0
+            ? 'Delivery fee: ' + money(order.delivery_fee) + ' for now. We will call you to confirm it before we send your order. Pay in cash when it arrives.'
+            : 'Delivery fee: to be confirmed. We will call you with it before we send your order. Pay in cash when it arrives.')
           : 'Pay in cash when it arrives.';
     }
     $('done-when').textContent = when;

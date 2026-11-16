@@ -998,7 +998,8 @@ async function route(req, res) {
     return sendJson(res, 200, {
       categories: categories.list(), items: pos.posMenu(),
       // Delivery: the same areas, fees and free delivery threshold as the checkout.
-      delivery_areas: delivery.selectable(), free_delivery_min: delivery.freeOver(), service_charge: s.service_charge,
+      delivery_areas: delivery.selectable(), free_delivery_min: delivery.freeOver(), other_area_fee: delivery.otherFee(),
+      service_charge: s.service_charge,
       vat_registered: s.vat_registered, cashier_discount_limit_bp: s.cashier_discount_limit_bp,
       lock_minutes: s.pos_lock_minutes,
       ingredients: stock.listIngredients().map((g) => ({ id: g.id, name: g.name, in_stock: g.in_stock })),
@@ -1078,6 +1079,17 @@ async function route(req, res) {
       return changed;
     });
     console.log(`[pos] online #${id} ${status} by staff ${who.staff.id}`);
+    return sendJson(res, 200, { order });
+  }
+
+  // "Other area": the delivery fee agreed on the call (confirm, change or waive).
+  const posFeeMatch = pathname.match(/^\/api\/pos\/online\/(\d+)\/fee$/);
+  if (posFeeMatch && method === 'POST') {
+    const who = requireStaff(req, res, { csrf: true, permission: 'change_delivery_fee' });
+    if (!who) return;
+    const order = orders.confirmFee(Number(posFeeMatch[1]), await readJson(req), who.staff);
+    if (!order) return sendJson(res, 404, { error: 'That delivery order no longer exists.' });
+    console.log(`[pos] online #${order.id} fee set by staff ${who.staff.id}`);
     return sendJson(res, 200, { order });
   }
 

@@ -284,6 +284,7 @@ function deliveryData() {
   return {
     areas: delivery.selectable().map((a) => ({ id: a.id, name: a.name, fee: a.fee, eta: delivery.etaLabel(a) })),
     free_min: delivery.freeOver(),
+    other_fee: delivery.otherFee(),
   };
 }
 
@@ -294,8 +295,9 @@ function areaOptionsHtml() {
     const label = `${a.name} · ${a.fee === 0 ? 'free delivery' : `₱${a.fee}`}${eta ? ` · ${eta.charAt(0).toLowerCase()}${eta.slice(1)}` : ''}`;
     return `          <option value="${a.id}">${esc(label)}</option>`;
   });
+  const other = delivery.otherFee();
   return ['          <option value="">Choose your area</option>', ...opts,
-    '          <option value="other">Other area (we call you with the fee)</option>'].join('\n');
+    `          <option value="other">${other ? `Other area · from ₱${other}, we call to confirm` : 'Other area (we call you with the fee)'}</option>`].join('\n');
 }
 
 /** The share image (Open Graph) set in Settings, or the logo. A wide share

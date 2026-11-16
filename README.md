@@ -183,8 +183,10 @@ Next to the orders list the admin sets:
 - **Delivery areas** (Settings page): each area has a fee and a usual time
   ("Usually 30–45 min"), and can be turned off. The customer picks an area at
   checkout and the server charges that area's fee; an area with no fee yet is
-  not offered. **Other area** is always offered: the order comes in with no
-  fee, marked **Fee to confirm**, and the shop calls with the fee. Removing an
+  not offered. **Other area** is always offered: the order comes in with the
+  starting fee set on the Settings page (or none), marked **Fee to confirm**,
+  and the shop calls with the fee. In the POS (Online orders) staff then set
+  the agreed fee or waive it with a note; the total follows. Removing an
   area keeps its name on past orders. The POS uses the same areas, and a
   cashier can still change one order's fee with a reason.
 - **Cart suggestions** (Settings page): up to three "Goes well with" items for
