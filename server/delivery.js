@@ -85,6 +85,13 @@ function freeOver() {
   return v !== '' && Number.isInteger(n) && n > 0 ? n : null;
 }
 
+/** "Other area": the starting fee in pesos (added until the call confirms it), or null for none. */
+function otherFee() {
+  const v = getSetting('other_area_fee', '');
+  const n = Number(v);
+  return v !== '' && Number.isInteger(n) && n >= 0 ? n : null;
+}
+
 /**
  * The area a customer or cashier chose, for pricing and the order.
  * @param choice an area id, or 'other'
@@ -92,7 +99,8 @@ function freeOver() {
  */
 function resolve(choice) {
   if (String(choice ?? '').trim().toLowerCase() === OTHER) {
-    return { id: null, name: 'Other area', fee_cents: 0, to_confirm: true, eta: '', free_over_cents: null };
+    // The starting fee, if the owner set one; the shop confirms, changes or waives it by phone.
+    return { id: null, name: 'Other area', fee_cents: (otherFee() ?? 0) * 100, to_confirm: true, eta: '', free_over_cents: null };
   }
   const id = Number(choice);
   if (!Number.isInteger(id) || id < 1) return null;
@@ -168,4 +176,4 @@ function get(id) {
   return r ? shape(r) : null;
 }
 
-module.exports = { OTHER, list, selectable, etaLabel, freeOver, resolve, create, update, remove, reorder, get };
+module.exports = { OTHER, list, selectable, etaLabel, freeOver, otherFee, resolve, create, update, remove, reorder, get };

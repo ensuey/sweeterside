@@ -272,6 +272,17 @@ function parseFreeMin(input) {
   return String(n);
 }
 
+/** "Other area": the starting fee, in whole pesos (0 is allowed); blank: none. */
+function parseOtherFee(input) {
+  const raw = input === null || input === undefined ? '' : String(input).trim();
+  if (raw === '') return '';
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0 || n > 10000) {
+    throw new ValidationError({ other_area_fee: 'Enter a whole number of pesos from 0 to 10000, or leave it blank.' });
+  }
+  return String(n);
+}
+
 /** What the menu says while ordering is closed, for the switch or the hours. */
 function closedMessage(now = new Date()) {
   const s = shopState(now);
@@ -396,6 +407,7 @@ function settings() {
     gcash_webhook: !!process.env.PAYMONGO_WEBHOOK_SECRET,
     gcash_live: require('./paymongo').liveMode(),
     free_delivery_min: delivery.freeOver(),
+    other_area_fee: delivery.otherFee(),
     preorder_days: schedule.preorderDays(),
     require_confirm_delivery: requiresConfirmation('delivery'),
     require_confirm_pickup: requiresConfirmation('pickup'),
@@ -423,6 +435,7 @@ function updateSettings(input) {
     ...Object.fromEntries(Object.keys(TRACKING).map((key) => [key, parseTracking(key)])),
     gcash_online: parseSwitch('gcash_online'),
     free_delivery_min: parseFreeMin,
+    other_area_fee: parseOtherFee,
     preorder_days: schedule.parseDays,
     require_confirm_delivery: parseSwitch('require_confirm_delivery'),
     require_confirm_pickup: parseSwitch('require_confirm_pickup'),
@@ -965,6 +978,56 @@ function setStatus(id, status, { reason } = {}) {
   return get(id);
 }
 
+const FEE_MAX = 10000; // pesos, as for an area's fee
+const FEE_REASON_MAX = 200;
+
+/**
+ * An online "Other area" delivery: the fee agreed on the call. It replaces
+ * the starting fee: the same (confirmed), another amount, or 0 (waived, with
+ * a reason). The total and the change to bring follow. Only while the fee is
+ * still to confirm and nothing is paid. Audited.
+ * input: { fee (whole pesos), reason }
+ * @returns the order, or null when there is no such order
+ */
+function confirmFee(id, input, by) {
+  const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(id));
+  if (!o || o.source !== 'online' || o.order_type !== 'delivery') return null;
+  const refuse = (message) => { throw Object.assign(new Error(message), { status: 409, body: { error: message } }); };
+  if (!o.fee_to_confirm) refuse('The delivery fee of this order is already set.');
+  if (['completed', 'cancelled'].includes(o.status)) refuse('This order is closed.');
+  const { paid } = db.prepare('SELECT COALESCE(SUM(amount_cents), 0) AS paid FROM payments WHERE order_id = ?').get(o.id);
+  if (o.paid_at || paid > 0 || o.pay_status === 'paid') refuse('This order is already paid.');
+
+  const raw = input && input.fee;
+  const fee = typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : raw;
+  if (!Number.isInteger(fee) || fee < 0 || fee > FEE_MAX) {
+    throw new ValidationError({ fee: `Enter the fee in whole pesos, from 0 to ${FEE_MAX}.` });
+  }
+  const reason = String((input && input.reason) ?? '').trim().replace(/\s+/g, ' ').slice(0, FEE_REASON_MAX);
+  if (fee === 0 && !reason) throw new ValidationError({ reason: 'Say why the fee is waived.' });
+
+  const feeCents = fee * 100;
+  const total = o.total_cents - o.delivery_fee_cents + feeCents;
+  // Cash on delivery: at least the new total, so the rider brings the right change.
+  const cash = o.cash_cents > 0 ? Math.max(o.cash_cents, total) : 0;
+  const p = o.pricing ? JSON.parse(o.pricing) : null;
+  if (p) {
+    p.delivery = { ...p.delivery, amount: feeCents, reason: reason || 'Confirmed by call' };
+    p.totals = { ...p.totals, delivery_fee: feeCents, total };
+  }
+  return transaction(() => {
+    db.prepare(`UPDATE orders SET delivery_fee_cents = ?, total_cents = ?, cash_cents = ?, change_due_cents = ?,
+                pricing = ?, fee_to_confirm = 0, updated_at = datetime('now') WHERE id = ?`)
+      .run(feeCents, total, cash, cash > 0 ? cash - total : 0, p ? JSON.stringify(p) : o.pricing, o.id);
+    require('./audit').record({
+      action: 'delivery_fee_changed', staff: by, order_id: o.id, amount_cents: feeCents,
+      reason: reason || (fee === 0 ? '' : 'Confirmed by call'),
+      details: { from_cents: o.delivery_fee_cents, to_cents: feeCents, area: 'Other area' },
+    });
+    return get(o.id);
+  });
+}
+
 /**
  * Delete an order for good, for test orders. Its lines, payments and refunds
  * go with it, so it leaves the order lists, the reports, the shift totals and
@@ -1000,5 +1063,5 @@ module.exports = {
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
   closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage, tracking,
-  quote, create, insertLines, get, list, counts, setStatus,
+  quote, create, insertLines, get, list, counts, setStatus, confirmFee,
 };
