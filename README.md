@@ -867,7 +867,10 @@ flyctl deploy --remote-only --config fly.staging.toml
 `STAGING=1` (set in `fly.staging.toml`) makes sure it is never taken for the
 real shop:
 
-- search engines are told to stay away (`robots.txt` and `X-Robots-Tag`);
+- search engines are told not to list it: `X-Robots-Tag: noindex` on every
+  response and a robots noindex tag on every page. `robots.txt` allows
+  crawling on purpose, so search engines can see the noindex. There is no
+  sitemap or `llms.txt`;
 - tracking is off, even if the IDs are set;
 - a live PayMongo key is refused. Use test keys (`sk_test_…`);
 - every page shows a red **STAGING** badge.

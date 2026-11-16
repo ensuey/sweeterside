@@ -59,14 +59,25 @@ test('the live site: indexable, tracking on, no badge', () => withStaging(false,
   assert.strictEqual(orders.tracking().meta_pixel_id, '123456789012345');
 })));
 
-test('staging: noindex everywhere, robots.txt shuts the door, a badge on the pages', () => withStaging(true, () => withServer(async (base) => {
-  for (const p of ['/', '/cakes', '/admin/login', '/healthz', '/robots.txt']) {
+test('staging: noindex on every response and page, no sitemap, a badge on the pages', () => withStaging(true, () => withServer(async (base) => {
+  for (const p of ['/', '/cakes', '/about', '/admin/login', '/healthz', '/robots.txt', '/assets/css/styles.css']) {
     const res = await fetch(`${base}${p}`);
     assert.strictEqual(res.headers.get('x-robots-tag'), 'noindex, nofollow', p);
     const body = await res.text();
-    if (['/', '/cakes', '/admin/login'].includes(p)) assert.ok(body.includes('STAGING · test site'), `${p} shows the badge`);
+    if (['/', '/cakes', '/about', '/admin/login'].includes(p)) {
+      assert.ok(body.includes('STAGING · test site'), `${p} shows the badge`);
+      assert.strictEqual((body.match(/<meta name="robots"/g) || []).length, 1, `${p}: one robots tag`);
+      assert.match(body, /<meta name="robots" content="noindex, nofollow">/, `${p}: noindex in the page`);
+    }
   }
-  assert.strictEqual(await (await fetch(`${base}/robots.txt`)).text(), 'User-agent: *\nDisallow: /\n');
+  // Crawling stays allowed, so search engines can see the noindex.
+  assert.strictEqual(await (await fetch(`${base}/robots.txt`)).text(), 'User-agent: *\nAllow: /\n');
+  for (const p of ['/sitemap.xml', '/llms.txt']) assert.strictEqual((await fetch(`${base}${p}`)).status, 404, p);
+})));
+
+test('the live site has no robots tag on customer pages, and keeps its sitemap', () => withStaging(false, () => withServer(async (base) => {
+  assert.ok(!/<meta name="robots"/.test(await (await fetch(`${base}/`)).text()));
+  assert.strictEqual((await fetch(`${base}/sitemap.xml`)).status, 200);
 })));
 
 test('staging: tracking is off even when the IDs are set', () => withStaging(true, async () => {
