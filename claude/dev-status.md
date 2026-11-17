@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 315 (`npm test`):
+**Tests:** 322 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -36,6 +36,21 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
+- 7 in `test/sms.test.js`
+
+## SMS order alerts through Semaphore (2026-11-17, branch `sms-order-alerts`)
+
+- Every new online order (and a GCash order once paid) also sends one text to
+  the owner's numbers, with the same words as the push alert: order number,
+  type, item count and total. Never the customer's name, phone or address.
+  Cake bookings and POS orders are not texted.
+- **Settings → Order alerts → Text messages (SMS):** up to 3 PH mobile
+  numbers, kept as +639XXXXXXXXX (setting `sms_alert_numbers`). Blank: no texts.
+- Fly secrets: `SEMAPHORE_API_KEY` (unset: nothing is sent) and optional
+  `SEMAPHORE_SENDER` (the sender name Semaphore approved; Semaphore sends
+  nothing until one is approved: 500 "No active sender name"). Each text uses
+  Semaphore credits. The key and the numbers are never logged.
+- Code: `server/sms.js`; tests in `test/sms.test.js`.
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 

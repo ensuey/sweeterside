@@ -131,6 +131,32 @@ async function saveGcash() {
   }
 }
 
+/* ---------------------------- SMS alerts ---------------------------- */
+
+function showSms(s) {
+  $('sms-numbers').value = s.sms_numbers;
+  $('sms-status').textContent = s.sms_enabled
+    ? 'Sent through Semaphore. Each text uses Semaphore credits. It says the order number, type and total, never the customer\'s details.'
+    : 'Semaphore is not set up on the server yet, so no texts are sent. The numbers are kept for when it is.';
+}
+
+async function saveSms(event) {
+  event.preventDefault();
+  const err = $('sms-err');
+  err.hidden = true;
+  $('sms-save').disabled = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body: { sms_numbers: $('sms-numbers').value } });
+    showSms(s);
+    toast(s.sms_numbers ? `Saved. New orders are texted to ${s.sms_numbers}.` : 'Saved. No texts for new orders.');
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+  } finally {
+    $('sms-save').disabled = false;
+  }
+}
+
 /* ---------------------------- tracking ---------------------------- */
 
 // Setting -> input id.
@@ -547,6 +573,7 @@ $('hours-form').addEventListener('submit', saveHours);
 $('confirm-form').addEventListener('submit', saveConfirm);
 $('tracking-form').addEventListener('submit', saveTracking);
 $('gcash-on').addEventListener('change', saveGcash);
+$('sms-form').addEventListener('submit', saveSms);
 $('share-file').addEventListener('change', uploadShare);
 $('share-remove').addEventListener('click', removeShare);
 
@@ -558,6 +585,7 @@ adminBoot(async () => {
   showShare(s);
   showTracking(s);
   showGcash(s);
+  showSms(s);
   $('free-min').value = s.free_delivery_min ?? '';
   $('other-fee').value = s.other_area_fee ?? '';
   showAreas((await api('/api/delivery-areas')).areas);

@@ -918,6 +918,8 @@ tracking IDs or secrets. Staging has its own admin account and staff PINs.
 | `CANONICAL_HOST` | unset | The shop's own address, e.g. `sweeterside.ph`. When set, page visits to `www.` and the `.fly.dev` address move there (301). Saves and `/healthz` never move. Set it only once that address serves HTTPS |
 | `STAGING` | unset | Set to `1` on the staging site only: noindex, no tracking, no live PayMongo key, a STAGING badge |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | unset | Keys that sign order alerts (Web Push). Make them with `node scripts/vapid-keys.js \| flyctl secrets import -a sweeterside`. Unset, alerts are off |
+| `SEMAPHORE_API_KEY` | unset | Semaphore key for SMS order alerts to the numbers in Settings → Order alerts. Set it yourself: `flyctl secrets set SEMAPHORE_API_KEY=… -a sweeterside`. Unset, no texts are sent |
+| `SEMAPHORE_SENDER` | unset | The sender name Semaphore approved for the account. Semaphore sends nothing until the account has an approved sender name |
 
 ## Still to fill in
 
