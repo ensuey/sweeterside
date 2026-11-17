@@ -30,6 +30,7 @@ const pos = require('./pos');
 const settings = require('./settings');
 const payments = require('./payments');
 const shifts = require('./shifts');
+const sms = require('./sms');
 const reports = require('./reports');
 const audit = require('./audit');
 const stock = require('./stock');
@@ -261,7 +262,7 @@ function siteUrl(req) {
 // A GCash order is announced to the kitchen once it is paid.
 paymongo.onPaid((id) => {
   const order = orders.get(id);
-  if (order) push.alert(push.orderMessage(order));
+  if (order) { push.alert(push.orderMessage(order)); sms.alert(push.orderMessage(order)); }
 });
 
 /* Cake bookings and their reference photos are public writes as well. */
@@ -766,6 +767,7 @@ async function route(req, res) {
       }
     }
     push.alert(push.orderMessage(order));
+    sms.alert(push.orderMessage(order));
     return sendJson(res, 201, { order: publicOrder(order) });
   }
 

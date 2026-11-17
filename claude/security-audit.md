@@ -186,6 +186,8 @@ to or from utang.
 
 Alerts are sent after a new online order or cake booking, encrypted per device (RFC 8291) and signed with the VAPID key (RFC 8292, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` fly secrets). They carry the order number, type and total (cakes: number, date, size), never names, phones or addresses. A device the push service reports gone (404/410) is removed.
 
+SMS order alerts (`server/sms.js`) go from the server to Semaphore (`https://api.semaphore.co`, server-side only; no browser origin or CSP change). The key is the `SEMAPHORE_API_KEY` fly secret, sent in the POST body, never in a URL or log. The text is the push alert's words: no names, phones or addresses. The owner's numbers are validated as PH mobiles (max 3) through `PUT /api/settings` (admin session + CSRF, as before).
+
 ### Reports and audit (owner)
 
 | Route | Auth | CSRF | Limit | Notes |
@@ -223,6 +225,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-17: SMS order alerts through Semaphore. No new endpoint: setting `sms_numbers` on `PUT /api/settings`, validated (PH mobiles, max 3). New outbound service `api.semaphore.co` (server-side). Secrets `SEMAPHORE_API_KEY`, `SEMAPHORE_SENDER`. Key and numbers never logged; the message carries no customer details.
 - 2026-11-16: "Other area" starting fee (setting `other_area_fee`) and `POST /api/pos/online/:id/fee` to confirm, change or waive it after the call. Staff session, CSRF, `change_delivery_fee`; the server recomputes the total; audited. No personal data in logs (order id and staff id only).
 - 2026-11-16: Counting by flavor. No new endpoint: `POST /api/items/:id/count` and `POST /api/pos/stock` (same auth, CSRF, `manage_stock`) accept `flavors` and `option_id`, checked against the item's own required single groups. The server enforces each flavor's count on checkout and POS save; the browser's counts are display only. No personal data involved.
 - 2026-11-14: Staging noindex tightened. Pages also carry `<meta name="robots" content="noindex, nofollow">`; `robots.txt` now allows crawling so the noindex can be seen; `sitemap.xml` and `llms.txt` answer 404 on staging. No change on live.
