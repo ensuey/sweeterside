@@ -27,7 +27,7 @@ function capture(status = 200) {
   sms.setTransport(async (url, init) => {
     sent.push({ url, init, form: new URLSearchParams(init.body) });
     if (status === 0) throw new Error('offline');
-    return { status };
+    return { status, text: async () => `[{"senderName":"No active sender name found.","number":"639171234567","key":"${KEY}"}]` };
   });
   return sent;
 }
@@ -110,8 +110,9 @@ test('a refusal or no answer never throws, and the key and numbers are not logge
     capture(0);
     assert.deepStrictEqual(await sms.send('x'), { sent: 0, status: 0 });
     assert.strictEqual(logged.length, 2);
+    assert.match(logged[0], /No active sender name found/);
     for (const line of logged) {
-      assert.ok(!line.includes(KEY) && !line.includes('917'), line);
+      assert.ok(!line.includes(KEY) && !line.includes('917') && !line.includes('123'), line);
     }
   } finally {
     console.warn = warn;

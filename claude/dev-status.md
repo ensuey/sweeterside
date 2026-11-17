@@ -47,7 +47,8 @@ npm dependencies, SQLite via `node:sqlite`.
 - **Settings → Order alerts → Text messages (SMS):** up to 3 PH mobile
   numbers, kept as +639XXXXXXXXX (setting `sms_alert_numbers`). Blank: no texts.
 - Fly secrets: `SEMAPHORE_API_KEY` (unset: nothing is sent) and optional
-  `SEMAPHORE_SENDER` (a sender name Semaphore approved). Each text uses
+  `SEMAPHORE_SENDER` (the sender name Semaphore approved; Semaphore sends
+  nothing until one is approved: 500 "No active sender name"). Each text uses
   Semaphore credits. The key and the numbers are never logged.
 - Code: `server/sms.js`; tests in `test/sms.test.js`.
 

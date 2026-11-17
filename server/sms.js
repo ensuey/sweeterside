@@ -70,8 +70,14 @@ async function send(text) {
       body: form.toString(),
       signal: AbortSignal.timeout(10 * 1000),
     });
-    // The key and the numbers are never logged.
-    if (res.status < 200 || res.status >= 300) console.warn(`[sms] Semaphore refused (${res.status})`);
+    // The key and the numbers are never logged: Semaphore's reason is cut short
+    // and any run of digits in it hidden.
+    if (res.status < 200 || res.status >= 300) {
+      const key = process.env.SEMAPHORE_API_KEY.trim();
+      const why = await res.text()
+        .then((t) => t.split(key).join('[key]').replace(/\d{4,}/g, '#').slice(0, 200)).catch(() => '');
+      console.warn(`[sms] Semaphore refused (${res.status})${why ? `: ${why}` : ''}`);
+    }
     return { sent: res.status >= 200 && res.status < 300 ? to.length : 0, status: res.status };
   } catch {
     console.warn('[sms] Semaphore did not answer');
