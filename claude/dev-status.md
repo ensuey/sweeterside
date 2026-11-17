@@ -130,7 +130,7 @@ Fixes since the POS went live:
 - **#19 (v13): POS item photos on iPad.** The photo box is now made square
   with padding instead of `aspect-ratio`. The sprite position is set in JS as
   plain percentages instead of nested `calc()`. Photos are no longer
-  lazy-loaded inside the scrolling grid. Not yet confirmed on a real iPad.
+  lazy-loaded inside the scrolling grid. Confirmed on a real iPad (2026-11-17).
 - **#20 (v14): security review fixes.**
   - **SC/PWD IDs in `pos_input`.** Every order response carried the raw
     `pos_input` column (what the cashier typed, with ID numbers in full), past
@@ -239,7 +239,7 @@ All merged and deployed (Fly v15–v28).
   - **Home Screen app:** the admin top bar and the POS bar leave room for the
     status bar (`env(safe-area-inset-top)`).
   - **Report tables** scroll inside their box.
-  - Not yet confirmed on the real iPhone.
+  - Confirmed on the real iPhone (2026-11-17).
 - **#32 (v25): Settings page** (`/admin/settings`, admin sign-in, in every
   page's nav).
   - Holds **Fake-order protection** and **Order alerts**, moved off the
@@ -563,8 +563,8 @@ amount, by any method.
 - Migration: new tables and two nullable columns; nothing existing changed.
 - Also fixed: the pay screen showed the last order's payments on the next
   order's screen.
-- **Owner to do after deploy:** POS → Utang → **+ Add customer** for each
-  regular allowed utang, with a limit. Ask the accountant whether counting
+- **Done on live (2026-11-17):** the Utang customers are added (POS → Utang → **+ Add customer** for each
+  regular allowed utang, with a limit). Still to do: ask the accountant whether counting
   utang as a sale on the day suits the books.
 
 ## Custom items, Other payments, fixing entries (2026-11-11)
@@ -657,8 +657,8 @@ amount, by any method.
 - New tables `stock_moves`, `ingredients`, `item_ingredients` (additive).
   Audit actions `stock_count`, `stock_add`, `stock_off`,
   `ingredient_change`.
-- Owner to do after deploy: start counting the baked goods (Items → In
-  stock), add the frappe ingredients and tick them on each frappe.
+- Done on live (2026-11-17): counting the baked goods (Items → In
+  stock). Check that the frappe ingredients are added and ticked on each frappe.
 
 ### Counting by flavor (2026-11-16, branch `flavor-stock`)
 
