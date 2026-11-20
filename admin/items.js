@@ -96,6 +96,11 @@ function rowHtml(item) {
           <input data-stock="daily_limit" type="number" min="1" max="9999" step="1" inputmode="numeric"
             placeholder="No limit" value="${item.daily_limit ?? ''}">
         </label>
+        <label class="stock__field" title="When sold out, customers can still order it for this many hours from now. Blank: sold out is sold out.">
+          <span>Sold out: ready in (h)</span>
+          <input data-stock="preorder_lead_hours" type="number" min="1" max="72" step="1" inputmode="numeric"
+            placeholder="Off" value="${item.preorder_lead_hours ?? ''}">
+        </label>
         <div class="stock__field">
           <span>In stock</span>
           <button class="stock__btn${stockOut ? ' is-out' : ''}${item.stock ? '' : ' is-off'}" type="button" data-action="stock">${stockLabel(item)}</button>
@@ -117,20 +122,25 @@ async function saveStock(row) {
   if (!item) return;
   const select = row.querySelector('[data-stock="availability"]');
   const limit = row.querySelector('[data-stock="daily_limit"]');
-  const body = { availability: select.value, daily_limit: limit.value.trim() };
+  const lead = row.querySelector('[data-stock="preorder_lead_hours"]');
+  const body = { availability: select.value, daily_limit: limit.value.trim(), preorder_lead_hours: lead.value.trim() };
 
   select.disabled = true;
   limit.disabled = true;
+  lead.disabled = true;
   try {
     const { item: saved } = await api(`/api/items/${id}/stock`, { method: 'PATCH', body });
     Object.assign(item, saved);
     const limitText = saved.daily_limit === null ? 'no daily limit' : `max ${saved.daily_limit} a day`;
-    toast(`${saved.name}: ${AVAILABILITY_LABEL[saved.availability].toLowerCase()}, ${limitText}.`);
+    const leadText = saved.preorder_lead_hours === null ? ''
+      : `, when sold out ready in ${saved.preorder_lead_hours} h`;
+    toast(`${saved.name}: ${AVAILABILITY_LABEL[saved.availability].toLowerCase()}, ${limitText}${leadText}.`);
   } catch (err) {
     toast(err.fields ? Object.values(err.fields).join(' ') : err.message, 'error');
   } finally {
     select.disabled = false;
     limit.disabled = false;
+    lead.disabled = false;
     render();
   }
 }

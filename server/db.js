@@ -560,6 +560,13 @@ addMissingColumns('orders', {
 /* Items can be left out of the SC/PWD discount (non-food items added later). */
 addMissingColumns('items', { sc_eligible: 'INTEGER NOT NULL DEFAULT 1' });
 
+/* Made to order when sold out: a whole cake sold out can still be ordered
+   for a time at least this many hours ahead (NULL: sold out is sold out). */
+addMissingColumns('items', { preorder_lead_hours: 'INTEGER' });
+// A line made to order (the item was sold out): made fresh, so the stock and
+// flavor counts leave it out. Daily limits still count it.
+addMissingColumns('order_items', { made: 'INTEGER NOT NULL DEFAULT 0' });
+
 /* The shop is non-VAT registered (8% income tax option). Saved here, once,
    so the POS gives the non-VAT SC/PWD discount; the owner can change it in
    Tax settings. OR IGNORE keeps whatever the owner set later. */

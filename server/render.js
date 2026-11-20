@@ -104,7 +104,10 @@ function stockByDay(now) {
   for (let i = 0; i <= schedule.preorderDays(); i++) {
     const date = addDays(today, i);
     const left = {};
-    for (const item of menu.list({ now, date })) if (item.remaining !== null) left[item.id] = item.remaining;
+    for (const item of menu.list({ now, date })) {
+      const can = menu.orderable(item);
+      if (can !== null) left[item.id] = can;
+    }
     out[date] = left;
   }
   return out;
@@ -192,14 +195,21 @@ function cardHtml(item, category, { eager = false } = {}) {
   // Sold out (by hand, today's limit used up, none left in stock or an
   // ingredient out): shown, but cannot be added. Otherwise data-remaining
   // tells the cart how many it may take.
-  const stockAttr = item.sold_out ? ' data-soldout'
-    : item.remaining !== null ? ` data-remaining="${item.remaining}"` : '';
-  const action = item.sold_out
+  // Made to order: sold out now, but it can be ordered for later (data-lead,
+  // in hours); the cart then offers times from that far ahead.
+  const made = item.preorder_lead !== null;
+  const soldOut = menu.soldOutNow(item);
+  const can = menu.orderable(item);
+  const stockAttr = soldOut ? ' data-soldout'
+    : (made ? ` data-lead="${item.preorder_lead}"` : '') + (can !== null ? ` data-remaining="${can}"` : '');
+  const action = soldOut
     ? '<span class="card__soldout">Sold out</span>'
-    : `<button class="card__add" type="button" data-add>Add<span class="vh"> ${esc(item.name)} to cart</span></button>`;
-  const fewLeft = !item.sold_out && item.remaining !== null && item.remaining <= FEW_LEFT
-    ? `\n          <p class="card__left">Only ${item.remaining} ${menu.leftText(item)}</p>`
-    : '';
+    : `<button class="card__add" type="button" data-add>${made ? 'Order' : 'Add'}<span class="vh"> ${esc(item.name)} to cart</span></button>`;
+  const fewLeft = made
+    ? `\n          <p class="card__left">Sold out now · order ahead, ready in ${item.preorder_lead} ${item.preorder_lead === 1 ? 'hour' : 'hours'}</p>`
+    : !item.sold_out && item.remaining !== null && item.remaining <= FEW_LEFT
+      ? `\n          <p class="card__left">Only ${item.remaining} ${menu.leftText(item)}</p>`
+      : '';
 
   // data-price is what the cart charges, so on sale it is the sale price;
   // data-was keeps the full price for the detail popup.
@@ -231,7 +241,7 @@ function cardHtml(item, category, { eager = false } = {}) {
     ? `<span class="price">${from}<s class="price__was"><span class="vh">Was </span>₱${opts ? fromPrice({ ...item, sale_type: '' }, opts) : item.price}</s> <small>₱</small>${shown}</span>`
     : `<span class="price">${from}<small>₱</small>${shown}</span>`;
 
-  return `      <li class="card${item.sold_out ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.sale_price}"${promoAttrs}${stockAttr}${detailAttrs}${optsAttr}>${badge}
+  return `      <li class="card${soldOut ? ' card--soldout' : ''}" data-id="${item.id}" data-cat="${esc(category.slug)}" data-tag="${esc(category.label)}" data-name="${esc(item.name)}" data-price="${item.sale_price}"${promoAttrs}${stockAttr}${detailAttrs}${optsAttr}>${badge}
         <div${shotAttrs}>
           ${photoHtml(item, { eager })}
         </div>
@@ -263,7 +273,7 @@ ${items.map((item, i) => cardHtml(item, category, { eager: i < eagerLeft })).joi
 /** Best sellers, first on the menu: the items with the badge that can be
     ordered today. A scrolling row; menu.js hides it during a search or filter. */
 function bestSellersHtml(groups) {
-  const best = groups.flatMap((g) => g.items.filter((i) => i.best_seller && !i.sold_out).map((i) => ({ item: i, category: g.category })));
+  const best = groups.flatMap((g) => g.items.filter((i) => i.best_seller && !menu.soldOutNow(i)).map((i) => ({ item: i, category: g.category })));
   if (!best.length) return '';
   return `  <section class="best" id="best-sellers" aria-labelledby="best-title" data-best-row>
     <div class="section__head">
@@ -380,7 +390,7 @@ function menuGroups(allItems = menu.list(), cats = categories.list()) {
 
 /** Sold out items moved to the end; otherwise the order is kept. */
 function soldOutLast(items) {
-  return [...items.filter((i) => !i.sold_out), ...items.filter((i) => i.sold_out)];
+  return [...items.filter((i) => !menu.soldOutNow(i)), ...items.filter((i) => menu.soldOutNow(i))];
 }
 
 /** The menu page. now is the current time, for tests. viewer.admin: the

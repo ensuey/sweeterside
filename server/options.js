@@ -92,7 +92,8 @@ function menuOptions(items) {
         groups: groups.map((g) => ({
           id: g.id, name: g.name, kind: g.kind, required: g.required, min: g.min, max: g.max,
           options: g.options.map((o) => {
-            const left = item.flavor_group === g.id ? (item.flavor_left[o.id] ?? 0) : null;
+            // Made to order: made fresh, so the flavor counts do not apply.
+            const left = item.flavor_group === g.id && item.preorder_lead == null ? (item.flavor_left[o.id] ?? 0) : null;
             return { id: o.id, name: o.name, price: o.price, available: o.available && left !== 0, left };
           }),
         })),
