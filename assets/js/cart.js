@@ -646,6 +646,8 @@
     var picked = [];
     var inCart = {};
     lines.forEach(function (l) { inCart[l.id] = true; });
+    var chosen = {}; // words of the options picked in the cart
+    lines.forEach(function (l) { words(optionsText(l)).forEach(function (w) { chosen[w] = true; }); });
     var lists = lines.map(function (l) { return (suggest.by_cat || {})[catalog[l.id].cat] || []; });
     lists.push(suggest.any || []);
     lists.forEach(function (ids) {
@@ -654,10 +656,18 @@
         var item = catalog[id];
         if (picked.length >= SUGGEST_MAX || !item || inCart[id] || picked.indexOf(id) > -1) return;
         if (itemQty(id) >= item.max) return;
+        if (words(item.name).some(function (w) { return chosen[w]; })) return;
         picked.push(id);
       });
     });
     return picked;
+  }
+
+  /** 'Chicken Nuggets (5pcs)' -> ['chicken', 'nugget', '5pc']: words of 4+
+      letters, lower case, without a plural s, to match items against options. */
+  function words(text) {
+    return String(text).toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4; })
+      .map(function (w) { return w.replace(/s$/, ''); });
   }
 
   function renderSuggest() {
@@ -694,6 +704,21 @@
     });
   }
 
+  /** "2 in cart" on each menu card holding items in the cart. */
+  function renderInCart() {
+    cards.forEach(function (card) {
+      var n = itemQty(card.dataset.id);
+      var tag = card.querySelector('.card__incart');
+      if (!tag && !n) return;
+      if (!tag) {
+        tag = el('span', 'card__incart');
+        card.appendChild(tag);
+      }
+      tag.hidden = !n;
+      tag.textContent = n ? n + ' in cart' : '';
+    });
+  }
+
   function render() {
     var n = count();
 
@@ -708,6 +733,7 @@
     list.textContent = '';
     lines.forEach(function (l) { list.appendChild(lineNode(l)); });
     renderSuggest();
+    renderInCart();
 
     $('cart-empty').hidden = n > 0;
     $('cart-sum').hidden = n === 0;

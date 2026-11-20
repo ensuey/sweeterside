@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 315 (`npm test`):
+**Tests:** 320 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -36,6 +36,20 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
+- 5 in `test/menu-cart-polish.test.js`
+
+## Menu and cart polish (2026-11-20, branch `menu-cart-polish`)
+
+From a UX review of the menu, cart and checkout:
+- **Item popup:** the photo is at most 42% of the screen high, and
+  **Add to cart** stays pinned at the bottom while the options scroll.
+- **"Goes well with"** leaves out items a chosen option already gives: a
+  burger with "Fries & nuggets" no longer suggests Fries or Chicken Nuggets.
+  Matched on the words of the names (4+ letters, plural s ignored).
+- **Menu cards** show "2 in cart" on the photo for items in the cart.
+- **Cart − and +** are 44 px.
+- Not done yet (own PR): a pinned total / Place order bar in checkout, and
+  "₱X + delivery" until an area is chosen.
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 
