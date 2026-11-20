@@ -120,6 +120,16 @@ img { max-width: 100%; }
 }
 .hero__cta:hover { filter: brightness(1.08); }
 .hero__cta:active { transform: scale(.98); }
+/* The menu's own hero: logo and name side by side, kept short so the menu
+   starts on the first screen of a phone. */
+.hero--home { padding: var(--sp-4) 0 var(--sp-5); }
+.hero__brand { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); }
+.hero__brand .hero__logo { width: clamp(56px, 14vw, 88px); margin: 0; flex: none; box-shadow: 0 4px 12px rgba(74,53,32,.14); }
+.hero__brand .hero__title { font-size: clamp(1.75rem, 6vw, 2.75rem); }
+.hero--home .hero__sub { margin-top: var(--sp-2); }
+.hero--home .status { margin-top: var(--sp-3); }
+.hero--home .hero__cta { margin-top: var(--sp-3); }
+@media (min-width: 640px) { .hero--home { padding: var(--sp-6) 0; } }
 .hero--small { padding: var(--sp-5) 0 var(--sp-6); }
 .hero--small .hero__logo { width: clamp(80px, 18vw, 104px); }
 .hero__home { display: inline-block; border-radius: 50%; }

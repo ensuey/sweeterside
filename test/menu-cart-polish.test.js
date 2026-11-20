@@ -54,3 +54,14 @@ test('the item popup keeps Add to cart in view, and the photo leaves room for it
 test('the cart - and + buttons are at least 44 px', () => {
   assert.match(css, /\.stepper__btn \{\s*width: 44px; height: 44px;/);
 });
+
+test('the menu hero is short on a phone: logo beside the name, a one-line tagline, a one-line status', () => {
+  const tpl = fs.readFileSync(path.join(root, 'templates', 'menu.html'), 'utf8');
+  assert.match(tpl, /<header class="hero hero--home">\s*<div class="wrap">\s*<div class="hero__brand">\s*<img class="hero__logo"[^>]*>\s*<h1 class="hero__title">Sweeter Side<\/h1>\s*<\/div>/);
+  const sub = /<p class="hero__sub">([^<]*)<\/p>/.exec(tpl)[1];
+  assert.ok(sub.length <= 60, `tagline kept short (${sub.length})`);
+  assert.match(css, /\.hero__brand \{ display: flex;/);
+  const hours = fs.readFileSync(path.join(root, 'assets', 'js', 'hours.js'), 'utf8');
+  const render = fs.readFileSync(path.join(root, 'server', 'render.js'), 'utf8');
+  for (const src of [hours, render]) assert.ok(!src.includes('Tap Add on anything'), 'status says only the closing time');
+});
