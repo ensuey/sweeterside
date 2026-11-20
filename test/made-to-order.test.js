@@ -105,3 +105,69 @@ test('the cart offers times from the lead on: no "as soon as possible", no dine-
   assert.match(cart, /openNow\(\) && !madeMinutes\(\)\) times\.push\(\{ value: 'asap'/);
   assert.match(cart, /dinein: openNow\(\) && !madeMinutes\(\)/);
 });
+
+/* From the code review: each of these failed before the fix. */
+
+const staff = require('../server/staff');
+const stock = require('../server/stock');
+const options = require('../server/options');
+const seo = require('../server/seo');
+const owner = staff.create({ name: 'Dachel', role: 'owner', pin: '2580' }, null);
+
+test('a cake counted by flavor, all flavors at 0: its flavors can still be chosen and ordered', () => {
+  const FLAVOR = options.createGroup({ name: 'Flavor', kind: 'single', required: true,
+    options: [{ name: 'Mango', price: 0 }, { name: 'Ube', price: 0 }] });
+  const sandwich = menu.list().find((i) => i.name === 'Bacon and Egg Sandwich'); // ₱85
+  menu.update(sandwich.id, { ...sandwich, option_groups: [FLAVOR.id] });
+  const [mango, ube] = FLAVOR.options.map((o) => o.id);
+  stock.change(sandwich.id, { action: 'count', flavors: [{ option_id: mango, qty: 0 }, { option_id: ube, qty: 0 }] }, owner);
+  menu.setStock(sandwich.id, { availability: 'available', daily_limit: '', preorder_lead_hours: '1' });
+  const item = menu.list({ now: manila(12) }).find((i) => i.id === sandwich.id);
+  assert.strictEqual(item.preorder_lead, 1);
+  const flavors = options.menuOptions([item])[item.id].groups[0].options;
+  assert.ok(flavors.every((o) => o.available && o.left === null), 'no flavor greyed out');
+  const o = place({ items: [{ id: sandwich.id, qty: 1, options: [mango] }], expected_total: 85,
+    pickup_at: '14:00', pickup_date: '2026-10-23' }, manila(12));
+  assert.strictEqual(o.total, 85);
+});
+
+test('made-to-order lines are not taken from the stock count, so a new batch is free to sell', () => {
+  const id = cake().id;
+  stock.change(id, { action: 'count', qty: 0 }, owner);
+  menu.setStock(id, { availability: 'available', daily_limit: '', preorder_lead_hours: '1' });
+  place({ pickup_at: '15:00', pickup_date: '2026-10-24' }, manila(12));
+  place({ pickup_at: '15:00', pickup_date: '2026-10-25' }, manila(12));
+  stock.change(id, { action: 'add', qty: 2 }, owner);
+  const now = menu.list({ now: manila(12) }).find((i) => i.id === id);
+  assert.deepStrictEqual([now.stock_left, now.sold_out], [2, false], 'the 2 on the shelf can be sold');
+  stock.change(id, { action: 'off' }, owner);
+});
+
+test("today's limit used up: not made to order today, and the card says sold out", () => {
+  const id = cake().id;
+  menu.setStock(id, { availability: 'available', daily_limit: '1', preorder_lead_hours: '1' });
+  const day = manila(12, 0, 27);
+  place({ pickup_at: '13:00', pickup_date: '2026-10-27' }, day); // in stock: today's one
+  const item = menu.list({ now: day }).find((i) => i.id === id);
+  assert.deepStrictEqual([item.sold_out, item.preorder_lead], [true, null]);
+  menu.setStock(id, { availability: 'sold_out', daily_limit: '', preorder_lead_hours: '1' });
+});
+
+test('a lead longer than the days taken: sold out, not "Order" with no time to pick', () => {
+  orders.updateSettings({ preorder_days: 0 });
+  try {
+    menu.setStock(cake().id, { availability: 'sold_out', daily_limit: '', preorder_lead_hours: '24' });
+    assert.strictEqual(menu.list({ now: manila(12) }).find((i) => i.id === cake().id).preorder_lead, null);
+  } finally {
+    orders.updateSettings({ preorder_days: 3 });
+  }
+});
+
+test('made to order stays in Best sellers and is published as a pre-order, not sold out', () => {
+  const c = cake();
+  menu.update(c.id, { ...c, best_seller: true });
+  menu.setStock(c.id, { availability: 'sold_out', daily_limit: '', preorder_lead_hours: '2' });
+  const best = (render.buildHtml().split('id="best-sellers"')[1] || '').split('</section>')[0];
+  assert.ok(best.includes(`data-id="${c.id}"`), 'still a best seller');
+  assert.match(seo.homeLd(render.menuGroups().groups), /schema\.org\/PreOrder/);
+});

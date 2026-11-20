@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 327 (`npm test`):
+**Tests:** 332 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -37,7 +37,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
 - 5 in `test/menu-cart-polish.test.js`
-- 7 in `test/made-to-order.test.js`
+- 12 in `test/made-to-order.test.js`
 
 ## Made to order when sold out (2026-11-20, branch `soldout-preorder`)
 
@@ -52,9 +52,14 @@ npm dependencies, SQLite via `node:sqlite`.
   no "as soon as possible", no dine-in. The server checks it again
   (`schedule.checkMade`): ASAP, dine-in or a time too soon is refused with
   the first time that works.
-- The daily limit still caps it, per day. Stock and flavor counts are not
-  checked for it (it is made fresh); the order still holds a unit, so a
-  batch added later goes to it first. The POS is unchanged (today only).
+- The daily limit still caps it, per day; once today's is used up it is
+  plain sold out for today. It is offered only when a pick-up or delivery
+  time that far ahead exists within the days taken.
+- Made fresh, so stock and flavor counts leave it out: its lines are marked
+  `order_items.made = 1` (additive column) and the stock queries skip them,
+  so a batch added later is free to sell. Its flavors are not greyed out.
+- It stays in Best sellers and its place in the menu; SEO publishes it as
+  schema.org PreOrder ("made to order" in llms.txt). The POS is unchanged.
 
 ## Menu and cart polish (2026-11-20, branch `menu-cart-polish`)
 

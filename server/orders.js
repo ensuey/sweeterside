@@ -555,7 +555,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
     lines.push({
       item_id: item.id, name: item.name, price: prices.sale_cents / 100, regular: prices.unit_cents / 100,
       sc_eligible: item.sc_eligible, qty, key: chosen.key, options: chosen.snapshot, options_cents: chosen.options_cents,
-      option_ids: chosen.ids, source: suggested ? 'suggested' : '',
+      option_ids: chosen.ids, source: suggested ? 'suggested' : '', made: item.preorder_lead !== null,
     });
   }
   // Today's limit counts the item, whatever options each line has.
@@ -810,14 +810,14 @@ function create(input, { now = new Date(), admin = false } = {}) {
 function insertLines(orderId, lines, quoted = []) {
   const line = db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty,
-                             options, options_cents, option_ids, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                             options, options_cents, option_ids, source, made)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // The engine's lines are keyed by their place in the quote.
   lines.forEach((l) => {
     const q = quoted[Number(l.key)] || {};
     line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty,
       q.options && q.options.length ? JSON.stringify(q.options) : '', q.options_cents || 0,
-      JSON.stringify(q.option_ids || []), q.source === 'suggested' ? 'suggested' : '');
+      JSON.stringify(q.option_ids || []), q.source === 'suggested' ? 'suggested' : '', q.made ? 1 : 0);
   });
 }
 

@@ -198,7 +198,7 @@ function cardHtml(item, category, { eager = false } = {}) {
   // Made to order: sold out now, but it can be ordered for later (data-lead,
   // in hours); the cart then offers times from that far ahead.
   const made = item.preorder_lead !== null;
-  const soldOut = item.sold_out && !made;
+  const soldOut = menu.soldOutNow(item);
   const can = menu.orderable(item);
   const stockAttr = soldOut ? ' data-soldout'
     : (made ? ` data-lead="${item.preorder_lead}"` : '') + (can !== null ? ` data-remaining="${can}"` : '');
@@ -273,7 +273,7 @@ ${items.map((item, i) => cardHtml(item, category, { eager: i < eagerLeft })).joi
 /** Best sellers, first on the menu: the items with the badge that can be
     ordered today. A scrolling row; menu.js hides it during a search or filter. */
 function bestSellersHtml(groups) {
-  const best = groups.flatMap((g) => g.items.filter((i) => i.best_seller && !i.sold_out).map((i) => ({ item: i, category: g.category })));
+  const best = groups.flatMap((g) => g.items.filter((i) => i.best_seller && !menu.soldOutNow(i)).map((i) => ({ item: i, category: g.category })));
   if (!best.length) return '';
   return `  <section class="best" id="best-sellers" aria-labelledby="best-title" data-best-row>
     <div class="section__head">
@@ -390,7 +390,7 @@ function menuGroups(allItems = menu.list(), cats = categories.list()) {
 
 /** Sold out items moved to the end; otherwise the order is kept. */
 function soldOutLast(items) {
-  return [...items.filter((i) => !i.sold_out), ...items.filter((i) => i.sold_out)];
+  return [...items.filter((i) => !menu.soldOutNow(i)), ...items.filter((i) => menu.soldOutNow(i))];
 }
 
 /** The menu page. now is the current time, for tests. viewer.admin: the

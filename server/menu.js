@@ -202,7 +202,7 @@ function soldToday(now = new Date(), date = manilaDate(now)) {
 /** What withStock needs besides the item: today's sales, counts, ingredients out. */
 function stockState(now, date) {
   const stock = require('./stock');
-  return { sold: soldToday(now, date), levels: stock.levels(), missing: stock.missing() };
+  return { sold: soldToday(now, date), levels: stock.levels(), missing: stock.missing(), now };
 }
 
 /**
@@ -214,7 +214,7 @@ function stockState(now, date) {
  * stock_left is the count (null when not counted), and left_by says which
  * of the two set remaining: 'stock' or 'day'.
  */
-function withStock(item, { sold, levels, missing }) {
+function withStock(item, { sold, levels, missing, now = new Date() }) {
   const sold_today = sold.get(item.id) || 0;
   const dayLeft = item.daily_limit === null ? null : Math.max(0, item.daily_limit - sold_today);
   const level = levels.get(item.id);
@@ -232,9 +232,26 @@ function withStock(item, { sold, levels, missing }) {
     sold_out,
     // Sold out, but made to order this many hours ahead (an ingredient out
     // still stops it). Such an order is capped by the daily limit only.
-    preorder_lead: sold_out && item.preorder_lead_hours != null && !missing_ingredients.length ? item.preorder_lead_hours : null,
+    preorder_lead: madeLead(item, { sold_out, dayLeft, missing: missing_ingredients.length > 0, now }),
     day_left: dayLeft,
   };
+}
+
+/**
+ * Hours a sold-out item can be made in, or null. Not while an ingredient is
+ * out, nor when the day's limit is used up (the limit still caps it), nor
+ * when no pick-up or delivery time is that far ahead within the days taken.
+ */
+function madeLead(item, { sold_out, dayLeft, missing, now }) {
+  if (!sold_out || item.preorder_lead_hours == null || missing || dayLeft === 0) return null;
+  const schedule = require('./schedule'); // here: schedule needs this module first
+  const need = item.preorder_lead_hours * 60;
+  return schedule.next('pickup', now, need) || schedule.next('delivery', now, need) ? item.preorder_lead_hours : null;
+}
+
+/** Sold out with no way to order it: not even made to order. */
+function soldOutNow(item) {
+  return item.sold_out && item.preorder_lead === null;
 }
 
 /** How many may be ordered: the daily limit only for a made-to-order item. */
@@ -275,11 +292,11 @@ function validateStock(input) {
 function setStock(id, input) {
   if (!get(id)) return null;
   const { availability, daily_limit, preorder_lead_hours } = validateStock(input);
-  db.prepare(`UPDATE items SET availability = ?, daily_limit = ?, updated_at = datetime('now')
-              WHERE id = ?`).run(availability, daily_limit, Number(id));
-  if (preorder_lead_hours !== undefined) {
-    db.prepare('UPDATE items SET preorder_lead_hours = ? WHERE id = ?').run(preorder_lead_hours, Number(id));
-  }
+  // A lead time left out of the request keeps what it was.
+  db.prepare(`UPDATE items SET availability = ?, daily_limit = ?,
+              preorder_lead_hours = CASE WHEN ? THEN ? ELSE preorder_lead_hours END, updated_at = datetime('now')
+              WHERE id = ?`).run(availability, daily_limit, preorder_lead_hours !== undefined ? 1 : 0,
+    preorder_lead_hours ?? null, Number(id));
   return get(id);
 }
 
@@ -421,6 +438,6 @@ function availableImages() {
 
 module.exports = {
   ValidationError,
-  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice, leftText, orderable, LEAD_MAX,
+  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice, leftText, orderable, soldOutNow, LEAD_MAX,
   availableImages, resolveImage, validate, DEFAULT_IMAGE, DESCRIPTION_MAX, SIZE_MAX,
 };

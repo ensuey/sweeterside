@@ -51,12 +51,12 @@ const addsSince = db.prepare(`
 const handedOverAll = db.prepare(`
   SELECT COALESCE(SUM(oi.qty - oi.voided_qty), 0) AS n
   FROM order_items oi JOIN orders o ON o.id = oi.order_id
-  WHERE oi.item_id = ? AND o.status <> 'cancelled' AND (o.status = 'completed' OR o.paid_at IS NOT NULL)`);
+  WHERE oi.item_id = ? AND oi.made = 0 AND o.status <> 'cancelled' AND (o.status = 'completed' OR o.paid_at IS NOT NULL)`);
 
 const openUnits = db.prepare(`
   SELECT oi.item_id, SUM(oi.qty - oi.voided_qty) AS n
   FROM order_items oi JOIN orders o ON o.id = oi.order_id
-  WHERE oi.item_id IS NOT NULL AND o.status NOT IN ('cancelled', 'completed') AND o.paid_at IS NULL
+  WHERE oi.item_id IS NOT NULL AND oi.made = 0 AND o.status NOT IN ('cancelled', 'completed') AND o.paid_at IS NULL
   GROUP BY oi.item_id`);
 
 // The same four, for each flavor.
@@ -75,13 +75,13 @@ const flavorAddsSince = db.prepare(`
 const flavorHandedOverAll = db.prepare(`
   SELECT COALESCE(SUM(oi.qty - oi.voided_qty), 0) AS n
   FROM order_items oi JOIN orders o ON o.id = oi.order_id, json_each(oi.option_ids) j
-  WHERE oi.item_id = ? AND j.value = ?
+  WHERE oi.item_id = ? AND j.value = ? AND oi.made = 0
     AND o.status <> 'cancelled' AND (o.status = 'completed' OR o.paid_at IS NOT NULL)`);
 
 const flavorOpenUnits = db.prepare(`
   SELECT oi.item_id, j.value AS option_id, SUM(oi.qty - oi.voided_qty) AS n
   FROM order_items oi JOIN orders o ON o.id = oi.order_id, json_each(oi.option_ids) j
-  WHERE oi.item_id IS NOT NULL AND o.status NOT IN ('cancelled', 'completed') AND o.paid_at IS NULL
+  WHERE oi.item_id IS NOT NULL AND oi.made = 0 AND o.status NOT IN ('cancelled', 'completed') AND o.paid_at IS NULL
   GROUP BY oi.item_id, j.value`);
 
 /**
@@ -296,14 +296,14 @@ function keepCountsOnDelete(orderId, by = null) {
   const counted = levels();
   const lines = db.prepare(`
     SELECT item_id, SUM(qty - voided_qty) AS n FROM order_items
-    WHERE order_id = ? AND item_id IS NOT NULL GROUP BY item_id`).all(Number(orderId));
+    WHERE order_id = ? AND item_id IS NOT NULL AND made = 0 GROUP BY item_id`).all(Number(orderId));
   for (const l of lines) {
     if (counted.has(l.item_id) && l.n > 0) move(l.item_id, 'add', -l.n, by, null);
   }
   const flavors = db.prepare(`
     SELECT oi.item_id, j.value AS option_id, SUM(oi.qty - oi.voided_qty) AS n
     FROM order_items oi, json_each(oi.option_ids) j
-    WHERE oi.order_id = ? AND oi.item_id IS NOT NULL GROUP BY oi.item_id, j.value`).all(Number(orderId));
+    WHERE oi.order_id = ? AND oi.item_id IS NOT NULL AND oi.made = 0 GROUP BY oi.item_id, j.value`).all(Number(orderId));
   for (const f of flavors) {
     const level = counted.get(f.item_id);
     if (level && level.flavors && level.flavors.some((x) => x.option_id === f.option_id) && f.n > 0) {
