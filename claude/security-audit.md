@@ -223,6 +223,7 @@ Alerts are sent after a new online order or cake booking, encrypted per device (
 - **Domain move (PR #25):** `CANONICAL_HOST` sends GET and HEAD on `www.` and `.fly.dev` to a fixed host. It is not an open redirect, and saves and `/healthz` are not moved.
 
 ## Change log
+- 2026-11-20: Made to order when sold out. No new endpoint: `preorder_lead_hours` on `PATCH /api/items/:id/stock` (admin session + CSRF), validated as whole hours 1–72. The server recomputes when an order may be for (`schedule.checkMade`); the browser's times are only a convenience. No personal data involved.
 - 2026-11-16: "Other area" starting fee (setting `other_area_fee`) and `POST /api/pos/online/:id/fee` to confirm, change or waive it after the call. Staff session, CSRF, `change_delivery_fee`; the server recomputes the total; audited. No personal data in logs (order id and staff id only).
 - 2026-11-16: Counting by flavor. No new endpoint: `POST /api/items/:id/count` and `POST /api/pos/stock` (same auth, CSRF, `manage_stock`) accept `flavors` and `option_id`, checked against the item's own required single groups. The server enforces each flavor's count on checkout and POS save; the browser's counts are display only. No personal data involved.
 - 2026-11-14: Staging noindex tightened. Pages also carry `<meta name="robots" content="noindex, nofollow">`; `robots.txt` now allows crawling so the noindex can be seen; `sitemap.xml` and `llms.txt` answer 404 on staging. No change on live.

@@ -533,18 +533,21 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const short = [];
 
   const perItem = new Map(); // item_id -> qty over all its lines
+  let madeHours = 0; // the longest lead of a made-to-order item in the cart
   const perFlavor = new Map(); // 'item:option' -> { item, flavor, qty }, for items counted by flavor
   for (const { id, qty, options, suggested } of cartLines(rawItems)) {
     const item = menu.get(id, { now, date: date || undefined });
-    if (!item || item.availability === 'unavailable' || item.sold_out) {
+    if (!item || item.availability === 'unavailable' || (item.sold_out && item.preorder_lead === null)) {
       if (!unavailable.includes(id)) unavailable.push(id);
       continue;
     }
+    if (item.preorder_lead !== null) madeHours = Math.max(madeHours, item.preorder_lead);
     // The options must be on this item, available, and fit each group.
     const chosen = itemOptions.choose(item, options);
     const prices = itemOptions.linePrices(item, chosen.options_cents);
     perItem.set(item.id, { item, qty: (perItem.has(item.id) ? perItem.get(item.id).qty : 0) + qty });
-    const flavor = stock.flavorOf(item, chosen.ids);
+    // A made-to-order item is made fresh, so its flavor counts do not apply.
+    const flavor = item.preorder_lead === null ? stock.flavorOf(item, chosen.ids) : null;
     if (flavor) {
       const fkey = `${item.id}:${flavor.id}`;
       perFlavor.set(fkey, { item, flavor, qty: (perFlavor.has(fkey) ? perFlavor.get(fkey).qty : 0) + qty });
@@ -557,8 +560,9 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   }
   // Today's limit counts the item, whatever options each line has.
   for (const { item, qty } of perItem.values()) {
-    if (item.remaining !== null && qty > item.remaining) {
-      short.push({ id: item.id, name: item.name, remaining: item.remaining, left: menu.leftText(item) });
+    const can = menu.orderable(item);
+    if (can !== null && qty > can) {
+      short.push({ id: item.id, name: item.name, remaining: can, left: item.preorder_lead !== null ? 'left that day' : menu.leftText(item) });
     }
   }
   // A flavor counted on its own: no more than it has left, over all lines.
@@ -598,7 +602,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
   const flavorLimits = Object.fromEntries(flavorShort.map((s) => [s.key, s.remaining]));
   return {
-    lines, unavailable, limits, short, flavorLimits, flavorShort, subtotal: t.subtotal / 100, discount, voucher, voucherError,
+    lines, unavailable, limits, short, flavorLimits, flavorShort, madeHours, subtotal: t.subtotal / 100, discount, voucher, voucherError,
     delivery_fee: t.delivery_fee / 100, total: t.total / 100, priced, area,
     delivery_free: !!(priced && priced.delivery && priced.delivery.free),
   };
@@ -719,6 +723,8 @@ function create(input, { now = new Date(), admin = false } = {}) {
   try {
     // Today's limits count against the day the order is for.
     q = quote(input.items, type, now, input.voucher, input.delivery_area, when.service_date);
+    // A made-to-order item: the order must be for a time far enough ahead.
+    schedule.checkMade(type, when, q.madeHours, now);
     if (type === 'delivery' && !q.area) {
       errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
     }

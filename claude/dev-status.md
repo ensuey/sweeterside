@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 320 (`npm test`):
+**Tests:** 327 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -37,6 +37,24 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
 - 5 in `test/menu-cart-polish.test.js`
+- 7 in `test/made-to-order.test.js`
+
+## Made to order when sold out (2026-11-20, branch `soldout-preorder`)
+
+- Items → **Sold out: ready in (h)** per item (1–72 hours; blank: off),
+  saved with availability and the daily limit (`PATCH /api/items/:id/stock`,
+  column `items.preorder_lead_hours`, additive). Meant for whole cakes that
+  take an hour or so to assemble.
+- While such an item is sold out (marked by hand, count at 0 or today's
+  limit used up; an ingredient out still stops it), the menu shows
+  **Order** and "Sold out now · order ahead, ready in N hours".
+- The cart then offers pick-up and delivery times from N hours ahead only:
+  no "as soon as possible", no dine-in. The server checks it again
+  (`schedule.checkMade`): ASAP, dine-in or a time too soon is refused with
+  the first time that works.
+- The daily limit still caps it, per day. Stock and flavor counts are not
+  checked for it (it is made fresh); the order still holds a unit, so a
+  batch added later goes to it first. The POS is unchanged (today only).
 
 ## Menu and cart polish (2026-11-20, branch `menu-cart-polish`)
 

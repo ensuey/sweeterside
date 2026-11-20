@@ -179,6 +179,7 @@ function salePrice(item) {
 // greyed out and cannot be ordered, until the admin changes it back.
 const AVAILABILITY = ['available', 'unavailable', 'sold_out'];
 const LIMIT_MAX = 9999;
+const LEAD_MAX = 72; // hours
 
 /**
  * Quantity of each item on today's orders (Manila time), online and POS,
@@ -223,12 +224,22 @@ function withStock(item, { sold, levels, missing }) {
     ? Object.fromEntries(level.flavors.map((f) => [f.option_id, Math.max(0, f.left)])) : null;
   const remaining = dayLeft === null ? stock_left : stock_left === null ? dayLeft : Math.min(dayLeft, stock_left);
   const missing_ingredients = missing.get(item.id) || [];
+  const sold_out = item.availability === 'sold_out' || remaining === 0 || missing_ingredients.length > 0;
   return {
     ...item, best_seller: item.best_seller === 1, must_try: item.must_try === 1, trending: item.trending === 1, sc_eligible: item.sc_eligible !== 0, sale_price: salePrice(item),
     sold_today, remaining, stock_left, left_by: remaining !== null && remaining === stock_left ? 'stock' : 'day',
     missing_ingredients, flavor_group: flavor_left ? level.group_id : null, flavor_left,
-    sold_out: item.availability === 'sold_out' || remaining === 0 || missing_ingredients.length > 0,
+    sold_out,
+    // Sold out, but made to order this many hours ahead (an ingredient out
+    // still stops it). Such an order is capped by the daily limit only.
+    preorder_lead: sold_out && item.preorder_lead_hours != null && !missing_ingredients.length ? item.preorder_lead_hours : null,
+    day_left: dayLeft,
   };
+}
+
+/** How many may be ordered: the daily limit only for a made-to-order item. */
+function orderable(item) {
+  return item.preorder_lead !== null ? item.day_left : item.remaining;
 }
 
 /** "left today" for a daily limit, "left" for a count. */
@@ -248,15 +259,27 @@ function validateStock(input) {
     dailyLimit = null;
   }
 
+  // Left out: unchanged. Blank: off.
+  let lead;
+  if ('preorder_lead_hours' in input) {
+    lead = intOrNull(input.preorder_lead_hours);
+    if (Number.isNaN(lead) || (lead !== null && (lead < 1 || lead > LEAD_MAX))) {
+      errors.preorder_lead_hours = `Enter whole hours from 1 to ${LEAD_MAX}, or leave it blank.`;
+    }
+  }
+
   if (Object.keys(errors).length) throw new ValidationError(errors);
-  return { availability, daily_limit: dailyLimit };
+  return { availability, daily_limit: dailyLimit, preorder_lead_hours: lead };
 }
 
 function setStock(id, input) {
   if (!get(id)) return null;
-  const { availability, daily_limit } = validateStock(input);
+  const { availability, daily_limit, preorder_lead_hours } = validateStock(input);
   db.prepare(`UPDATE items SET availability = ?, daily_limit = ?, updated_at = datetime('now')
               WHERE id = ?`).run(availability, daily_limit, Number(id));
+  if (preorder_lead_hours !== undefined) {
+    db.prepare('UPDATE items SET preorder_lead_hours = ? WHERE id = ?').run(preorder_lead_hours, Number(id));
+  }
   return get(id);
 }
 
@@ -264,7 +287,7 @@ function setStock(id, input) {
 
 const SELECT = `SELECT i.id, i.name, i.price, i.category_id, i.image, i.alt,
                        i.crop_x, i.crop_y, i.crop_w, i.crop_h, i.position,
-                       i.availability, i.daily_limit, i.best_seller, i.must_try, i.trending, i.sale_type, i.sale_value,
+                       i.availability, i.daily_limit, i.preorder_lead_hours, i.best_seller, i.must_try, i.trending, i.sale_type, i.sale_value,
                        i.sc_eligible, i.description, i.size_label
                 FROM items i`;
 
@@ -398,6 +421,6 @@ function availableImages() {
 
 module.exports = {
   ValidationError,
-  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice, leftText,
+  AVAILABILITY, list, get, create, update, remove, reorder, setStock, salePrice, leftText, orderable, LEAD_MAX,
   availableImages, resolveImage, validate, DEFAULT_IMAGE, DESCRIPTION_MAX, SIZE_MAX,
 };
