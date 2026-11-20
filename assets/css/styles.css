@@ -304,7 +304,7 @@ body[data-empty="true"] .section { display: none; }
 .sheet::backdrop { background: rgba(58, 40, 22, .5); backdrop-filter: blur(3px); }
 .sheet .shot { border-bottom: 1px solid var(--line); border-radius: 0; }
 /* An uploaded photo keeps the card's 3:4 shape, but never taller than most of the screen. */
-.sheet .shot--plain { width: 100%; max-height: 60vh; }
+.sheet .shot--plain { width: 100%; max-height: 42vh; }
 .sheet__body { padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
 .sheet__name { font-size: 1.5rem; }
 .sheet__size { font-size: 1rem; font-weight: 500; color: var(--ink-soft); }
@@ -387,6 +387,14 @@ body[data-empty="true"] .section { display: none; }
 .card__add:hover { background: #FDF1EE; }
 .card__add:active { transform: scale(.95); }
 .card__add.is-added { background: var(--coral-ink); color: #fff; }
+/* How many of this item are in the cart, on the card's photo. */
+.card__incart {
+  position: absolute; top: var(--sp-3); right: var(--sp-3); z-index: 2; pointer-events: none;
+  padding: .3rem .6rem; border-radius: var(--r-full);
+  font-size: .75rem; font-weight: 700; color: #fff; background: var(--coral-ink);
+  box-shadow: 0 2px 6px rgba(142,44,29,.22);
+}
+.card__incart[hidden] { display: none; }
 .has-cart .card__add[hidden] { display: none; }
 
 .sheet__add, .checkout__submit {
@@ -396,6 +404,9 @@ body[data-empty="true"] .section { display: none; }
   transition: filter .2s var(--ease), transform .12s var(--ease);
 }
 .sheet__add:hover, .checkout__submit:hover:not(:disabled) { filter: brightness(1.08); }
+/* The item popup scrolls; Add to cart stays in view at its bottom. The ring
+   in the popup's colour hides what scrolls behind it. */
+.sheet__add { position: sticky; bottom: var(--sp-4); z-index: 2; box-shadow: 0 0 0 var(--sp-3) var(--surface); }
 .sheet[data-soldout] .sheet__add { display: none; }
 .sheet__add:active, .checkout__submit:active:not(:disabled) { transform: scale(.98); }
 .checkout__submit:disabled { opacity: .6; cursor: progress; }
@@ -528,7 +539,7 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
   display: inline-flex; align-items: center; border: 1.5px solid var(--line); border-radius: var(--r-full);
 }
 .stepper__btn {
-  width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer;
+  width: 44px; height: 44px; display: grid; place-items: center; cursor: pointer;
   font: 700 1.125rem/1 "Nunito", sans-serif; color: var(--ink);
   background: none; border: 0; border-radius: var(--r-full);
 }
