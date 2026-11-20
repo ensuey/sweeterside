@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 320 (`npm test`):
+**Tests:** 321 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -36,7 +36,16 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
-- 5 in `test/menu-cart-polish.test.js`
+- 6 in `test/menu-cart-polish.test.js`
+
+## Shorter menu hero on phones (2026-11-20, branch `mobile-hero`)
+
+- The hero took about 61% of a 390×844 phone screen (512px). Now 250px,
+  about 30%: logo (56px on phones) beside "Sweeter Side", tagline cut to
+  "Café and cake shop in San Isidro, Davao Oriental.", less padding.
+- The open status is one line: "OPEN NOW · Orders until 8:00 PM" (the
+  "Tap Add on anything you like to order." sentence is gone, server and
+  `hours.js`). The /cakes and /about heroes are unchanged.
 
 ## Menu and cart polish (2026-11-20, branch `menu-cart-polish`)
 
