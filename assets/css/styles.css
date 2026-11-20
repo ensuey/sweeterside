@@ -128,7 +128,12 @@ img { max-width: 100%; }
 .hero__brand .hero__title { font-size: clamp(1.75rem, 6vw, 2.75rem); }
 .hero--home .hero__sub { margin-top: var(--sp-2); }
 .hero--home .status { margin-top: var(--sp-3); }
-.hero--home .hero__cta { margin-top: var(--sp-3); }
+/* Custom cakes are a side door here: a quiet outline, not the main action. */
+.hero--home .hero__cta {
+  margin-top: var(--sp-3); padding: 0 var(--sp-4); font-size: .9375rem;
+  color: var(--coral-ink); background: rgba(255,255,255,.55); border: 1.5px solid var(--coral-ink); box-shadow: none;
+}
+.hero--home .hero__cta:hover { filter: none; background: #fff; }
 @media (min-width: 640px) { .hero--home { padding: var(--sp-6) 0; } }
 .hero--small { padding: var(--sp-5) 0 var(--sp-6); }
 .hero--small .hero__logo { width: clamp(80px, 18vw, 104px); }
