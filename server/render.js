@@ -360,7 +360,7 @@ function shopStatusHtml(state, note) {
     return `<p class="status status--soon" id="shop-status"><span class="status__pill">Closing soon</span> We take orders until ${esc(closes)} today.</p>`;
   }
   if (state.open) {
-    return `<p class="status status--open" id="shop-status"><span class="status__pill">Open now</span> Tap Add on anything you like to order. Orders until ${esc(closes)}.</p>`;
+    return `<p class="status status--open" id="shop-status"><span class="status__pill">Open now</span> Orders until ${esc(closes)}.</p>`;
   }
   const text = !state.switch_open
     ? note || "We're closed right now. You can still look through the menu."
