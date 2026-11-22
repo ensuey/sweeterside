@@ -77,7 +77,7 @@ test('an order alert texts every number: order number, type and total only', asy
     assert.strictEqual(f.get('sendername'), null);
     const text = f.get('message');
     assert.match(text, /New order #42/);
-    assert.match(text, /Delivery · 3 items · ₱560/);
+    assert.match(text, /Delivery - 3 items - P560/);
     for (const secret of ['Maria', 'Santos', '0917', 'Mabini']) assert.ok(!text.includes(secret), secret);
   } finally {
     delete process.env.SEMAPHORE_API_KEY;
@@ -123,4 +123,14 @@ test('a refusal or no answer never throws, and the key and numbers are not logge
 test('new online orders and paid GCash orders both send the text', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'server', 'index.js'), 'utf8');
   assert.strictEqual((src.match(/sms\.alert\(push\.orderMessage\(order\)\)/g) || []).length, 2);
+});
+
+test('texts use plain characters only, at most 160: one normal SMS, one credit', () => {
+  // A scheduled delivery: the longest alert, with a dash between the window's times.
+  const long = sms.orderText({ title: 'New order #1234', body: 'Delivery · Scheduled Tue 24 Nov, 11:30 AM–12:00 PM · 12 items · ₱12,560' });
+  assert.strictEqual(long, 'Sweeter Side: New order #1234. Delivery - Scheduled Tue 24 Nov, 11:30 AM-12:00 PM - 12 items - P12,560');
+  assert.match(long, /^[\x20-\x7E]*$/, 'plain characters only');
+  // A dine-in table typed by the customer: accents kept as letters, the rest dropped, never over 160.
+  assert.strictEqual(sms.plainSms('Dine-in · Table Café 3 🍰'), 'Dine-in - Table Cafe 3');
+  assert.strictEqual(sms.plainSms('x'.repeat(300)).length, 160);
 });

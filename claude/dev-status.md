@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 340 (`npm test`):
+**Tests:** 341 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -38,13 +38,16 @@ npm dependencies, SQLite via `node:sqlite`.
 - 5 in `test/other-area-fee.test.js`
 - 6 in `test/menu-cart-polish.test.js`
 - 12 in `test/made-to-order.test.js`
-- 7 in `test/sms.test.js`
+- 8 in `test/sms.test.js`
 
 ## SMS order alerts through Semaphore (2026-11-17, branch `sms-order-alerts`)
 
 - Every new online order (and a GCash order once paid) also sends one text to
   the owner's numbers, with the same words as the push alert: order number,
   type, item count and total. Never the customer's name, phone or address.
+  Plain characters only ("-" and "P560", not "·" and "₱"), at most 160, so
+  each alert is one normal SMS: one credit. Normal, not priority, texts
+  (priority costs 2 credits); delivery took about 2 minutes on Smart.
   Cake bookings and POS orders are not texted.
 - **Settings → Order alerts → Text messages (SMS):** up to 3 PH mobile
   numbers, kept as +639XXXXXXXXX (setting `sms_alert_numbers`). Blank: no texts.

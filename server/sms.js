@@ -87,7 +87,22 @@ async function send(text) {
 
 /** The push alert's words on one line: 'New order #12: Pick-up · ASAP · 2 items · ₱320'. */
 function orderText(message) {
-  return `Sweeter Side: ${message.title}. ${message.body}`;
+  return plainSms(`Sweeter Side: ${message.title}. ${message.body}`);
+}
+
+/**
+ * Plain characters only, at most 160: one normal SMS, one credit. A "·" or
+ * "₱" would make it a Unicode SMS of 70 characters, often two credits.
+ * 'Delivery · 3 items · ₱560' -> 'Delivery - 3 items - P560'.
+ */
+function plainSms(text) {
+  return String(text)
+    .replace(/₱/g, 'P')
+    .replace(/[·•–—]/g, '-')
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '') // é -> e
+    .replace(/[^\x20-\x7E]/g, '') // anything else not plain is dropped
+    .replace(/\s+/g, ' ').trim()
+    .slice(0, 160);
 }
 
 /** Fire and forget, after the response has gone. */
@@ -96,4 +111,4 @@ function alert(message) {
   setImmediate(() => { send(orderText(message)).catch(() => {}); });
 }
 
-module.exports = { enabled, numbers, numbersLabel, parseNumbers, send, orderText, alert, setTransport, MAX_NUMBERS };
+module.exports = { enabled, numbers, numbersLabel, parseNumbers, send, orderText, plainSms, alert, setTransport, MAX_NUMBERS };
