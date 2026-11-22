@@ -100,7 +100,7 @@
         bar.hidden = false;
       }
     } else {
-      setStatus('open', 'Open now', 'Tap Add on anything you like to order. Orders until ' + clock12(close) + '.');
+      setStatus('open', 'Open now', 'Orders until ' + clock12(close) + '.');
       if (bar) bar.hidden = true;
     }
   }

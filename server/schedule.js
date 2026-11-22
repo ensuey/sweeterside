@@ -75,8 +75,9 @@ function openNow(now = new Date()) {
  * pickup: every 15 minutes from opening to closing (a time at midnight is
  * not offered). delivery: 30-minute windows that end by closing.
  * Today only from the lead time on; nothing on a date out of range.
+ * made: minutes a made-to-order item in the order needs, from now (0: none).
  */
-function slots(type, date, now = new Date()) {
+function slots(type, date, now = new Date(), made = 0) {
   const { open, close } = hours();
   if (open === null || close === null || !switchOpen()) return [];
   const today = manilaDate(now);
@@ -85,28 +86,28 @@ function slots(type, date, now = new Date()) {
   const step = type === 'delivery' ? WINDOW_MINUTES : SLOT_MINUTES;
   const last = type === 'delivery' ? close - WINDOW_MINUTES : Math.min(close, 24 * 60 - SLOT_MINUTES);
   let first = open;
-  if (date === today) {
-    const lead = manilaMinutes(now) + (type === 'delivery' ? DELIVERY_LEAD : PICKUP_LEAD);
-    while (first < lead) first += step;
-  }
+  // The earliest time, counted from the start of this date (it can fall on a later day).
+  const days = Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+  const earliest = manilaMinutes(now) + Math.max(type === 'delivery' ? DELIVERY_LEAD : PICKUP_LEAD, made) - days * 24 * 60;
+  while (first < earliest) first += step;
   for (let t = first; t <= last; t += step) out.push(t);
   return out;
 }
 
 /** The dates with something left to choose, today first. */
-function dates(type, now = new Date()) {
+function dates(type, now = new Date(), made = 0) {
   const today = manilaDate(now);
   const out = [];
   for (let i = 0; i <= preorderDays(); i++) {
     const d = addDays(today, i);
-    if (slots(type, d, now).length) out.push(d);
+    if (slots(type, d, now, made).length) out.push(d);
   }
   return out;
 }
 
 /** The first time a type can be had: now when open (ASAP), else the next slot. */
-function next(type, now = new Date()) {
-  for (const d of dates(type, now)) return { date: d, minutes: slots(type, d, now)[0] };
+function next(type, now = new Date(), made = 0) {
+  for (const d of dates(type, now, made)) return { date: d, minutes: slots(type, d, now, made)[0] };
   return null;
 }
 
@@ -213,7 +214,27 @@ function parseWhen(type, input, now = new Date()) {
   };
 }
 
+/**
+ * A made-to-order item needs `hours` from now: refuse an order that is not
+ * scheduled at least that far ahead (dine-in and "as soon as possible" too).
+ * @throws ValidationError on the time field
+ */
+function checkMade(type, when, hours, now = new Date()) {
+  if (!hours) return;
+  const field = type === 'pickup' ? 'pickup_at' : type === 'delivery' ? 'deliver_at' : 'type';
+  const need = hours * 60;
+  const at = when.scheduled_for ? new Date(`${when.scheduled_for.replace(' ', 'T')}Z`).getTime() : 0;
+  if (at && at >= now.getTime() + (need - GRACE) * 60000) return;
+  const n = type === 'dinein' ? null : next(type, now, need);
+  const what = `Your cart has a made-to-order item that needs ${hours} ${hours === 1 ? 'hour' : 'hours'}.`;
+  throw new ValidationError({
+    [field]: type === 'dinein' ? `${what} Choose pick-up or delivery for later.`
+      : n ? `${what} Choose a time: the first is ${whenText(n.date, n.minutes, now)}.`
+        : `${what} There is no time left in the days we take orders for.`,
+  });
+}
+
 module.exports = {
   SLOT_MINUTES, WINDOW_MINUTES, PICKUP_LEAD, DELIVERY_LEAD, MAX_DAYS,
-  preorderDays, parseDays, openNow, slots, dates, next, dayLabel, clock12, whenText, utcSql, fromUtcSql, label, parseWhen, hhmm,
+  preorderDays, parseDays, openNow, slots, dates, next, checkMade, dayLabel, clock12, whenText, utcSql, fromUtcSql, label, parseWhen, hhmm,
 };
