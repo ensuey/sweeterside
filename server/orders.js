@@ -405,6 +405,7 @@ function settings() {
     // the server (never the keys themselves).
     gcash_online: getSetting('gcash_online', '0') === '1',
     sms_enabled: sms.enabled(),
+    sms_on: sms.on(),
     sms_numbers: sms.numbersLabel(),
     gcash_ready: require('./paymongo').configured(),
     gcash_webhook: !!process.env.PAYMONGO_WEBHOOK_SECRET,
@@ -438,6 +439,7 @@ function updateSettings(input) {
     ...Object.fromEntries(Object.keys(TRACKING).map((key) => [key, parseTracking(key)])),
     gcash_online: parseSwitch('gcash_online'),
     sms_numbers: (v) => JSON.stringify(sms.parseNumbers(v)),
+    sms_on: parseSwitch('sms_on'),
     free_delivery_min: parseFreeMin,
     other_area_fee: parseOtherFee,
     preorder_days: schedule.parseDays,

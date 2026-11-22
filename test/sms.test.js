@@ -134,3 +134,21 @@ test('texts use plain characters only, at most 160: one normal SMS, one credit',
   assert.strictEqual(sms.plainSms('Dine-in · Table Café 3 🍰'), 'Dine-in - Table Cafe 3');
   assert.strictEqual(sms.plainSms('x'.repeat(300)).length, 160);
 });
+
+test('the Settings switch turns texts off and on; the numbers are kept', async () => {
+  process.env.SEMAPHORE_API_KEY = KEY;
+  try {
+    orders.updateSettings({ sms_numbers: '09171234567' });
+    assert.strictEqual(orders.settings().sms_on, true, 'on unless turned off');
+    const off = orders.updateSettings({ sms_on: false });
+    assert.deepStrictEqual([off.sms_on, off.sms_numbers], [false, '0917 123 4567']);
+    const sent = capture();
+    assert.deepStrictEqual(await sms.send('x'), { sent: 0, status: 0 });
+    assert.strictEqual(sent.length, 0, 'nothing goes to Semaphore while off');
+    assert.throws(() => orders.updateSettings({ sms_on: 'maybe' }), (e) => Boolean(e.errors && e.errors.sms_on));
+    orders.updateSettings({ sms_on: true });
+    assert.deepStrictEqual(await sms.send('x'), { sent: 1, status: 200 });
+  } finally {
+    delete process.env.SEMAPHORE_API_KEY;
+  }
+});

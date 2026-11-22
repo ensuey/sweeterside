@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 341 (`npm test`):
+**Tests:** 342 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -38,7 +38,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 5 in `test/other-area-fee.test.js`
 - 6 in `test/menu-cart-polish.test.js`
 - 12 in `test/made-to-order.test.js`
-- 8 in `test/sms.test.js`
+- 9 in `test/sms.test.js`
 
 ## SMS order alerts through Semaphore (2026-11-17, branch `sms-order-alerts`)
 
@@ -51,6 +51,8 @@ npm dependencies, SQLite via `node:sqlite`.
   Cake bookings and POS orders are not texted.
 - **Settings → Order alerts → Text messages (SMS):** up to 3 PH mobile
   numbers, kept as +639XXXXXXXXX (setting `sms_alert_numbers`). Blank: no texts.
+  **Text me new orders** switch (setting `sms_on`, on unless turned off):
+  off sends nothing and keeps the numbers.
 - Fly secrets: `SEMAPHORE_API_KEY` (unset: nothing is sent) and optional
   `SEMAPHORE_SENDER` (the sender name Semaphore approved; Semaphore sends
   nothing until one is approved: 500 "No active sender name"). Each text uses

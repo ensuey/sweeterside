@@ -20,6 +20,11 @@ function enabled() {
   return Boolean(String(process.env.SEMAPHORE_API_KEY || '').trim());
 }
 
+/** The owner's switch in Settings: on unless turned off. Off keeps the numbers. */
+function on() {
+  return getSetting('sms_on', '1') === '1';
+}
+
 /** The owner's numbers, as '+639XXXXXXXXX'. */
 function numbers() {
   try {
@@ -55,7 +60,7 @@ function parseNumbers(input) {
  */
 async function send(text) {
   const to = numbers();
-  if (!enabled() || !to.length) return { sent: 0, status: 0 };
+  if (!enabled() || !on() || !to.length) return { sent: 0, status: 0 };
   const form = new URLSearchParams({
     apikey: process.env.SEMAPHORE_API_KEY.trim(),
     number: to.map((n) => n.slice(1)).join(','), // '639XXXXXXXXX'
@@ -107,8 +112,8 @@ function plainSms(text) {
 
 /** Fire and forget, after the response has gone. */
 function alert(message) {
-  if (!enabled() || !numbers().length) return;
+  if (!enabled() || !on() || !numbers().length) return;
   setImmediate(() => { send(orderText(message)).catch(() => {}); });
 }
 
-module.exports = { enabled, numbers, numbersLabel, parseNumbers, send, orderText, plainSms, alert, setTransport, MAX_NUMBERS };
+module.exports = { enabled, on, numbers, numbersLabel, parseNumbers, send, orderText, plainSms, alert, setTransport, MAX_NUMBERS };
