@@ -11,6 +11,7 @@ const pricing = require('./pricing');
 const { getSetting, saveSetting } = require('./settings');
 const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
+const sms = require('./sms');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
 const stock = require('./stock');
@@ -403,6 +404,9 @@ function settings() {
     // GCash through PayMongo: the switch, and whether the keys are set on
     // the server (never the keys themselves).
     gcash_online: getSetting('gcash_online', '0') === '1',
+    sms_enabled: sms.enabled(),
+    sms_on: sms.on(),
+    sms_numbers: sms.numbersLabel(),
     gcash_ready: require('./paymongo').configured(),
     gcash_webhook: !!process.env.PAYMONGO_WEBHOOK_SECRET,
     gcash_live: require('./paymongo').liveMode(),
@@ -434,6 +438,8 @@ function updateSettings(input) {
     share_image: parseShareImage,
     ...Object.fromEntries(Object.keys(TRACKING).map((key) => [key, parseTracking(key)])),
     gcash_online: parseSwitch('gcash_online'),
+    sms_numbers: (v) => JSON.stringify(sms.parseNumbers(v)),
+    sms_on: parseSwitch('sms_on'),
     free_delivery_min: parseFreeMin,
     other_area_fee: parseOtherFee,
     preorder_days: schedule.parseDays,
@@ -464,7 +470,7 @@ function updateSettings(input) {
   }
   if (Object.keys(errors).length) throw new ValidationError(errors);
   // The hours keep their original keys (see opening hours above).
-  const STORED_AS = { open_at: 'pickup_open', close_at: 'pickup_close' };
+  const STORED_AS = { open_at: 'pickup_open', close_at: 'pickup_close', sms_numbers: 'sms_alert_numbers' };
   transaction(() => Object.entries(values).forEach(([key, v]) => saveSetting(STORED_AS[key] || key, v)));
   return settings();
 }
