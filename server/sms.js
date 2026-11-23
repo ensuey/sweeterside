@@ -90,9 +90,10 @@ async function send(text) {
   }
 }
 
-/** The push alert's words on one line: 'New order #12: Pick-up · ASAP · 2 items · ₱320'. */
+/** The push alert's words on one line: 'New order #12. Pick-up - ASAP - 2 items - P320'. */
 function orderText(message) {
-  return plainSms(`Sweeter Side: ${message.title}. ${message.body}`);
+  // No shop name: the sender name (SweeterSide) already says who it is from.
+  return plainSms(`${message.title}. ${message.body}`);
 }
 
 /**

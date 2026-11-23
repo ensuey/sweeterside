@@ -128,7 +128,7 @@ test('new online orders and paid GCash orders both send the text', () => {
 test('texts use plain characters only, at most 160: one normal SMS, one credit', () => {
   // A scheduled delivery: the longest alert, with a dash between the window's times.
   const long = sms.orderText({ title: 'New order #1234', body: 'Delivery · Scheduled Tue 24 Nov, 11:30 AM–12:00 PM · 12 items · ₱12,560' });
-  assert.strictEqual(long, 'Sweeter Side: New order #1234. Delivery - Scheduled Tue 24 Nov, 11:30 AM-12:00 PM - 12 items - P12,560');
+  assert.strictEqual(long, 'New order #1234. Delivery - Scheduled Tue 24 Nov, 11:30 AM-12:00 PM - 12 items - P12,560');
   assert.match(long, /^[\x20-\x7E]*$/, 'plain characters only');
   // A dine-in table typed by the customer: accents kept as letters, the rest dropped, never over 160.
   assert.strictEqual(sms.plainSms('Dine-in · Table Café 3 🍰'), 'Dine-in - Table Cafe 3');
