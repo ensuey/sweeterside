@@ -45,7 +45,12 @@
     span.className = 'status__pill';
     span.textContent = pill;
     status.appendChild(span);
-    status.appendChild(document.createTextNode(' ' + text));
+    status.appendChild(document.createTextNode(' ' + text + ' '));
+    // The line is a link into the menu (server/render.js shopStatusHtml).
+    var go = document.createElement('span');
+    go.className = 'status__go';
+    go.textContent = 'See the menu';
+    status.appendChild(go);
   }
 
   var shopOpen = body.dataset.shopOpen === '1';
@@ -74,7 +79,12 @@
       body.dataset.shopOpen = '0';
       body.dataset.preorder = '1';
       if (bar) bar.hidden = true;
-      setStatus('closed', 'Closed now', 'You can pre-order for tomorrow at ' + clock12(open) + '.');
+      setStatus('preorder', 'Pre-order', 'Order now for tomorrow at ' + clock12(open) + '.');
+      var note = document.getElementById('preorder-note');
+      if (note) {
+        note.textContent = 'Pre-ordering for tomorrow at ' + clock12(open);
+        note.hidden = false;
+      }
       document.dispatchEvent(new CustomEvent('shop:preorder'));
       return;
     }

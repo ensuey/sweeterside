@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 342 (`npm test`):
+**Tests:** 344 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -39,6 +39,19 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/menu-cart-polish.test.js`
 - 12 in `test/made-to-order.test.js`
 - 9 in `test/sms.test.js`
+
+## Closed for now: a pre-order, not a rejection (2026-11-23, branch `closed-preorder-hero`)
+
+From the homepage critique (25/40; top 2 issues):
+- Closed with pre-orders open, the hero leads with **Pre-order** (a sky-blue
+  pill) and "Order now for tomorrow at 10:00 AM." instead of a dark "CLOSED NOW".
+- The status line is a link into the menu ("See the menu"), 44px tall: the
+  hero now has a way in besides the custom-cake button.
+- While pre-ordering, the sticky search bar shows "Pre-ordering for tomorrow
+  at 10:00 AM" and the cards' Add buttons say **Pre-order** (made-to-order
+  items keep "Order"). hours.js does the same when closing time comes.
+- Contrast: `--coral-deep` (#A93520) for the quiet custom-cake button and the
+  coral hover states (were 4.1–4.2:1, now 4.9:1 and up).
 
 ## SMS order alerts through Semaphore (2026-11-17, branch `sms-order-alerts`)
 

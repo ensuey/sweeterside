@@ -75,9 +75,14 @@ test('the menu page: open, closing soon with the bar, and closed after hours', (
   const closed = render.buildHtml(undefined, undefined, manila(20, 5));
   assert.match(closed, /data-shop-open="0"/);
   assert.match(closed, /data-preorder="1"/);
-  assert.match(closed, /<span class="status__pill">Closed now<\/span> You can pre-order for tomorrow at 10:00 AM\./);
+  // It leads with what can be done: a pre-order, also in the sticky bar.
+  assert.match(closed, /<a class="status status--preorder" id="shop-status" href="#menu"><span class="status__pill">Pre-order<\/span> Order now for tomorrow at 10:00 AM\. <span class="status__go">See the menu<\/span><\/a>/);
+  assert.doesNotMatch(closed, /Closed now/);
+  assert.match(closed, /<p class="toolbar__note" id="preorder-note">Pre-ordering for tomorrow at 10:00 AM<\/p>/);
+  assert.match(open, /<p class="toolbar__note" id="preorder-note" hidden><\/p>/, 'no note while open');
+  assert.match(open, /<a class="status status--open" id="shop-status" href="#menu">/, 'the status line leads into the menu');
   const early = render.buildHtml(undefined, undefined, manila(8, 0));
-  assert.match(early, /You can pre-order for today at 10:00 AM\./);
+  assert.match(early, /Order now for today at 10:00 AM\./);
 
   // Pre-orders off (today only): after closing there is nothing to order for.
   orders.updateSettings({ preorder_days: 0 });
@@ -129,4 +134,23 @@ test('the hours are set on the Settings page through the admin API (sign-in and 
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
+});
+
+test('pre-ordering in the browser: the same line and note, and the Add buttons say Pre-order', () => {
+  const root = path.join(__dirname, '..');
+  const hours = fs.readFileSync(path.join(root, 'assets', 'js', 'hours.js'), 'utf8');
+  assert.match(hours, /setStatus\('preorder', 'Pre-order', 'Order now for tomorrow at '/);
+  assert.match(hours, /note\.textContent = 'Pre-ordering for tomorrow at '/);
+  assert.match(hours, /go\.textContent = 'See the menu'/);
+  const cart = fs.readFileSync(path.join(root, 'assets', 'js', 'cart.js'), 'utf8');
+  assert.match(cart, /label\.nodeValue === 'Add'\) label\.nodeValue = 'Pre-order'/);
+  assert.match(cart, /if \(document\.body\.dataset\.preorder === '1'\) preorderButtons\(\);/);
+});
+
+test('contrast: the quiet custom-cake button and coral hovers use the deeper coral', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'assets', 'css', 'styles.css'), 'utf8');
+  assert.match(css, /--coral-deep: +#A93520;/);
+  assert.match(css, /color: var\(--coral-deep\); background: rgba\(255,255,255,\.55\); border: 1\.5px solid var\(--coral-deep\)/);
+  assert.match(css, /\.card__add:hover \{ background: #FDF1EE; color: var\(--coral-deep\)/);
+  assert.match(css, /\.voucher__apply:hover, \.voucher__remove:hover \{ background: #FDF1EE; color: var\(--coral-deep\); \}/);
 });

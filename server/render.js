@@ -351,23 +351,27 @@ function chipsHtml(groups, total) {
 /** Open, closing soon or closed, shown in the hero. Rendered here so it shows
     without JavaScript; assets/js/hours.js keeps it current while the page is open. */
 function shopStatusHtml(state, note) {
-  if (state.preorder) {
-    return `<p class="status status--closed" id="shop-status"><span class="status__pill">Closed now</span> ${esc(`You can pre-order for ${state.preorder.text}.`)}</p>`;
-  }
+  // The whole line is the way into the menu (hours.js rebuilds it the same way).
+  const line = (kind, pill, text) =>
+    `<a class="status status--${kind}" id="shop-status" href="#menu"><span class="status__pill">${pill}</span> ${esc(text)} <span class="status__go">See the menu</span></a>`;
+  // Closed with pre-orders open: lead with what can be done, not with "closed".
+  if (state.preorder) return line('preorder', 'Pre-order', `Order now for ${state.preorder.text}.`);
   const closes = orders.clock12(state.closes_at);
   const opens = orders.clock12(state.opens_at);
-  if (state.closing_soon) {
-    return `<p class="status status--soon" id="shop-status"><span class="status__pill">Closing soon</span> We take orders until ${esc(closes)} today.</p>`;
-  }
-  if (state.open) {
-    return `<p class="status status--open" id="shop-status"><span class="status__pill">Open now</span> Orders until ${esc(closes)}.</p>`;
-  }
+  if (state.closing_soon) return line('soon', 'Closing soon', `We take orders until ${closes} today.`);
+  if (state.open) return line('open', 'Open now', `Orders until ${closes}.`);
   const text = !state.switch_open
     ? note || "We're closed right now. You can still look through the menu."
     : state.before_opening
       ? `We open at ${opens} today. You can look through the menu.`
       : `We're closed for today. We take orders again from ${opens} tomorrow.`;
-  return `<p class="status status--closed" id="shop-status"><span class="status__pill">Closed</span> ${esc(text)}</p>`;
+  return line('closed', 'Closed', text);
+}
+
+/** In the sticky search bar while pre-ordering, so it stays in view after the hero scrolls away. */
+function preorderNoteHtml(state) {
+  const text = state.preorder ? `Pre-ordering for ${state.preorder.text}` : '';
+  return `<p class="toolbar__note" id="preorder-note"${text ? '' : ' hidden'}>${esc(text)}</p>`;
 }
 
 /** The bar at the top of the menu in the last 30 minutes before closing. */
@@ -428,6 +432,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date(), 
     .replace('<!--SOON_MINUTES-->', String(orders.CLOSING_SOON_MINUTES))
     .replace('<!--SOON_BAR-->', () => soonBarHtml(state))
     .replace('<!--SHOP_STATUS-->', () => shopStatusHtml(state, orders.closedNote()))
+    .replace('<!--PREORDER_NOTE-->', () => preorderNoteHtml(state))
     .replace('<!--DELIVERY_AREAS-->', () => esc(JSON.stringify(deliveryData())))
     .replace('<!--AREA_OPTIONS-->', () => areaOptionsHtml())
     .replace('<!--SUGGEST-->', () => esc(JSON.stringify(suggestions.forMenu())))
