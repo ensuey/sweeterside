@@ -65,3 +65,11 @@ test('the menu hero is short on a phone: logo beside the name, a one-line taglin
   const render = fs.readFileSync(path.join(root, 'server', 'render.js'), 'utf8');
   for (const src of [hours, render]) assert.ok(!src.includes('Tap Add on anything'), 'status says only the closing time');
 });
+
+test('checkout: Place order and the total stay in view; "+ delivery" until an area is chosen', () => {
+  assert.match(css, /\.checkout__submit \{ position: sticky; bottom: var\(--sp-4\);/);
+  assert.match(css, /scroll-padding-bottom: 96px;/, 'a focused field is not left under the button');
+  const render = /function render\(\) \{[\s\S]*?\n  \}/.exec(cart)[0];
+  assert.match(render, /var feeLater = type === 'delivery' && !a \? ' \+ delivery' : '';/);
+  assert.match(render, /money\(total\(\)\) \+ feeLater;/);
+});

@@ -798,8 +798,10 @@
     $('cart-total').textContent = money(total());
     renderPay();
     var gcash = payMethod() === 'gcash';
+    // No area yet: the fee is still to come, so the total is not final.
+    var feeLater = type === 'delivery' && !a ? ' + delivery' : '';
     submitBtn.textContent = sending ? (gcash ? 'Opening GCash…' : 'Placing order…')
-      : (gcash ? 'Pay with GCash · ' : 'Place order · ') + money(total());
+      : (gcash ? 'Pay with GCash · ' : 'Place order · ') + money(total()) + feeLater;
 
     renderChange();
   }
