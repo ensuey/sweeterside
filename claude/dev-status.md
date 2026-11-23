@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 344 (`npm test`):
+**Tests:** 345 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -36,7 +36,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
-- 6 in `test/menu-cart-polish.test.js`
+- 7 in `test/menu-cart-polish.test.js`
 - 12 in `test/made-to-order.test.js`
 - 9 in `test/sms.test.js`
 
@@ -71,6 +71,20 @@ From the homepage critique (25/40; top 2 issues):
   nothing until one is approved: 500 "No active sender name"). Each text uses
   Semaphore credits. The key and the numbers are never logged.
 - Code: `server/sms.js`; tests in `test/sms.test.js`.
+
+## Popups recorded by Clarity (2026-11-23, branch `clarity-dialogs`)
+
+- Clarity replays did not show the cart or the item popup at all: they were
+  native `<dialog>`s opened with `showModal()`, drawn in the browser's top
+  layer, which session replays do not record.
+- `assets/js/modal.js` (`ssModal.open`) opens them with `show()` as ordinary
+  page elements and rebuilds the modal behaviour: a dimmed, blurred `.scrim`
+  (tap to close), the rest of the page `inert`, Esc to close, focus moved in
+  (and back, by menu.js / cart.js, after the page is released in a capture
+  listener). The item popup opened over the cart stacks above it.
+- Clarity masking is narrowed from the whole cart to the checkout form and
+  the order-done screen: recordings show the items and totals, never what
+  customers type. Clarity is off on staging; check recordings on live.
 
 ## Made to order when sold out (2026-11-20, branch `soldout-preorder`)
 

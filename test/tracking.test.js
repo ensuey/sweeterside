@@ -179,12 +179,14 @@ test('the CSP adds only the origins of the tools that are on', async () => {
   }
 });
 
-test('Clarity is told to hide the cart, the checkout and the cake form', async () => {
+test('Clarity is told to hide what customers type: the checkout, the order-done screen and the cake form', async () => {
   orders.updateSettings({ ...OFF, clarity_id: IDS.clarity_id });
   try {
     await withServer(async (url) => {
       const menuHtml = await (await fetch(url)).text();
-      assert.match(menuHtml, /<dialog class="sheet cart" id="cart"[^>]*data-clarity-mask="true"/, 'the cart, checkout and order-done screen');
+      // The cart's items and totals are recorded; the details customers type are not.
+      assert.match(menuHtml, /<form class="checkout" id="checkout"[^>]*data-clarity-mask="true"/, 'the checkout form');
+      assert.match(menuHtml, /<div class="cart__done" id="cart-done"[^>]*data-clarity-mask="true"/, 'the order-done screen');
       const cakes = await (await fetch(`${url}/cakes`)).text();
       assert.match(cakes, /<form class="cake-form" id="cake-form"[^>]*data-clarity-mask="true"/, 'the cake form');
       assert.match(cakes, /<section class="cake-done" id="cake-done"[^>]*data-clarity-mask="true"/, 'the cake request number');
