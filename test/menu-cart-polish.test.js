@@ -88,3 +88,18 @@ test('checkout: Place order is pinned in the cart only, solid while sending', ()
   assert.match(css, /\.cart \.checkout__submit:disabled \{ opacity: 1;/);
   assert.match(css, /scroll-padding-bottom: 128px;/);
 });
+
+test('popups open as page elements (recorded by Clarity), with the modal behaviour rebuilt', () => {
+  const modal = fs.readFileSync(path.join(root, 'assets', 'js', 'modal.js'), 'utf8');
+  const menu = fs.readFileSync(path.join(root, 'assets', 'js', 'menu.js'), 'utf8');
+  const tpl = fs.readFileSync(path.join(root, 'templates', 'menu.html'), 'utf8');
+  for (const src of [menu, cart]) assert.ok(!/\.showModal\(\)/.test(src), 'no top-layer popups');
+  assert.match(menu, /ssModal\.open\(sheet\)/);
+  assert.match(cart, /ssModal\.open\(dialog\)/);
+  assert.match(modal, /dialog\.show\(\);/);
+  assert.match(modal, /el\.inert = true;/, 'the page behind is inert');
+  assert.match(modal, /e\.key !== 'Escape'/, 'Esc closes');
+  assert.match(modal, /scrim\.addEventListener\('click'/, 'tapping the dimmed page closes');
+  assert.ok(tpl.indexOf('assets/js/modal.js') < tpl.indexOf('assets/js/menu.js'), 'loaded before menu.js');
+  assert.match(css, /\.scrim \{ position: fixed; inset: 0;/);
+});

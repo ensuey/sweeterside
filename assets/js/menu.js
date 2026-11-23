@@ -138,7 +138,7 @@
         sheet.toggleAttribute('data-soldout', soldOut); // hides "Add to cart"
 
         opener = btn;
-        sheet.showModal();
+        ssModal.open(sheet);
         // cart.js prices the choices and adds the item.
         sheet.dispatchEvent(new CustomEvent('sheet:open', { detail: { id: card.dataset.id } }));
       });
