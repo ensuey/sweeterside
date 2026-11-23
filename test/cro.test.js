@@ -168,11 +168,11 @@ test('best sellers: a row at the top, sold-out ones left out, none when there ar
     assert.ok(row.includes('data-name="Matcha Frappe"') && !row.includes('data-name="Biscoff Frappe"'));
     assert.ok(row.includes('1 item'));
     assert.ok(html.indexOf('id="best-sellers"') < html.indexOf('<section class="section"'), 'first on the menu');
-    render.writeStatic();
-    assert.ok(fs.readFileSync(render.OUTPUT, 'utf8').includes('id="best-sellers"'), 'also in the static index.html');
+    // Its own file: other test files write index.html at the same time, which made this flaky.
+    const out = render.writeStatic(path.join(TEST_DIR, 'index.html'));
+    assert.ok(fs.readFileSync(out, 'utf8').includes('id="best-sellers"'), 'also in the static index.html');
   } finally {
     db.prepare("UPDATE items SET best_seller = 0, availability = 'available' WHERE id IN (?, ?)").run(matcha.id, biscoff.id);
-    render.writeStatic();
   }
 });
 
