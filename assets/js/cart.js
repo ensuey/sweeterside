@@ -49,6 +49,7 @@
       max: remaining === undefined ? MAX_QTY : Math.min(MAX_QTY, Number(remaining)),
       shot: card.querySelector('.shot'), // the card's photo, copied as the cart thumbnail
       options: readOptions(card), // { price, sale_type, sale_value, groups }, or null
+      lead: Number(card.dataset.lead) || 0, // made to order: hours needed (sold out now)
     };
   });
 
@@ -171,8 +172,19 @@
   // Closing time came while the page was open, and pre-orders are on: as
   // soon as possible and dine-in go; a later time can still be chosen.
   document.addEventListener('shop:preorder', function () {
+    preorderButtons();
     refreshTypes();
   });
+
+  /** While pre-ordering, the cards' Add says "Pre-order", so nobody thinks
+      it comes now. A made-to-order item already says "Order". */
+  function preorderButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('.card [data-add]'), function (btn) {
+      var label = btn.firstChild;
+      if (label && label.nodeType === 3 && label.nodeValue === 'Add') label.nodeValue = 'Pre-order';
+    });
+  }
+  if (document.body.dataset.preorder === '1') preorderButtons();
 
   document.addEventListener('shop:closed', function (e) {
     shopClosed = true;
@@ -277,6 +289,11 @@
     return switchOn && pickupOpen !== null && pickupClose !== null && now >= pickupOpen && now < pickupClose;
   }
 
+  /** Minutes the cart's made-to-order items need, from now (0: none). */
+  function madeMinutes() {
+    return lines.reduce(function (m, l) { return Math.max(m, (catalog[l.id] ? catalog[l.id].lead : 0) * 60); }, 0);
+  }
+
   /** The start times (minutes) offered on a day. */
   function slotsOn(kind, date) {
     if (pickupOpen === null || pickupClose === null || !switchOn) return [];
@@ -285,7 +302,10 @@
     var step = kind === 'delivery' ? WINDOW_MINUTES : SLOT_MINUTES;
     var last = kind === 'delivery' ? pickupClose - WINDOW_MINUTES : Math.min(pickupClose, 24 * 60 - SLOT_MINUTES);
     var first = pickupOpen;
-    if (date === today) while (first < manilaMinutes() + LEAD[kind]) first += step;
+    // The earliest time, from the start of this date: it can fall on a later day.
+    var days = Math.round((Date.parse(date + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000);
+    var earliest = manilaMinutes() + Math.max(LEAD[kind], madeMinutes()) - days * 24 * 60;
+    while (first < earliest) first += step;
     var out = [];
     for (var t = first; t <= last; t += step) out.push(t);
     return out;
@@ -297,7 +317,7 @@
     var out = [];
     for (var i = 0; i <= preorderDays; i++) {
       var d = addDays(today, i);
-      if (slotsOn(kind, d).length || (i === 0 && openNow())) out.push(d);
+      if (slotsOn(kind, d).length || (i === 0 && openNow() && !madeMinutes())) out.push(d);
     }
     return out;
   }
@@ -324,7 +344,7 @@
     daySel.closest('.when__part').hidden = days.length < 2;
     var date = daySel.value;
     var times = [];
-    if (date === manilaToday() && openNow()) times.push({ value: 'asap', label: 'As soon as possible' });
+    if (date === manilaToday() && openNow() && !madeMinutes()) times.push({ value: 'asap', label: 'As soon as possible' });
     slotsOn(kind, date).forEach(function (t) {
       times.push({ value: hhmm(t), label: kind === 'delivery' ? windowLabel(t) : clockLabel(t) });
     });
@@ -377,7 +397,7 @@
   /** Which types can be chosen right now: turned on, dine-in only while
       open, and pick-up or delivery while there is a time to choose. */
   function availableTypes() {
-    var ok = { pickup: fillWhen('pickup'), delivery: fillWhen('delivery'), dinein: openNow() };
+    var ok = { pickup: fillWhen('pickup'), delivery: fillWhen('delivery'), dinein: openNow() && !madeMinutes() };
     return enabledTypes.filter(function (t) { return ok[t]; });
   }
 
@@ -415,7 +435,11 @@
     if (enabledTypes.indexOf('pickup') > -1 && open.indexOf('pickup') === -1) {
       note = 'Pick-up is closed for now.';
     }
-    if (enabledTypes.indexOf('dinein') > -1 && open.indexOf('dinein') === -1 && open.length) {
+    var made = madeMinutes() / 60;
+    if (made) {
+      note = (note ? note + ' ' : '') + 'Your cart has a made-to-order item: it is ready ' + made +
+        (made === 1 ? ' hour' : ' hours') + ' from now at the earliest, so the times start then.';
+    } else if (enabledTypes.indexOf('dinein') > -1 && open.indexOf('dinein') === -1 && open.length) {
       note = (note ? note + ' ' : '') + "Dine-in orders are taken while we're open.";
     }
     $('otype-note').textContent = note;
@@ -646,6 +670,8 @@
     var picked = [];
     var inCart = {};
     lines.forEach(function (l) { inCart[l.id] = true; });
+    var chosen = {}; // words of the options picked in the cart
+    lines.forEach(function (l) { words(optionsText(l)).forEach(function (w) { chosen[w] = true; }); });
     var lists = lines.map(function (l) { return (suggest.by_cat || {})[catalog[l.id].cat] || []; });
     lists.push(suggest.any || []);
     lists.forEach(function (ids) {
@@ -654,10 +680,18 @@
         var item = catalog[id];
         if (picked.length >= SUGGEST_MAX || !item || inCart[id] || picked.indexOf(id) > -1) return;
         if (itemQty(id) >= item.max) return;
+        if (words(item.name).some(function (w) { return chosen[w]; })) return;
         picked.push(id);
       });
     });
     return picked;
+  }
+
+  /** 'Chicken Nuggets (5pcs)' -> ['chicken', 'nugget', '5pc']: words of 4+
+      letters, lower case, without a plural s, to match items against options. */
+  function words(text) {
+    return String(text).toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 4; })
+      .map(function (w) { return w.replace(/s$/, ''); });
   }
 
   function renderSuggest() {
@@ -694,8 +728,28 @@
     });
   }
 
+  /** "2 in cart" on each menu card holding items in the cart. */
+  function renderInCart() {
+    cards.forEach(function (card) {
+      var n = itemQty(card.dataset.id);
+      var tag = card.querySelector('.card__incart');
+      if (!tag && !n) return;
+      if (!tag) {
+        tag = el('span', 'card__incart');
+        card.appendChild(tag);
+      }
+      tag.hidden = !n;
+      tag.textContent = n ? n + ' in cart' : '';
+    });
+  }
+
+  var lastMade = 0;
   function render() {
     var n = count();
+    if (madeMinutes() !== lastMade) {
+      lastMade = madeMinutes();
+      setTimeout(refreshTypes, 0); // refreshTypes renders again
+    }
 
     // Bar at the bottom of the page.
     $('cartbar').hidden = n === 0;
@@ -708,6 +762,7 @@
     list.textContent = '';
     lines.forEach(function (l) { list.appendChild(lineNode(l)); });
     renderSuggest();
+    renderInCart();
 
     $('cart-empty').hidden = n > 0;
     $('cart-sum').hidden = n === 0;

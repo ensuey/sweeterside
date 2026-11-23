@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 315 (`npm test`):
+**Tests:** 344 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -36,6 +36,85 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
+- 6 in `test/menu-cart-polish.test.js`
+- 12 in `test/made-to-order.test.js`
+- 9 in `test/sms.test.js`
+
+## Closed for now: a pre-order, not a rejection (2026-11-23, branch `closed-preorder-hero`)
+
+From the homepage critique (25/40; top 2 issues):
+- Closed with pre-orders open, the hero leads with **Pre-order** (a sky-blue
+  pill) and "Order now for tomorrow at 10:00 AM." instead of a dark "CLOSED NOW".
+- The status line is a link into the menu ("See the menu"), 44px tall: the
+  hero now has a way in besides the custom-cake button.
+- While pre-ordering, the sticky search bar shows "Pre-ordering for tomorrow
+  at 10:00 AM" and the cards' Add buttons say **Pre-order** (made-to-order
+  items keep "Order"). hours.js does the same when closing time comes.
+- Contrast: `--coral-deep` (#A93520) for the quiet custom-cake button and the
+  coral hover states (were 4.1–4.2:1, now 4.9:1 and up).
+
+## SMS order alerts through Semaphore (2026-11-17, branch `sms-order-alerts`)
+
+- Every new online order (and a GCash order once paid) also sends one text to
+  the owner's numbers, with the same words as the push alert: order number,
+  type, item count and total. Never the customer's name, phone or address.
+  Plain characters only ("-" and "P560", not "·" and "₱"), at most 160, so
+  each alert is one normal SMS: one credit. Normal, not priority, texts
+  (priority costs 2 credits); delivery took about 2 minutes on Smart.
+  Cake bookings and POS orders are not texted.
+- **Settings → Order alerts → Text messages (SMS):** up to 3 PH mobile
+  numbers, kept as +639XXXXXXXXX (setting `sms_alert_numbers`). Blank: no texts.
+  **Text me new orders** switch (setting `sms_on`, on unless turned off):
+  off sends nothing and keeps the numbers.
+- Fly secrets: `SEMAPHORE_API_KEY` (unset: nothing is sent) and optional
+  `SEMAPHORE_SENDER` (the sender name Semaphore approved; Semaphore sends
+  nothing until one is approved: 500 "No active sender name"). Each text uses
+  Semaphore credits. The key and the numbers are never logged.
+- Code: `server/sms.js`; tests in `test/sms.test.js`.
+
+## Made to order when sold out (2026-11-20, branch `soldout-preorder`)
+
+- Items → **Sold out: ready in (h)** per item (1–72 hours; blank: off),
+  saved with availability and the daily limit (`PATCH /api/items/:id/stock`,
+  column `items.preorder_lead_hours`, additive). Meant for whole cakes that
+  take an hour or so to assemble.
+- While such an item is sold out (marked by hand, count at 0 or today's
+  limit used up; an ingredient out still stops it), the menu shows
+  **Order** and "Sold out now · order ahead, ready in N hours".
+- The cart then offers pick-up and delivery times from N hours ahead only:
+  no "as soon as possible", no dine-in. The server checks it again
+  (`schedule.checkMade`): ASAP, dine-in or a time too soon is refused with
+  the first time that works.
+- The daily limit still caps it, per day; once today's is used up it is
+  plain sold out for today. It is offered only when a pick-up or delivery
+  time that far ahead exists within the days taken.
+- Made fresh, so stock and flavor counts leave it out: its lines are marked
+  `order_items.made = 1` (additive column) and the stock queries skip them,
+  so a batch added later is free to sell. Its flavors are not greyed out.
+- It stays in Best sellers and its place in the menu; SEO publishes it as
+  schema.org PreOrder ("made to order" in llms.txt). The POS is unchanged.
+
+## Shorter menu hero on phones (2026-11-20, branch `mobile-hero`)
+
+- The hero took about 61% of a 390×844 phone screen (512px). Now 250px,
+  about 30%: logo (56px on phones) beside "Sweeter Side", tagline cut to
+  "Café and cake shop in San Isidro, Davao Oriental.", less padding.
+- The open status is one line: "OPEN NOW · Orders until 8:00 PM" (the
+  "Tap Add on anything you like to order." sentence is gone, server and
+  `hours.js`). The /cakes and /about heroes are unchanged.
+
+## Menu and cart polish (2026-11-20, branch `menu-cart-polish`)
+
+From a UX review of the menu, cart and checkout:
+- **Item popup:** the photo is at most 42% of the screen high, and
+  **Add to cart** stays pinned at the bottom while the options scroll.
+- **"Goes well with"** leaves out items a chosen option already gives: a
+  burger with "Fries & nuggets" no longer suggests Fries or Chicken Nuggets.
+  Matched on the words of the names (4+ letters, plural s ignored).
+- **Menu cards** show "2 in cart" on the photo for items in the cart.
+- **Cart − and +** are 44 px.
+- Not done yet (own PR): a pinned total / Place order bar in checkout, and
+  "₱X + delivery" until an area is chosen.
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 

@@ -128,7 +128,8 @@ function homeLd(groups) {
         name: i.name,
         offers: {
           '@type': 'Offer', price: String(i.sale_price ?? i.price), priceCurrency: 'PHP',
-          availability: i.sold_out ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
+          availability: i.preorder_lead != null ? 'https://schema.org/PreOrder'
+            : i.sold_out ? 'https://schema.org/SoldOut' : 'https://schema.org/InStock',
         },
       })),
     })),
@@ -344,7 +345,7 @@ function aboutLd() {
 function llmsTxt(groups) {
   const b = BUSINESS;
   const menuLines = groups.map((g) => `### ${g.category.name}\n${g.items
-    .map((i) => `- ${i.name}: ₱${i.sale_price ?? i.price}${i.sold_out ? ' (sold out today)' : ''}`).join('\n')}`).join('\n\n');
+    .map((i) => `- ${i.name}: ₱${i.sale_price ?? i.price}${i.preorder_lead != null ? ' (made to order)' : i.sold_out ? ' (sold out today)' : ''}`).join('\n')}`).join('\n\n');
   return `# ${b.name}
 
 > ${b.description}

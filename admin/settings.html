@@ -289,6 +289,18 @@
       <button class="btn btn--ghost" type="button" id="alerts-test" hidden>Send a test alert</button>
       <button class="link-quiet" type="button" id="alerts-off" hidden>Turn off on this device</button>
     </div>
+    <h3 class="alerts__subtitle">Text messages (SMS)</h3>
+    <p class="hint" id="sms-status"></p>
+    <label class="promo__check"><input type="checkbox" id="sms-on"> Text me new orders</label>
+    <p class="field__err" id="sms-on-err" hidden></p>
+    <form class="hours__form" id="sms-form" novalidate>
+      <div class="field field--wide">
+        <label for="sms-numbers">Text these numbers for every new online order <span class="hint">(up to 3, separated by commas)</span></label>
+        <input id="sms-numbers" type="text" inputmode="tel" autocomplete="off" placeholder="0917 123 4567, 0918 123 4567">
+      </div>
+      <button class="btn btn--ghost" type="submit" id="sms-save">Save</button>
+    </form>
+    <p class="field__err" id="sms-err" role="alert" hidden></p>
     <h3 class="alerts__subtitle" id="alerts-devices-title" hidden>Devices with alerts on</h3>
     <ul class="alerts__devices" id="alerts-devices"></ul>
   </section>

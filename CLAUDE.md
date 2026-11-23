@@ -5,9 +5,11 @@ bookings, and an in-store POS. Live at https://sweeterside.ph (`www.` and
 `sweeterside.fly.dev` redirect there).
 
 Read `claude/dev-status.md` first: it says what is shipped, what is live and
-what is still open. The POS design is in `claude/pos-plan.md`, and setup and
-behaviour are in `README.md`. `claude/architecture.md` has diagrams of the
-structure and the order and POS flows.
+what is still open. Planned work not yet started is in `claude/todo.md`; tick
+items off there in the PR that builds them. The POS design is in
+`claude/pos-plan.md`, and setup and behaviour are in `README.md`.
+`claude/architecture.md` has diagrams of the structure and the order and POS
+flows.
 
 ## Hard rules
 

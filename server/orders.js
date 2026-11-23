@@ -11,6 +11,7 @@ const pricing = require('./pricing');
 const { getSetting, saveSetting } = require('./settings');
 const { manilaMinutes } = require('./clock');
 const { normalizePhPhone, PHONE_MESSAGE } = require('./phone');
+const sms = require('./sms');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
 const stock = require('./stock');
@@ -403,6 +404,9 @@ function settings() {
     // GCash through PayMongo: the switch, and whether the keys are set on
     // the server (never the keys themselves).
     gcash_online: getSetting('gcash_online', '0') === '1',
+    sms_enabled: sms.enabled(),
+    sms_on: sms.on(),
+    sms_numbers: sms.numbersLabel(),
     gcash_ready: require('./paymongo').configured(),
     gcash_webhook: !!process.env.PAYMONGO_WEBHOOK_SECRET,
     gcash_live: require('./paymongo').liveMode(),
@@ -434,6 +438,8 @@ function updateSettings(input) {
     share_image: parseShareImage,
     ...Object.fromEntries(Object.keys(TRACKING).map((key) => [key, parseTracking(key)])),
     gcash_online: parseSwitch('gcash_online'),
+    sms_numbers: (v) => JSON.stringify(sms.parseNumbers(v)),
+    sms_on: parseSwitch('sms_on'),
     free_delivery_min: parseFreeMin,
     other_area_fee: parseOtherFee,
     preorder_days: schedule.parseDays,
@@ -464,7 +470,7 @@ function updateSettings(input) {
   }
   if (Object.keys(errors).length) throw new ValidationError(errors);
   // The hours keep their original keys (see opening hours above).
-  const STORED_AS = { open_at: 'pickup_open', close_at: 'pickup_close' };
+  const STORED_AS = { open_at: 'pickup_open', close_at: 'pickup_close', sms_numbers: 'sms_alert_numbers' };
   transaction(() => Object.entries(values).forEach(([key, v]) => saveSetting(STORED_AS[key] || key, v)));
   return settings();
 }
@@ -533,18 +539,21 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const short = [];
 
   const perItem = new Map(); // item_id -> qty over all its lines
+  let madeHours = 0; // the longest lead of a made-to-order item in the cart
   const perFlavor = new Map(); // 'item:option' -> { item, flavor, qty }, for items counted by flavor
   for (const { id, qty, options, suggested } of cartLines(rawItems)) {
     const item = menu.get(id, { now, date: date || undefined });
-    if (!item || item.availability === 'unavailable' || item.sold_out) {
+    if (!item || item.availability === 'unavailable' || (item.sold_out && item.preorder_lead === null)) {
       if (!unavailable.includes(id)) unavailable.push(id);
       continue;
     }
+    if (item.preorder_lead !== null) madeHours = Math.max(madeHours, item.preorder_lead);
     // The options must be on this item, available, and fit each group.
     const chosen = itemOptions.choose(item, options);
     const prices = itemOptions.linePrices(item, chosen.options_cents);
     perItem.set(item.id, { item, qty: (perItem.has(item.id) ? perItem.get(item.id).qty : 0) + qty });
-    const flavor = stock.flavorOf(item, chosen.ids);
+    // A made-to-order item is made fresh, so its flavor counts do not apply.
+    const flavor = item.preorder_lead === null ? stock.flavorOf(item, chosen.ids) : null;
     if (flavor) {
       const fkey = `${item.id}:${flavor.id}`;
       perFlavor.set(fkey, { item, flavor, qty: (perFlavor.has(fkey) ? perFlavor.get(fkey).qty : 0) + qty });
@@ -552,13 +561,14 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
     lines.push({
       item_id: item.id, name: item.name, price: prices.sale_cents / 100, regular: prices.unit_cents / 100,
       sc_eligible: item.sc_eligible, qty, key: chosen.key, options: chosen.snapshot, options_cents: chosen.options_cents,
-      option_ids: chosen.ids, source: suggested ? 'suggested' : '',
+      option_ids: chosen.ids, source: suggested ? 'suggested' : '', made: item.preorder_lead !== null,
     });
   }
   // Today's limit counts the item, whatever options each line has.
   for (const { item, qty } of perItem.values()) {
-    if (item.remaining !== null && qty > item.remaining) {
-      short.push({ id: item.id, name: item.name, remaining: item.remaining, left: menu.leftText(item) });
+    const can = menu.orderable(item);
+    if (can !== null && qty > can) {
+      short.push({ id: item.id, name: item.name, remaining: can, left: item.preorder_lead !== null ? 'left that day' : menu.leftText(item) });
     }
   }
   // A flavor counted on its own: no more than it has left, over all lines.
@@ -598,7 +608,7 @@ function quote(rawItems, type = 'delivery', now = new Date(), voucherCode = '', 
   const limits = Object.fromEntries(short.map((s) => [s.id, s.remaining]));
   const flavorLimits = Object.fromEntries(flavorShort.map((s) => [s.key, s.remaining]));
   return {
-    lines, unavailable, limits, short, flavorLimits, flavorShort, subtotal: t.subtotal / 100, discount, voucher, voucherError,
+    lines, unavailable, limits, short, flavorLimits, flavorShort, madeHours, subtotal: t.subtotal / 100, discount, voucher, voucherError,
     delivery_fee: t.delivery_fee / 100, total: t.total / 100, priced, area,
     delivery_free: !!(priced && priced.delivery && priced.delivery.free),
   };
@@ -719,6 +729,8 @@ function create(input, { now = new Date(), admin = false } = {}) {
   try {
     // Today's limits count against the day the order is for.
     q = quote(input.items, type, now, input.voucher, input.delivery_area, when.service_date);
+    // A made-to-order item: the order must be for a time far enough ahead.
+    schedule.checkMade(type, when, q.madeHours, now);
     if (type === 'delivery' && !q.area) {
       errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
     }
@@ -804,14 +816,14 @@ function create(input, { now = new Date(), admin = false } = {}) {
 function insertLines(orderId, lines, quoted = []) {
   const line = db.prepare(`
     INSERT INTO order_items (order_id, item_id, name, price_cents, regular_price_cents, net_cents, qty,
-                             options, options_cents, option_ids, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+                             options, options_cents, option_ids, source, made)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // The engine's lines are keyed by their place in the quote.
   lines.forEach((l) => {
     const q = quoted[Number(l.key)] || {};
     line.run(orderId, l.item_id, l.name, l.sale_unit_cents, l.unit_cents, l.net, l.qty,
       q.options && q.options.length ? JSON.stringify(q.options) : '', q.options_cents || 0,
-      JSON.stringify(q.option_ids || []), q.source === 'suggested' ? 'suggested' : '');
+      JSON.stringify(q.option_ids || []), q.source === 'suggested' ? 'suggested' : '', q.made ? 1 : 0);
   });
 }
 
