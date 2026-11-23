@@ -220,6 +220,18 @@
   }
   // Free delivery: the items after the voucher come to the threshold or more
   // (not for "Other area", whose fee is still to be confirmed).
+/**
+   * ' + delivery' while the delivery fee is still to come, so the total on the
+   * button does not look final: no area chosen yet (unless the order is over the
+   * free-delivery minimum, where most areas cost nothing), or "Other area" with
+   * no starting fee (the fee is agreed by phone).
+   */
+  function feeNote(kind, a, sub, freeOver, otherStart) {
+    if (kind !== 'delivery') return '';
+    if (!a) return freeOver && sub >= freeOver ? '' : ' + delivery';
+    return a.other && otherStart == null ? ' + delivery' : '';
+  }
+
   function freeDelivery() {
     var a = area();
     return !!(freeMin && a && !a.other && a.fee > 0 && subtotal() - discount() >= freeMin);
@@ -798,8 +810,7 @@
     $('cart-total').textContent = money(total());
     renderPay();
     var gcash = payMethod() === 'gcash';
-    // No area yet: the fee is still to come, so the total is not final.
-    var feeLater = type === 'delivery' && !a ? ' + delivery' : '';
+    var feeLater = feeNote(type, a, subtotal() - discount(), freeMin, otherFee);
     submitBtn.textContent = sending ? (gcash ? 'Opening GCash…' : 'Placing order…')
       : (gcash ? 'Pay with GCash · ' : 'Place order · ') + money(total()) + feeLater;
 

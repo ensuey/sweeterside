@@ -66,10 +66,25 @@ test('the menu hero is short on a phone: logo beside the name, a one-line taglin
   for (const src of [hours, render]) assert.ok(!src.includes('Tap Add on anything'), 'status says only the closing time');
 });
 
-test('checkout: Place order and the total stay in view; "+ delivery" until an area is chosen', () => {
-  assert.match(css, /\.checkout__submit \{ position: sticky; bottom: var\(--sp-4\);/);
-  assert.match(css, /scroll-padding-bottom: 96px;/, 'a focused field is not left under the button');
-  const render = /function render\(\) \{[\s\S]*?\n  \}/.exec(cart)[0];
-  assert.match(render, /var feeLater = type === 'delivery' && !a \? ' \+ delivery' : '';/);
-  assert.match(render, /money\(total\(\)\) \+ feeLater;/);
+test('checkout: "+ delivery" while the fee is still to come, and only then', () => {
+  const src = /function feeNote\(kind, a, sub, freeOver, otherStart\) \{[\s\S]*?\n  \}/.exec(cart);
+  assert.ok(src, 'cart.js has feeNote()');
+  const feeNote = vm.runInNewContext(`(${src[0]})`);
+  const area = { fee: 40 };
+  const other = { other: true, fee: 0 };
+  assert.strictEqual(feeNote('delivery', null, 300, null, null), ' + delivery', 'no area yet');
+  assert.strictEqual(feeNote('delivery', null, 1500, 1000, null), '', 'over the free-delivery minimum');
+  assert.strictEqual(feeNote('delivery', null, 500, 1000, null), ' + delivery', 'under it');
+  assert.strictEqual(feeNote('delivery', area, 300, null, null), '', 'an area with its fee in the total');
+  assert.strictEqual(feeNote('delivery', other, 300, null, null), ' + delivery', 'Other area, fee by phone');
+  assert.strictEqual(feeNote('delivery', other, 300, null, 50), '', 'Other area with a starting fee in the total');
+  assert.strictEqual(feeNote('pickup', null, 300, null, null), '', 'pick-up has no fee');
+  assert.match(cart, /money\(total\(\)\) \+ feeLater;/);
+});
+
+test('checkout: Place order is pinned in the cart only, solid while sending', () => {
+  assert.match(css, /\.cart \.checkout__submit \{ position: sticky;/);
+  assert.doesNotMatch(css, /^\.checkout__submit \{ position: sticky/m, 'the cake page button stays in place');
+  assert.match(css, /\.cart \.checkout__submit:disabled \{ opacity: 1;/);
+  assert.match(css, /scroll-padding-bottom: 128px;/);
 });

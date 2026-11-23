@@ -445,9 +445,11 @@ body[data-empty="true"] .section { display: none; }
 .sheet[data-soldout] .sheet__add { display: none; }
 .sheet__add:active, .checkout__submit:active:not(:disabled) { transform: scale(.98); }
 .checkout__submit:disabled { opacity: .6; cursor: progress; }
-/* Place order and the total stay in view while the form scrolls. The ring in
-   the dialog's colour hides what passes behind it. */
-.checkout__submit { position: sticky; bottom: var(--sp-4); z-index: 2; box-shadow: 0 0 0 var(--sp-3) var(--surface); }
+/* In the cart, Place order and the total stay in view while the form scrolls.
+   The ring in the dialog's colour hides what passes behind it. Only in the
+   cart: the cake page's button shares the class and stays in place. */
+.cart .checkout__submit { position: sticky; bottom: var(--sp-4); z-index: 2; box-shadow: 0 0 0 var(--sp-3) var(--surface); }
+.cart .checkout__submit:disabled { opacity: 1; background: var(--ink-soft); }
 
 /* Bar pinned to the bottom of the screen while the cart has items. */
 .cartbar {
@@ -478,7 +480,7 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
   width: min(100% - 2rem, 480px);
   max-height: calc(100dvh - 2rem); overflow-y: auto; overscroll-behavior: contain;
   /* A field brought into view (keyboard, error) is never left under the pinned button. */
-  scroll-padding-bottom: 96px;
+  scroll-padding-bottom: 128px;
 }
 .cart__view, .cart__done { padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-4); }
 .cart__view[hidden], .cart__done[hidden] { display: none; }
