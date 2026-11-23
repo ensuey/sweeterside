@@ -38,7 +38,8 @@
       el.inert = true;
       inerted.push(el);
     });
-    stack.push({ dialog: dialog, inerted: inerted });
+    // What had focus, for when this closes back onto a popup still open below.
+    stack.push({ dialog: dialog, inerted: inerted, opener: document.activeElement });
     dialog.setAttribute('aria-modal', 'true');
     dialog.show();
     layout();
@@ -53,7 +54,19 @@
     for (var i = stack.length - 1; i >= 0; i--) {
       if (stack[i].dialog !== e.target) continue;
       stack[i].inerted.forEach(function (el) { el.inert = false; });
+      var opener = stack[i].opener;
       stack.splice(i, 1);
+      // Closed onto a popup still open below (the item popup over the cart):
+      // focus goes back inside that one, after menu.js has tried the page.
+      var below = top();
+      if (below) {
+        setTimeout(function () {
+          if (below.contains(document.activeElement)) return;
+          var back = opener && below.contains(opener) ? opener
+            : below.querySelector('button:not([disabled]), [href], input:not([disabled]), select, textarea');
+          if (back) back.focus({ preventScroll: true });
+        }, 0);
+      }
       e.target.style.zIndex = '';
       layout();
       return;
