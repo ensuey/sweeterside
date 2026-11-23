@@ -160,7 +160,7 @@ test('daily limits count the day the order is for', () => {
   const html = render.buildHtml(undefined, undefined, late);
   const stock = JSON.parse(html.match(/data-stock="([^"]*)"/)[1].replace(/&quot;/g, '"'));
   assert.deepStrictEqual([stock['2026-10-24'][pie.id], stock['2026-10-25'][pie.id], stock['2026-10-26'][pie.id]], [0, 0, 2]);
-  assert.match(html, /You can pre-order for tomorrow at 10:00 AM\./);
+  assert.match(html, /Order now for tomorrow at 10:00 AM\./);
   const card = html.split('<li class="card').find((c) => c.includes('data-name="Daily Pie"'));
   assert.ok(card.includes('data-soldout'), 'tomorrow (the next day) is full');
 });

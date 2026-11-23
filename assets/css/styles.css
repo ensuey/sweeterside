@@ -10,6 +10,9 @@
   --cream:         #FFF9E8;
   --coral:         #EF5350;
   --coral-ink:     #D2402C;  /* AA-safe coral for text and buttons */
+  --coral-deep:    #A93520;  /* coral text on tinted grounds (butter, hover pink): 5:1 and up */
+  --sky:           #DCEAF6;  /* pre-order: calm, not "closed" */
+  --sky-ink:       #1F4A6B;
   --navy:          #3E5E7E;
 
   /* Surfaces and text */
@@ -87,18 +90,35 @@ img { max-width: 100%; }
   font-size: clamp(1rem, 2.6vw, 1.125rem);
 }
 /* Open or closed, under the tagline. */
+/* Plain inline flow: pill, sentence and link wrap like text, two lines at most on a phone. */
 .status {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: var(--sp-2);
-  margin: var(--sp-4) auto 0; max-width: 46ch; font-size: .9375rem; font-weight: 600; color: #6B5330;
+  display: block; text-align: center; line-height: 1.7;
+  margin: var(--sp-4) auto 0; max-width: 52ch; font-size: .9375rem; font-weight: 600; color: #6B5330;
+  width: fit-content; min-height: 44px; padding: .4rem var(--sp-3); border-radius: var(--r-lg);
+  text-decoration: none; transition: background .2s var(--ease);
+}
+a.status:hover { background: rgba(255,255,255,.45); }
+a.status:focus-visible { outline: 3px solid var(--coral-deep); outline-offset: 2px; }
+.status__go {
+  color: var(--coral-deep); font-weight: 700; white-space: nowrap;
+  text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 3px;
 }
 .status__pill {
-  display: inline-flex; align-items: center; gap: .4em; padding: .3rem .75rem; border-radius: var(--r-full);
+  display: inline-flex; align-items: center; gap: .4em; vertical-align: .05em; margin-right: .25rem; padding: .3rem .75rem; border-radius: var(--r-full);
   font-size: .8125rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
 }
 .status__pill::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: currentColor; }
 .status--open .status__pill { color: #1F5A3A; background: #DDF0E3; }
 .status--closed .status__pill { color: #fff; background: #6B5330; }
 .status--soon .status__pill { color: #6B3E00; background: #FFE3A8; }
+.status--preorder .status__pill { color: var(--sky-ink); background: var(--sky); }
+
+/* Pre-ordering: one line in the sticky bar, so it stays in view. */
+.toolbar__note {
+  margin: 0; align-self: center; padding: .25rem .75rem; border-radius: var(--r-full);
+  font-size: .8125rem; font-weight: 700; color: var(--sky-ink); background: var(--sky);
+}
+.toolbar__note[hidden] { display: none; }
 
 /* The last 30 minutes before closing: a bar at the top of the menu. */
 .soonbar {
@@ -131,7 +151,7 @@ img { max-width: 100%; }
 /* Custom cakes are a side door here: a quiet outline, not the main action. */
 .hero--home .hero__cta {
   margin-top: var(--sp-3); padding: 0 var(--sp-4); font-size: .9375rem;
-  color: var(--coral-ink); background: rgba(255,255,255,.55); border: 1.5px solid var(--coral-ink); box-shadow: none;
+  color: var(--coral-deep); background: rgba(255,255,255,.55); border: 1.5px solid var(--coral-deep); box-shadow: none;
 }
 .hero--home .hero__cta:hover { filter: none; background: #fff; }
 @media (min-width: 640px) { .hero--home { padding: var(--sp-6) 0; } }
@@ -399,7 +419,7 @@ body[data-empty="true"] .section { display: none; }
   color: var(--ink-soft); text-decoration-thickness: 1.5px; margin-right: .2em;
 }
 .card--soldout .card__sale { background: var(--ink-soft); }
-.card__add:hover { background: #FDF1EE; }
+.card__add:hover { background: #FDF1EE; color: var(--coral-deep); border-color: var(--coral-deep); }
 .card__add:active { transform: scale(.95); }
 .card__add.is-added { background: var(--coral-ink); color: #fff; }
 /* How many of this item are in the cart, on the card's photo. */
@@ -490,7 +510,7 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
   font: 700 .9375rem "Nunito", sans-serif; color: var(--coral-ink);
   background: var(--surface); border: 1.5px solid var(--coral-ink); border-radius: var(--r-full);
 }
-.voucher__apply:hover, .voucher__remove:hover { background: #FDF1EE; }
+.voucher__apply:hover, .voucher__remove:hover { background: #FDF1EE; color: var(--coral-deep); }
 .voucher__apply:disabled { opacity: .5; cursor: wait; }
 .voucher__applied {
   margin: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);

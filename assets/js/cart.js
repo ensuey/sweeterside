@@ -172,8 +172,19 @@
   // Closing time came while the page was open, and pre-orders are on: as
   // soon as possible and dine-in go; a later time can still be chosen.
   document.addEventListener('shop:preorder', function () {
+    preorderButtons();
     refreshTypes();
   });
+
+  /** While pre-ordering, the cards' Add says "Pre-order", so nobody thinks
+      it comes now. A made-to-order item already says "Order". */
+  function preorderButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('.card [data-add]'), function (btn) {
+      var label = btn.firstChild;
+      if (label && label.nodeType === 3 && label.nodeValue === 'Add') label.nodeValue = 'Pre-order';
+    });
+  }
+  if (document.body.dataset.preorder === '1') preorderButtons();
 
   document.addEventListener('shop:closed', function (e) {
     shopClosed = true;
