@@ -458,10 +458,11 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date(), 
 }
 
 /** Write index.html so plain static hosting keeps serving a current menu. */
-function writeStatic() {
+/** out: another file, for tests, which run side by side and would race on index.html. */
+function writeStatic(out = OUTPUT) {
   const html = buildHtml();
-  fs.writeFileSync(OUTPUT, html, 'utf8');
-  return OUTPUT;
+  fs.writeFileSync(out, html, 'utf8');
+  return out;
 }
 
 /* ---------------------------- cake booking page ---------------------------- */

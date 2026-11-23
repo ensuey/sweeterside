@@ -34,3 +34,6 @@ data/
 
 # Admin photo uploads
 assets/uploads/
+
+# Impeccable design-review snapshots (local tool output)
+.impeccable/
