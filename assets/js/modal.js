@@ -45,19 +45,20 @@
     var first = dialog.querySelector('[autofocus]')
       || dialog.querySelector('button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])');
     if (first) first.focus({ preventScroll: true });
-
-    dialog.addEventListener('close', function onClose() {
-      dialog.removeEventListener('close', onClose);
-      for (var i = stack.length - 1; i >= 0; i--) {
-        if (stack[i].dialog !== dialog) continue;
-        stack[i].inerted.forEach(function (el) { el.inert = false; });
-        stack.splice(i, 1);
-        break;
-      }
-      dialog.style.zIndex = '';
-      layout();
-    });
   }
+
+  // On the way down (capture), before menu.js and cart.js hear 'close': the
+  // page must stop being inert first, or focus cannot go back to the opener.
+  document.addEventListener('close', function (e) {
+    for (var i = stack.length - 1; i >= 0; i--) {
+      if (stack[i].dialog !== e.target) continue;
+      stack[i].inerted.forEach(function (el) { el.inert = false; });
+      stack.splice(i, 1);
+      e.target.style.zIndex = '';
+      layout();
+      return;
+    }
+  }, true);
 
   document.addEventListener('keydown', function (e) {
     var d = top();
