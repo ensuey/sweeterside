@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 345 (`npm test`):
+**Tests:** 347 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -36,7 +36,7 @@ npm dependencies, SQLite via `node:sqlite`.
 - 6 in `test/staging.test.js`
 - 6 in `test/flavor-stock.test.js`
 - 5 in `test/other-area-fee.test.js`
-- 7 in `test/menu-cart-polish.test.js`
+- 9 in `test/menu-cart-polish.test.js`
 - 12 in `test/made-to-order.test.js`
 - 9 in `test/sms.test.js`
 
@@ -127,8 +127,12 @@ From a UX review of the menu, cart and checkout:
   Matched on the words of the names (4+ letters, plural s ignored).
 - **Menu cards** show "2 in cart" on the photo for items in the cart.
 - **Cart − and +** are 44 px.
-- Not done yet (own PR): a pinned total / Place order bar in checkout, and
-  "₱X + delivery" until an area is chosen.
+- **Checkout (2026-11-23):** in the cart only (the cake page shares the class),
+  Place order · ₱X stays pinned at the bottom while the form scrolls, solid
+  while sending; `scroll-padding-bottom` keeps a focused field clear of it
+  (iOS keyboard scrolling may not respect it). It reads "₱X + delivery" while
+  the fee is still to come: no area yet (unless over the free-delivery
+  minimum), or Other area with no starting fee (`feeNote` in cart.js).
 
 ## In-store POS (live; plan in `claude/pos-plan.md`)
 

@@ -66,6 +66,29 @@ test('the menu hero is short on a phone: logo beside the name, a one-line taglin
   for (const src of [hours, render]) assert.ok(!src.includes('Tap Add on anything'), 'status says only the closing time');
 });
 
+test('checkout: "+ delivery" while the fee is still to come, and only then', () => {
+  const src = /function feeNote\(kind, a, sub, freeOver, otherStart\) \{[\s\S]*?\n  \}/.exec(cart);
+  assert.ok(src, 'cart.js has feeNote()');
+  const feeNote = vm.runInNewContext(`(${src[0]})`);
+  const area = { fee: 40 };
+  const other = { other: true, fee: 0 };
+  assert.strictEqual(feeNote('delivery', null, 300, null, null), ' + delivery', 'no area yet');
+  assert.strictEqual(feeNote('delivery', null, 1500, 1000, null), '', 'over the free-delivery minimum');
+  assert.strictEqual(feeNote('delivery', null, 500, 1000, null), ' + delivery', 'under it');
+  assert.strictEqual(feeNote('delivery', area, 300, null, null), '', 'an area with its fee in the total');
+  assert.strictEqual(feeNote('delivery', other, 300, null, null), ' + delivery', 'Other area, fee by phone');
+  assert.strictEqual(feeNote('delivery', other, 300, null, 50), '', 'Other area with a starting fee in the total');
+  assert.strictEqual(feeNote('pickup', null, 300, null, null), '', 'pick-up has no fee');
+  assert.match(cart, /money\(total\(\)\) \+ feeLater;/);
+});
+
+test('checkout: Place order is pinned in the cart only, solid while sending', () => {
+  assert.match(css, /\.cart \.checkout__submit \{ position: sticky;/);
+  assert.doesNotMatch(css, /^\.checkout__submit \{ position: sticky/m, 'the cake page button stays in place');
+  assert.match(css, /\.cart \.checkout__submit:disabled \{ opacity: 1;/);
+  assert.match(css, /scroll-padding-bottom: 128px;/);
+});
+
 test('popups open as page elements (recorded by Clarity), with the modal behaviour rebuilt', () => {
   const modal = fs.readFileSync(path.join(root, 'assets', 'js', 'modal.js'), 'utf8');
   const menu = fs.readFileSync(path.join(root, 'assets', 'js', 'menu.js'), 'utf8');
