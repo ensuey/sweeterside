@@ -1229,7 +1229,7 @@
     done.hidden = true;
     refreshTypes(); // the page may have been open a while: recheck pick-up times
     freshToken();
-    dialog.showModal();
+    ssModal.open(dialog);
     if (count()) track('begin_checkout', { value: total(), count: count() });
   }
 
@@ -1418,7 +1418,7 @@
     done.hidden = true;
     paying.hidden = false;
     $('paying-text').textContent = text;
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) ssModal.open(dialog);
   }
 
   /** Paid: the order is placed. Empty the cart and show the confirmation. */

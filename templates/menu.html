@@ -103,7 +103,7 @@
   </button>
 </div>
 
-<dialog class="sheet cart" id="cart" aria-labelledby="cart-title" data-clarity-mask="true">
+<dialog class="sheet cart" id="cart" aria-labelledby="cart-title">
   <button class="sheet__close" type="button" data-close aria-label="Close">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
       <path d="M6 6l12 12M18 6L6 18"></path>
@@ -133,7 +133,7 @@
 
     <p class="cart__closed" id="cart-closed" hidden>Online ordering is closed right now. Please call us or drop by the shop.</p>
 
-    <form class="checkout" id="checkout" novalidate>
+    <form class="checkout" id="checkout" novalidate data-clarity-mask="true">
       <!-- cart.js shows only the types turned on in the admin, and only the
            fields whose data-for lists the chosen type. -->
       <fieldset class="otype" id="otype">
@@ -274,7 +274,7 @@
     <p id="paying-text" aria-live="polite">This takes a few seconds.</p>
   </div>
 
-  <div class="cart__done" id="cart-done" hidden>
+  <div class="cart__done" id="cart-done" hidden data-clarity-mask="true">
     <h2 class="cart__title" id="done-title" tabindex="-1">Order received!</h2>
     <p>Your order number is <strong id="done-id"></strong>.</p>
     <p class="done__when" id="done-when"></p>
@@ -316,6 +316,7 @@
   </div>
 </dialog>
 
+<script src="assets/js/modal.js" defer></script>
 <script src="assets/js/hours.js" defer></script>
 <script src="assets/js/menu.js" defer></script>
 <script src="assets/js/cart.js" defer></script>

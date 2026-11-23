@@ -336,7 +336,12 @@ body[data-empty="true"] .section { display: none; }
   /* Items with options can be taller than a phone screen. */
   max-height: calc(100dvh - 2rem); overflow-y: auto; overscroll-behavior: contain;
 }
-.sheet::backdrop { background: rgba(58, 40, 22, .5); backdrop-filter: blur(3px); }
+/* Popups open as page elements (assets/js/modal.js), not in the top layer, so
+   session replays draw them: centred like a modal, over a scrim. */
+.sheet { inset: 0; height: fit-content; z-index: 51; }
+.scrim { position: fixed; inset: 0; z-index: 50; background: rgba(58, 40, 22, .5); backdrop-filter: blur(3px); }
+.scrim[hidden] { display: none; }
+html.modal-open { overflow: hidden; }
 .sheet .shot { border-bottom: 1px solid var(--line); border-radius: 0; }
 /* An uploaded photo keeps the card's 3:4 shape, but never taller than most of the screen. */
 .sheet .shot--plain { width: 100%; max-height: 42vh; }
