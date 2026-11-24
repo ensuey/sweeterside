@@ -10,7 +10,7 @@ const categories = require('./categories');
 const orders = require('./orders');
 const cakes = require('./cakes');
 const seo = require('./seo');
-const { BUSINESS } = require('./business');
+const { BUSINESS, addressLine } = require('./business');
 const delivery = require('./delivery');
 const itemOptions = require('./options');
 const suggestions = require('./suggestions');
@@ -454,6 +454,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date(), 
     .replace('<!--VISIT-->', () => seo.visitHtml())
     .replace('<!--FAQ-->', () => seo.faqHtml())
     .replace('<!--FOOT_NAP-->', () => seo.footHtml())
+    .replace('<!--POLICY_LINKS-->', () => policyLinksHtml())
     .replace('<!--META_HOURS-->', () => esc(seo.hours().label));
 }
 
@@ -502,6 +503,7 @@ function buildCakesHtml(now = new Date()) {
     .replace('<!--INFO-->', () => cakeInfoHtml(s, avail))
     .replace('<!--TESTIMONIALS-->', () => testimonialsHtml())
     .replace('<!--TRACKING-->', () => trackingHtml())
+    .replace('<!--POLICY_LINKS-->', () => policyLinksHtml())
     .replaceAll('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
     .replaceAll('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
     .replaceAll('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()));
@@ -521,7 +523,43 @@ function buildAboutHtml() {
     }))
     .replace('<!--VISIT-->', () => seo.visitHtml())
     .replace('<!--FOOT_NAP-->', () => seo.footHtml())
+    .replace('<!--POLICY_LINKS-->', () => policyLinksHtml())
     .replace('<!--TRACKING-->', () => trackingHtml());
 }
 
-module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
+/* ---------------------------- policies ---------------------------- */
+
+/** The policy pages PayMongo asks for. The words are in templates/policies/;
+    change UPDATED when you change them. */
+const POLICIES = {
+  '/privacy': { file: 'privacy', title: 'Privacy Policy', description: 'How Sweeter Side by Dachel collects, uses and protects your personal information.' },
+  '/terms': { file: 'terms', title: 'Terms and Conditions', description: 'The terms for ordering from Sweeter Side by Dachel: what we sell, prices, payment, delivery and custom cakes.' },
+  '/refunds': { file: 'refunds', title: 'Return, Refund and Cancellation Policy', description: 'When you can cancel an order or a custom cake at Sweeter Side by Dachel, and how refunds are paid.' },
+};
+const POLICY_UPDATED = 'November 24, 2026';
+
+/** The footer line that links the policies, on every customer page. */
+function policyLinksHtml() {
+  return `    <p class="foot__legal">${Object.entries(POLICIES).map(([href, p]) => `<a href="${href}">${p.title}</a>`).join(' · ')}</p>`;
+}
+
+function buildPolicyHtml(pathname) {
+  const p = POLICIES[pathname];
+  const lead = cakes.settings().lead_days;
+  const body = fs.readFileSync(path.join(ROOT, 'templates', 'policies', `${p.file}.html`), 'utf8')
+    .replaceAll('<!--ADDRESS-->', esc(`${addressLine()}, Philippines`))
+    .replaceAll('<!--LEAD_DAYS-->', `${lead} day${lead === 1 ? '' : 's'}`)
+    .replaceAll('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
+    .replaceAll('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
+    .replaceAll('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()));
+  return fs.readFileSync(path.join(ROOT, 'templates', 'policy.html'), 'utf8')
+    .replaceAll('<!--TITLE-->', p.title)
+    .replace('<!--DESCRIPTION-->', p.description)
+    .replace('<!--PATH-->', pathname)
+    .replace('<!--UPDATED-->', POLICY_UPDATED)
+    .replace('<!--BODY-->', () => body)
+    .replace('<!--FOOT_NAP-->', () => seo.footHtml())
+    .replace('<!--POLICY_LINKS-->', () => policyLinksHtml());
+}
+
+module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, buildPolicyHtml, POLICIES, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };

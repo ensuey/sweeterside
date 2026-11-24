@@ -228,3 +228,28 @@ test('menu text on the About page is escaped', () => {
     menu.remove(evil.id);
   }
 });
+
+test('the policy pages PayMongo asks for are served, filled in and linked from every page', async () => {
+  await withServer(async (url) => {
+    for (const [p, title] of [['/privacy', 'Privacy Policy'], ['/terms', 'Terms and Conditions'], ['/refunds', 'Return, Refund and Cancellation Policy']]) {
+      const res = await fetch(`${url}${p}`);
+      assert.strictEqual(res.status, 200, p);
+      assert.ok(res.headers.get('content-security-policy').includes("script-src 'self'"), p);
+      const html = await res.text();
+      assert.ok(html.includes(`<h1 class="hero__title">${title}</h1>`), p);
+      assert.ok(html.includes(`<link rel="canonical" href="https://sweeterside.ph${p}">`), p);
+      assert.ok(!html.includes('<!--'), `${p} has no placeholder left`);
+      assert.ok(html.includes(BUSINESS.phone.display), p);
+      assert.ok(!/<script/i.test(html), `${p} loads no scripts`);
+    }
+    assert.ok((await (await fetch(`${url}/terms`)).text()).includes('No recurring payments'));
+    assert.strictEqual((await fetch(`${url}/privacy.html`)).status, 404);
+    assert.strictEqual((await fetch(`${url}/hasOwnProperty`)).status, 404);
+    const sitemap = await (await fetch(`${url}/sitemap.xml`)).text();
+    for (const p of ['/privacy', '/terms', '/refunds']) assert.ok(sitemap.includes(`<loc>https://sweeterside.ph${p}</loc>`), p);
+  });
+  for (const html of [render.buildHtml(), render.buildCakesHtml(), render.buildAboutHtml()]) {
+    for (const p of ['/privacy', '/terms', '/refunds']) assert.ok(html.includes(`<a href="${p}">`), p);
+    assert.ok(!html.includes('<!--POLICY_LINKS-->'));
+  }
+});
