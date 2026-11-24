@@ -228,7 +228,7 @@ function robotsTxt() {
 function sitemapXml(now = new Date()) {
   const day = manilaDate(now);
   const url = (loc, freq, priority) => `  <url><loc>${BUSINESS.url}${loc}</loc><lastmod>${day}</lastmod><changefreq>${freq}</changefreq><priority>${priority}</priority></url>`;
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${url('/', 'daily', '1.0')}\n${url('/cakes', 'weekly', '0.8')}\n${url('/about', 'monthly', '0.7')}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${url('/', 'daily', '1.0')}\n${url('/cakes', 'weekly', '0.8')}\n${url('/about', 'monthly', '0.7')}\n${['/privacy', '/terms', '/refunds'].map((p) => `${url(p, 'yearly', '0.3')}\n`).join('')}</urlset>\n`;
 }
 
 /* ---------------------------- about us ---------------------------- */

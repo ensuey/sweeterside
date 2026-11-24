@@ -401,6 +401,10 @@ All merged and deployed (Fly v15–v28).
     Screen app shows the new icon, and then needs order alerts turned on
     again on that device.
 - **#38 (v28): About us page** (`/about`), from the shop's facts only.
+- **Policy pages for PayMongo:** `/privacy`, `/terms` (with the nature of the
+  business and a no-recurring-payments clause) and `/refunds`. The words are in
+  `templates/policies/`; bump `POLICY_UPDATED` in `server/render.js` when they
+  change. Linked from every customer footer, the checkout and the cake form.
   - **Sections:** who we are, what we serve (today's menu with prices, up
     to 8 per category), custom cakes (sizes "from" prices and days of
     notice), how to order, quick facts, and visit us.

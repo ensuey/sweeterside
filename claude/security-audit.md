@@ -50,6 +50,7 @@ Legend:
 | Route | Auth | CSRF | Limit | Notes |
 |---|---|---|---|---|
 | `GET /`, `GET /cakes`, `GET /about` | — | | | Server-rendered; every field escaped. `/about` shows public shop facts and the menu with prices only. |
+| `GET /privacy`, `GET /terms`, `GET /refunds` | — | | | Static policy text from `templates/policies/`, with the shop phone, address, Facebook link and cake lead days filled in (escaped). No scripts, no input. Only these three paths (`render.POLICIES`). |
 | `GET /healthz` | — | | | `{ ok, items }` only. |
 | `GET /robots.txt`, `GET /sitemap.xml`, `GET /llms.txt` | — | | | For search engines and AI assistants. Public facts only (`server/business.js` and the live menu with prices); robots.txt keeps crawlers out of `/admin` and `/api/`. |
 | `GET /api/checkout-token` | — | | | Signed token; an order must arrive 3 s – 2 h after it was issued. |
@@ -235,6 +236,7 @@ SMS order alerts (`server/sms.js`) go from the server to Semaphore (`https://api
 - 2026-11-13: Utang (customer credit) routes added under `/api/pos/credit`, and `/api/reports/utang` (+ `.csv`).
 - 2026-11-03: Settings gain confirm_call_minutes, facebook_url and share_image (PR A). No new endpoint.
 - 2026-11-03: About us page (`/about`) added.
+- 2026-11-24: Policy pages (`/privacy`, `/terms`, `/refunds`) added for PayMongo.
 - 2026-11-03: robots.txt, sitemap.xml and llms.txt added (local SEO).
 - 2026-11-02: order alerts (Web Push) routes added.
 - 2026-11-02: F2 fixed: new uploads are stripped, and the existing menu photos were cleaned on the live volume.

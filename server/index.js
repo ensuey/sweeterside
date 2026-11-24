@@ -513,6 +513,10 @@ async function route(req, res) {
     return sendHtml(res, 200, render.buildAboutHtml(), customerHeaders());
   }
 
+  if (Object.hasOwn(render.POLICIES, pathname) && (method === 'GET' || method === 'HEAD')) {
+    return sendHtml(res, 200, render.buildPolicyHtml(pathname), customerHeaders());
+  }
+
   /* ---- health check (for the hosting platform) ---- */
   if (pathname === '/healthz' && (method === 'GET' || method === 'HEAD')) {
     return sendJson(res, 200, { ok: true, items: menu.list().length });
