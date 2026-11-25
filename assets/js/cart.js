@@ -1087,7 +1087,7 @@
     $('done-total-label').textContent = 'Total for them to pay';
     $('done-cash-row').hidden = true;
     $('done-change-row').hidden = true;
-    $('done-next').textContent = 'We start your order once their payment is confirmed.';
+    $('done-next').textContent = ''; // the share box says what happens next
     $('done-call').hidden = true;
     $('done-share-btn').onclick = function () {
       navigator.share({ title: 'Sweeter Side order #' + order.id, text: 'Please pay for my order', url: link }).catch(function () {});

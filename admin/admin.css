@@ -294,6 +294,7 @@ a { color: var(--navy); }
 .order__sum dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .order__sum .is-total { color: var(--ink); font-weight: 700; }
 .order__sum .order__discount { color: var(--ok); }
+.order__paycheck { grid-column: 1 / -1; margin: .5rem 0 0; display: flex; flex-wrap: wrap; gap: .5rem; }
 .order__change {
   grid-column: 1 / -1; margin-top: .35rem; padding: .5rem .7rem; border-radius: var(--r-sm);
   background: #EEF6F0; color: #1F5A3A; font-weight: 700;

@@ -678,8 +678,7 @@ function buildPayHtml(view, details = {}, { busy = false } = {}) {
       body += `
     <h2>How to pay</h2>
     <p class="pay__amount">Send exactly <strong>${esc(peso(view.total))}</strong>.</p>
-    <p>On the same phone? Tap Save QR, then in your GCash or bank app choose Scan QR and upload it from your photos.</p>
-${ways}
+${details.qr_gcash || details.qr_bank ? '    <p>On the same phone? Tap Save QR, then in your GCash or bank app choose Scan QR and upload it from your photos.</p>\n' : ''}${ways}
     <h2>After you pay</h2>
     <form class="pay__form" id="pay-form" novalidate>
       <fieldset>

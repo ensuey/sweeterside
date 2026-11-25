@@ -126,10 +126,12 @@ function actionsHtml(o) {
   const actions = [];
   // A counter order paid without going to the kitchen has nothing to confirm.
   const heldPos = o.source === 'pos' && !o.kitchen_sent_at;
-  if (o.status === 'new' && !heldPos) {
+  // Someone else pays: nothing to confirm or collect until their payment is checked.
+  const payerWait = o.pay_method === 'someone' && ['awaiting', 'checking'].includes(o.pay_status);
+  if (o.status === 'new' && !heldPos && !payerWait) {
     actions.push(`<button class="btn btn--primary btn--sm" type="button" data-confirm>Confirm</button>`);
   }
-  if (!orderPaid(o) && o.status !== 'cancelled') {
+  if (!orderPaid(o) && o.status !== 'cancelled' && !payerWait) {
     actions.push(`<a class="btn btn--ghost btn--sm" href="/admin/pos?pay=${o.id}">Take payment</a>`);
   }
   if (o.phone_norm && !o.blocked) {
@@ -218,8 +220,8 @@ function orderHtml(o) {
     : o.pay_status === 'checking'
     ? `<dt>Check your ${via} for ${money(o.total)}</dt>
         <dd class="order__change">Ref <strong>${esc(o.payer_reference)}</strong>${o.payer_name ? ` from ${esc(o.payer_name)}` : ''}</dd>
-        <dd class="order__paycheck"><button class="btn btn--primary" type="button" data-paid>Payment received</button>
-          <button class="btn" type="button" data-not-paid>Not received</button></dd>`
+        <dd class="order__paycheck"><button class="btn btn--primary btn--sm" type="button" data-paid>Payment received</button>
+          <button class="btn btn--ghost btn--sm" type="button" data-not-paid>Not received</button></dd>`
     : o.pay_status === 'awaiting'
     ? `<dd class="order__change">Someone else pays. Waiting for their payment${o.payer_checked ? ' (the last one did not arrive)' : ''}.</dd>`
     : o.pay_status === 'paid' && o.status === 'cancelled'

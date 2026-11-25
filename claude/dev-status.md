@@ -5,7 +5,7 @@ volume `sweeterside_data` at `/data`). `www.sweeterside.ph` and
 `sweeterside.fly.dev` redirect there (`CANONICAL_HOST` secret). Node 22, no
 npm dependencies, SQLite via `node:sqlite`.
 
-**Tests:** 347 (`npm test`):
+**Tests:** 381 (`npm test`):
 - 61 in `test/server.test.js`
 - 14 in `test/anti-fake-orders.test.js`
 - 20 in `test/pricing.test.js`
@@ -39,6 +39,18 @@ npm dependencies, SQLite via `node:sqlite`.
 - 9 in `test/menu-cart-polish.test.js`
 - 12 in `test/made-to-order.test.js`
 - 9 in `test/sms.test.js`
+- 26 in `test/someone-pays.test.js`
+
+## Someone else pays (2026-11-25, branch `someone-else-pays`)
+
+Spec: `docs/superpowers/specs/2026-11-25-someone-else-pays-design.md`; plan in `docs/superpowers/plans/`.
+
+- **Settings → Someone else pays:** on/off switch (off by default), GCash name and number, bank details, GCash and bank QR uploads. Customers see the choice only when it is on and a GCash number or bank details are set.
+- **Checkout:** "Someone else will pay" for delivery and pick-up (not dine-in, not "Other area"). Times start 3 hours ahead, no ASAP. The order is saved `pay_method 'someone'`, `pay_status 'awaiting'`: out of the queue, stock and slot held, no alerts. The done screen gives the pay link with Share and Copy.
+- **Payer page `/pay/<id>.<payer_token>`:** its own key, apart from the receiver's `pay_token`. Items, total, time, receiver's first name only; QR codes with Save QR; account details; the reference form (`POST /api/pay/reference`) → `checking`, and the owner gets a "Check payment" text.
+- **Admin Orders → Payment tab:** Payment received (paid, confirmed, into To do; kitchen alert and the receiver's text) or Not received (reference cleared, the link takes a new one, no more auto-cancel). Both audited (`someone_paid`, `someone_not_paid`). The money is kept on the order (`online_paid_cents`), not in the drawer or shifts.
+- **Auto-cancel:** no reference 24 hours after ordering, or 1 hour before its time (`someonePays.expireUnpaid`, every minute). Not while being checked.
+- Code: `server/someone-pays.js`, `assets/js/pay.js`; tests in `test/someone-pays.test.js`.
 
 ## Closed for now: a pre-order, not a rejection (2026-11-23, branch `closed-preorder-hero`)
 
