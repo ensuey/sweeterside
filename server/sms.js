@@ -25,6 +25,11 @@ function on() {
   return getSetting('sms_on', '1') === '1';
 }
 
+/** The switch for texting customers when we get their order: on unless turned off. */
+function customerOn() {
+  return getSetting('sms_customer_on', '1') === '1';
+}
+
 /** The owner's numbers, as '+639XXXXXXXXX'. */
 function numbers() {
   try {
@@ -55,12 +60,11 @@ function parseNumbers(input) {
 }
 
 /**
- * Send one text to every number. Never throws.
+ * Send one text to every number: the owner's, unless given. Never throws.
  * @returns {Promise<{ sent: number, status: number }>} status 0 on a network error.
  */
-async function send(text) {
-  const to = numbers();
-  if (!enabled() || !on() || !to.length) return { sent: 0, status: 0 };
+async function send(text, to = on() ? numbers() : []) {
+  if (!enabled() || !to.length) return { sent: 0, status: 0 };
   const form = new URLSearchParams({
     apikey: process.env.SEMAPHORE_API_KEY.trim(),
     number: to.map((n) => n.slice(1)).join(','), // '639XXXXXXXXX'
@@ -117,4 +121,32 @@ function alert(message) {
   setImmediate(() => { send(orderText(message)).catch(() => {}); });
 }
 
-module.exports = { enabled, on, numbers, numbersLabel, parseNumbers, send, orderText, plainSms, alert, setTransport, MAX_NUMBERS };
+/**
+ * The customer's "we got your order" text, with the link to its status page.
+ * Plain characters and at most 160, so the link is never cut off.
+ * 'Sweeter Side: We got your order #12 (P320). Status: https://sweeterside.ph/order/12.<key>'
+ */
+function customerText(order, link, { willCall = false } = {}) {
+  const total = `P${Number(order.total).toLocaleString('en-US')}`;
+  const text = `Sweeter Side: We got your order #${order.id} (${total}).${willCall ? ' We will call to confirm.' : ''} Status: ${link}`;
+  return text.length <= 160 ? text : `Order #${order.id} received. Status: ${link}`;
+}
+
+/**
+ * Text the customer that we got their order. Fire and forget, after the
+ * response has gone. Their number is never logged, only the order number.
+ */
+function confirmCustomer(order, link, options) {
+  const to = normalizePhPhone(order.phone_norm || order.phone || '');
+  if (!enabled() || !customerOn() || !to || !link) return;
+  setImmediate(() => {
+    send(customerText(order, link, options), [to])
+      .then((r) => console.log(`[sms] customer #${order.id} ${r.sent ? 'sent' : 'failed'}`))
+      .catch(() => {});
+  });
+}
+
+module.exports = {
+  enabled, on, customerOn, numbers, numbersLabel, parseNumbers, send, orderText, plainSms, alert,
+  customerText, confirmCustomer, setTransport, MAX_NUMBERS,
+};

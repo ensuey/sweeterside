@@ -3,6 +3,7 @@
    Orders come from the public menu, so nothing the browser sends about money
    is trusted: prices, the fee and the total are all recomputed here. */
 
+const crypto = require('node:crypto');
 const { db, transaction } = require('./db');
 const menu = require('./menu');
 const vouchers = require('./vouchers');
@@ -406,6 +407,7 @@ function settings() {
     gcash_online: getSetting('gcash_online', '0') === '1',
     sms_enabled: sms.enabled(),
     sms_on: sms.on(),
+    sms_customer_on: sms.customerOn(),
     sms_numbers: sms.numbersLabel(),
     gcash_ready: require('./paymongo').configured(),
     gcash_webhook: !!process.env.PAYMONGO_WEBHOOK_SECRET,
@@ -440,6 +442,7 @@ function updateSettings(input) {
     gcash_online: parseSwitch('gcash_online'),
     sms_numbers: (v) => JSON.stringify(sms.parseNumbers(v)),
     sms_on: parseSwitch('sms_on'),
+    sms_customer_on: parseSwitch('sms_customer_on'),
     free_delivery_min: parseFreeMin,
     other_area_fee: parseOtherFee,
     preorder_days: schedule.parseDays,
@@ -804,7 +807,7 @@ function create(input, { now = new Date(), admin = false } = {}) {
       t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced),
       q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0,
       when.scheduled_for, when.scheduled_date,
-      payMethod, payMethod ? 'awaiting' : '', payMethod ? require('./paymongo').newPayToken() : null);
+      payMethod, payMethod ? 'awaiting' : '', require('./paymongo').newPayToken());
     insertLines(info.lastInsertRowid, q.priced.lines, q.lines);
     return info.lastInsertRowid;
   });
@@ -876,7 +879,7 @@ function withLines(order, { fullIds = false } = {}) {
   // it nor the request key ever goes out with an order.
   delete order.pos_input;
   delete order.last_request_key;
-  // The customer's key to their GCash order never goes out with it.
+  // The customer's key to their order never goes out with it.
   delete order.pay_token;
   if (order.pricing && !fullIds) {
     order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
@@ -886,6 +889,23 @@ function withLines(order, { fullIds = false } = {}) {
 
 function get(id, options) {
   return withLines(db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(id)) || null, options);
+}
+
+/** The customer's own key to an online order, "<id>.<token>", or '' when it has none. */
+function customerRef(id) {
+  const row = db.prepare("SELECT pay_token FROM orders WHERE id = ? AND source = 'online'").get(Number(id));
+  return row && row.pay_token ? `${Number(id)}.${row.pay_token}` : '';
+}
+
+/** The online order a customer's "<id>.<token>" key opens, or null. The token is compared in constant time. */
+function byRef(ref) {
+  const m = /^(\d{1,10})\.([A-Za-z0-9_-]{32})$/.exec(String(ref || ''));
+  if (!m) return null;
+  const row = db.prepare("SELECT pay_token FROM orders WHERE id = ? AND source = 'online'").get(Number(m[1]));
+  if (!row || !row.pay_token) return null;
+  const a = Buffer.from(row.pay_token);
+  const b = Buffer.from(m[2]);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? get(Number(m[1])) : null;
 }
 
 /**
@@ -1075,5 +1095,5 @@ module.exports = {
   settings, updateSettings, normalisePhone, getSetting, saveSetting,
   isShopOpen, canOrder, nextOrderTime, shopState, openingHours, clock12, closedMessage, CLOSING_SOON_MINUTES,
   closedNote, shopClosedError, requiresConfirmation, historyFor, callMinutes, facebookUrl, shareImage, tracking,
-  quote, create, insertLines, get, list, counts, setStatus, confirmFee,
+  quote, create, insertLines, get, customerRef, byRef, list, counts, setStatus, confirmFee,
 };

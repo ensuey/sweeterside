@@ -536,7 +536,7 @@ const POLICIES = {
   '/terms': { file: 'terms', title: 'Terms and Conditions', description: 'The terms for ordering from Sweeter Side by Dachel: what we sell, prices, payment, delivery and custom cakes.' },
   '/refunds': { file: 'refunds', title: 'Return, Refund and Cancellation Policy', description: 'When you can cancel an order or a custom cake at Sweeter Side by Dachel, and how refunds are paid.' },
 };
-const POLICY_UPDATED = 'November 24, 2026';
+const POLICY_UPDATED = 'November 25, 2026';
 
 /** The footer line that links the policies, on every customer page. */
 function policyLinksHtml() {
@@ -562,4 +562,71 @@ function buildPolicyHtml(pathname) {
     .replace('<!--POLICY_LINKS-->', () => policyLinksHtml());
 }
 
-module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, buildPolicyHtml, POLICIES, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
+/* ---------------------------- the customer's order ---------------------------- */
+
+const ORDER_TYPE_LABEL = { delivery: 'Delivery', pickup: 'Pick-up', dinein: 'Dine-in' };
+// The 'delivering' step means "handed over" and reads differently per type, as in admin/orders.js.
+const HANDOVER_TEXT = { delivery: 'Your order is on the way.', pickup: 'Your order is ready for pick-up.', dinein: 'Your order is served.' };
+
+/** The status line a customer sees for their order. */
+function customerStatus(order, { status, awaiting = false, willCall = false }) {
+  if (awaiting) return 'Waiting for your GCash payment.';
+  return {
+    new: willCall ? 'We got your order. We will call you to confirm it.' : 'We got your order.',
+    confirmed: 'Your order is confirmed.',
+    preparing: 'We are making your order.',
+    delivering: HANDOVER_TEXT[order.order_type] || HANDOVER_TEXT.delivery,
+    completed: 'Your order is complete. Thank you!',
+    cancelled: 'This order was cancelled. Please call us if you have questions.',
+  }[status] || 'We got your order.';
+}
+
+/**
+ * The customer's own order page, from the link in their text. order is the
+ * publicOrder() view (no name, phone or address); null shows "not found", or
+ * "too many tries" with busy.
+ */
+function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCall = false, busy = false } = {}) {
+  let title; let line; let body = ''; let refresh = '';
+  if (!order) {
+    title = busy ? 'Please wait a minute' : 'Order not found';
+    line = busy ? 'You opened this page many times. Please try again in a few minutes.'
+      : 'Check that the link is complete, or call us.';
+  } else {
+    title = `Order #${order.id}`;
+    line = customerStatus(order, { status, awaiting, willCall });
+    if (['new', 'confirmed', 'preparing', 'delivering'].includes(status)) {
+      refresh = '<meta http-equiv="refresh" content="60">'; // the status updates by itself
+    }
+    const facts = [
+      ['Order', ORDER_TYPE_LABEL[order.order_type] || ''],
+      ['When', order.scheduled_label || (order.pickup_at ? `Pick-up at ${order.pickup_at}` : 'As soon as possible')],
+      order.table_no ? ['Table', order.table_no] : null,
+      order.delivery_area ? ['Area', order.delivery_area] : null,
+      order.eta && !order.scheduled_label ? ['Delivery time', order.eta] : null,
+    ].filter(Boolean).map(([k, v]) => `      <div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('\n');
+    const items = order.items.map((i) => `      <li>${esc(i.qty)} × ${esc(i.name)}${i.options_text ? ` <span class="about__price">(${esc(i.options_text)})</span>` : ''}</li>`).join('\n');
+    const money = [
+      ['Subtotal', peso(order.subtotal)],
+      order.discount ? [`Discount${order.voucher_code ? ` (${order.voucher_code})` : ''}`, `−${peso(order.discount)}`] : null,
+      order.order_type === 'delivery' ? ['Delivery fee', order.fee_to_confirm ? 'We call you with the fee' : peso(order.delivery_fee)] : null,
+      ['Total', peso(order.total)],
+      order.paid_online ? ['Payment', 'Paid with GCash']
+        : order.order_type === 'delivery' ? ['Payment', `Cash on delivery${order.change_due ? `: ${peso(order.cash)}, change ${peso(order.change_due)}` : ''}`]
+          : ['Payment', 'Pay at the counter'],
+    ].filter(Boolean).map(([k, v]) => `      <div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('\n');
+    body = `    <dl class="about__facts">\n${facts}\n    </dl>\n    <h2>Items</h2>\n    <ul>\n${items}\n    </ul>\n    <dl class="about__facts">\n${money}\n    </dl>`;
+  }
+  return fs.readFileSync(path.join(ROOT, 'templates', 'order-status.html'), 'utf8')
+    .replace('<!--REFRESH-->', refresh)
+    .replaceAll('<!--TITLE-->', esc(title))
+    .replace('<!--STATUS-->', esc(line))
+    .replace('<!--BODY-->', () => body)
+    .replace('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
+    .replace('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
+    .replace('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()))
+    .replace('<!--FOOT_NAP-->', () => seo.footHtml())
+    .replace('<!--POLICY_LINKS-->', () => policyLinksHtml());
+}
+
+module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, buildPolicyHtml, buildOrderStatusHtml, POLICIES, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };

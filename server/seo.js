@@ -222,7 +222,7 @@ ${faqs().map(([q, a]) => `      <div class="faq__item">\n        <h3>${esc(q)}</
 /** Search engines and AI crawlers are welcome on the public pages; the admin,
     the POS and the API are left out. */
 function robotsTxt() {
-  return `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\n\nSitemap: ${BUSINESS.url}/sitemap.xml\n`;
+  return `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /api/\nDisallow: /order/\n\nSitemap: ${BUSINESS.url}/sitemap.xml\n`;
 }
 
 function sitemapXml(now = new Date()) {

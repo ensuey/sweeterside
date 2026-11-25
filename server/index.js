@@ -23,6 +23,7 @@ const suggestions = require('./suggestions');
 const gallery = require('./gallery');
 const testimonials = require('./testimonials');
 const seo = require('./seo');
+const { BUSINESS } = require('./business');
 const blocklist = require('./blocklist');
 const { PHONE_MESSAGE, displayPhPhone } = require('./phone');
 const staff = require('./staff');
@@ -251,19 +252,38 @@ function publicOrder(order) {
   };
 }
 
-/** Where PayMongo sends the customer back: the shop's own address. */
+/** Where PayMongo sends the customer back, and where text links point: the
+    shop's own address. Without a request (PayMongo's webhook), the public one. */
 function siteUrl(req) {
   const canonical = String(process.env.CANONICAL_HOST || '').trim().toLowerCase();
   if (canonical) return `https://${canonical}`;
+  if (!req) return BUSINESS.url;
   const host = String(req.headers.host || '');
   return `${isSecure(req) ? 'https' : 'http'}://${/^[a-z0-9.-]+(:\d+)?$/i.test(host) ? host : 'localhost'}`;
 }
 
-// A GCash order is announced to the kitchen once it is paid.
+/** The customer's own status page for an online order, or '' when it has no key. */
+function statusUrl(id, req) {
+  const ref = orders.customerRef(id);
+  return ref ? `${siteUrl(req)}/order/${ref}` : '';
+}
+
+/** The owner's alerts, and the customer's "we got your order" text. */
+function announce(order, req) {
+  push.alert(push.orderMessage(order));
+  sms.alert(push.orderMessage(order));
+  sms.confirmCustomer(order, statusUrl(order.id, req),
+    { willCall: order.status === 'new' && orders.requiresConfirmation(order.order_type) });
+}
+
+// A GCash order is announced to the kitchen (and the customer) once it is paid.
 paymongo.onPaid((id) => {
   const order = orders.get(id);
-  if (order) { push.alert(push.orderMessage(order)); sms.alert(push.orderMessage(order)); }
+  if (order) announce(order);
 });
+
+/* Customers opening their order's status page from the link in their text. */
+const statusLimiter = rateLimiter(60, 10 * 60 * 1000);
 
 /* Cake bookings and their reference photos are public writes as well. */
 const cakeLimiter = rateLimiter(3, 10 * 60 * 1000);
@@ -515,6 +535,21 @@ async function route(req, res) {
 
   if (Object.hasOwn(render.POLICIES, pathname) && (method === 'GET' || method === 'HEAD')) {
     return sendHtml(res, 200, render.buildPolicyHtml(pathname), customerHeaders());
+  }
+
+  // The customer's own order, from the link in their text. The key is the
+  // only way in; the page shows no name, phone or address, and no trackers.
+  if (pathname.startsWith('/order/') && (method === 'GET' || method === 'HEAD')) {
+    const headers = { 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' };
+    const ip = clientIp(req);
+    if (statusLimiter.limited(ip)) return sendHtml(res, 429, render.buildOrderStatusHtml(null, { busy: true }), headers);
+    statusLimiter.record(ip);
+    const order = orders.byRef(pathname.slice('/order/'.length));
+    if (!order) return sendHtml(res, 404, render.buildOrderStatusHtml(null), headers);
+    return sendHtml(res, 200, render.buildOrderStatusHtml(publicOrder(order), {
+      status: order.status, awaiting: order.pay_status === 'awaiting',
+      willCall: orders.requiresConfirmation(order.order_type),
+    }), headers);
   }
 
   /* ---- health check (for the hosting platform) ---- */
@@ -770,9 +805,8 @@ async function route(req, res) {
         throw err;
       }
     }
-    push.alert(push.orderMessage(order));
-    sms.alert(push.orderMessage(order));
-    return sendJson(res, 201, { order: publicOrder(order) });
+    announce(order, req);
+    return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req) });
   }
 
   /* ---- GCash (PayMongo): the customer's way back, and PayMongo's webhook ---- */
@@ -786,7 +820,7 @@ async function route(req, res) {
     if (!found) return sendJson(res, 404, { error: 'We could not find that order. Please call us.' });
     // PayMongo unreachable: still waiting; the page asks again, the sweep settles it later.
     const status = await paymongo.settle(found).catch(() => 'awaiting');
-    return sendJson(res, 200, { status, order: publicOrder(orders.get(found.id)) });
+    return sendJson(res, 200, { status, order: publicOrder(orders.get(found.id)), status_url: statusUrl(found.id, req) });
   }
   // Back without paying: the order is cancelled (unless PayMongo says it was paid after all).
   if (pathname === '/api/orders/payment/cancel' && method === 'POST') {

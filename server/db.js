@@ -716,7 +716,8 @@ addMissingColumns('order_items', { option_ids: "TEXT NOT NULL DEFAULT '[]'" });
    stays out of the queue and the alerts), 'paid' once PayMongo confirms it,
    'late' when a payment arrived after the order was cancelled for not being
    paid (to refund in PayMongo). pay_token is the customer's own key to their
-   order on the way back from PayMongo. The GCash money is not drawer cash, so
+   order: the status link in their text, and the way back from PayMongo. Every
+   online order has one since 2026-11-25; older cash orders have none. The GCash money is not drawer cash, so
    it is kept on the order, not in payments. */
 addMissingColumns('orders', {
   pay_method: "TEXT NOT NULL DEFAULT ''",
