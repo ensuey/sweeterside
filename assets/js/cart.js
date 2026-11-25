@@ -1051,8 +1051,15 @@
     return errors;
   }
 
-  function showDone(order) {
+  function showDone(order, statusUrl) {
     var counter = order.order_type !== 'delivery';
+    // The same link as in the customer's text, on this site only.
+    var statusPath = '';
+    try { statusPath = new URL(statusUrl || '', window.location.href).pathname; } catch (e) { statusPath = ''; }
+    var statusLink = $('done-status');
+    statusLink.hidden = !/^\/order\/\d{1,10}\.[A-Za-z0-9_-]{32}$/.test(statusPath);
+    if (statusLink.hidden) statusLink.removeAttribute('href');
+    else statusLink.href = statusPath;
     $('done-id').textContent = '#' + order.id;
     $('done-total').textContent = money(order.total);
     $('done-discount-row').hidden = !order.discount;
@@ -1192,7 +1199,7 @@
         save();
         form.reset();
         setType(type); // reset() unchecked the type; keep it for next time
-        showDone(r.data.order);
+        showDone(r.data.order, r.data.status_url);
         return;
       }
       if (r.status === 422 && r.data.fields) {
@@ -1435,7 +1442,7 @@
   }
 
   /** Paid: the order is placed. Empty the cart and show the confirmation. */
-  function finishPaid(order) {
+  function finishPaid(order, statusUrl) {
     lines = [];
     setVoucher(null);
     token = null;
@@ -1443,7 +1450,7 @@
     form.reset();
     setType(type);
     paying.hidden = true;
-    showDone(order);
+    showDone(order, statusUrl);
   }
 
   /** What happens to the cart: pay again now, or (closed by now) next time. */
@@ -1474,7 +1481,7 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: ref }),
       }).then(function (res) { return res.json().catch(function () { return {}; }); }).then(function (d) {
         // Paid after all (it happens when GCash was slow to send them back).
-        if (d.status === 'paid') return checkPayment(ref).then(function (r) { finishPaid(r.data.order); });
+        if (d.status === 'paid') return checkPayment(ref).then(function (r) { finishPaid(r.data.order, r.data.status_url); });
         notPaid('You left GCash before paying, so your order was not placed. ' + cartKept());
       }).catch(function () {
         notPaid('Could not reach the shop. Check your connection. ' + cartKept());
@@ -1484,7 +1491,7 @@
     var tries = 0;
     (function poll() {
       checkPayment(ref).then(function (r) {
-        if (r.ok && r.data.status === 'paid') return finishPaid(r.data.order);
+        if (r.ok && r.data.status === 'paid') return finishPaid(r.data.order, r.data.status_url);
         if (!r.ok || r.data.status === 'cancelled') {
           return notPaid('Your GCash payment did not go through, so your order was not placed. ' + cartKept());
         }

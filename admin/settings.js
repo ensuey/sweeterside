@@ -136,25 +136,26 @@ async function saveGcash() {
 function showSms(s) {
   $('sms-numbers').value = s.sms_numbers;
   $('sms-on').checked = s.sms_on;
+  $('sms-customer-on').checked = s.sms_customer_on;
   $('sms-status').textContent = s.sms_enabled
     ? 'Sent through Semaphore. Each text uses Semaphore credits. It says the order number, type and total, never the customer\'s details.'
     : 'Semaphore is not set up on the server yet, so no texts are sent. The numbers are kept for when it is.';
 }
 
-/** The on/off switch saves at once; the numbers are kept either way. */
-async function saveSmsOn() {
-  const err = $('sms-on-err');
+/** An on/off switch saves at once; the numbers are kept either way. */
+async function saveSmsSwitch(id, key, onText, offText) {
+  const err = $(`${id}-err`);
   err.hidden = true;
-  $('sms-on').disabled = true;
+  $(id).disabled = true;
   try {
-    const s = await api('/api/settings', { method: 'PUT', body: { sms_on: $('sms-on').checked } });
+    const s = await api('/api/settings', { method: 'PUT', body: { [key]: $(id).checked } });
     showSms(s);
-    toast(s.sms_on ? 'Texts for new orders are on.' : 'Texts for new orders are off. Your numbers are kept.');
+    toast(s[key] ? onText : offText);
   } catch (e) {
     err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
     err.hidden = false;
   } finally {
-    $('sms-on').disabled = false;
+    $(id).disabled = false;
   }
 }
 
@@ -592,7 +593,10 @@ $('confirm-form').addEventListener('submit', saveConfirm);
 $('tracking-form').addEventListener('submit', saveTracking);
 $('gcash-on').addEventListener('change', saveGcash);
 $('sms-form').addEventListener('submit', saveSms);
-$('sms-on').addEventListener('change', saveSmsOn);
+$('sms-on').addEventListener('change', () => saveSmsSwitch('sms-on', 'sms_on',
+  'Texts for new orders are on.', 'Texts for new orders are off. Your numbers are kept.'));
+$('sms-customer-on').addEventListener('change', () => saveSmsSwitch('sms-customer-on', 'sms_customer_on',
+  'Customers get a text when we get their order.', 'Customers no longer get a text.'));
 $('share-file').addEventListener('change', uploadShare);
 $('share-remove').addEventListener('click', removeShare);
 

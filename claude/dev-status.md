@@ -405,6 +405,14 @@ All merged and deployed (Fly v15–v28).
   business and a no-recurring-payments clause) and `/refunds`. The words are in
   `templates/policies/`; bump `POLICY_UPDATED` in `server/render.js` when they
   change. Linked from every customer footer, the checkout and the cake form.
+- **Customer order text and status page:** every online order gets a key
+  (`pay_token`, which GCash already had). When the order is placed (GCash: once
+  paid) the customer gets one text through Semaphore: "We got your order #12
+  (P320). Status: <link>". The link opens `/order/<id>.<key>`, a server-rendered
+  page with the items, totals and status, refreshing every minute while active,
+  with no personal data. The confirmation screen shows the same link. Settings
+  switch "Text customers…" (`sms_customer_on`, on by default). Tests in
+  `test/order-status.test.js`.
   - **Sections:** who we are, what we serve (today's menu with prices, up
     to 8 per category), custom cakes (sizes "from" prices and days of
     notice), how to order, quick facts, and visit us.

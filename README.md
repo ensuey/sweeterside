@@ -921,6 +921,9 @@ tracking IDs or secrets. Staging has its own admin account and staff PINs.
 | `SEMAPHORE_API_KEY` | unset | Semaphore key for SMS order alerts to the numbers in Settings → Order alerts. Set it yourself: `flyctl secrets set SEMAPHORE_API_KEY=… -a sweeterside`. Unset, no texts are sent |
 | `SEMAPHORE_SENDER` | unset | The sender name Semaphore approved for the account. Semaphore sends nothing until the account has an approved sender name |
 
+Customers also get one text when we get their order (GCash orders: once paid), with a link to their order's status page (`/order/<id>.<key>`). The page shows the items, total and status, never the name, phone or address. Turn it off in Settings → Order alerts ("Text customers…"). Each text uses one Semaphore credit.
+
+
 ## Still to fill in
 
 - **No contact details, address, hours or ordering link.** The footer is a stub.
