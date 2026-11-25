@@ -122,25 +122,25 @@ function alert(message) {
 }
 
 /**
- * The customer's "we got your order" text, with the link to its status page.
- * Plain characters and at most 160, so the link is never cut off.
- * 'Sweeter Side: We got your order #12 (P320). Status: https://sweeterside.ph/order/12.<key>'
+ * The customer's "we got your order" text. No link: PH networks drop
+ * business texts with links that are not approved, while Semaphore still
+ * says "Sent". The status link is on the confirmation screen instead.
+ * 'Sweeter Side: We got your order #12 (P320). We will call to confirm.'
  */
-function customerText(order, link, { willCall = false } = {}) {
+function customerText(order, { willCall = false } = {}) {
   const total = `P${Number(order.total).toLocaleString('en-US')}`;
-  const text = `Sweeter Side: We got your order #${order.id} (${total}).${willCall ? ' We will call to confirm.' : ''} Status: ${link}`;
-  return text.length <= 160 ? text : `Order #${order.id} received. Status: ${link}`;
+  return plainSms(`Sweeter Side: We got your order #${order.id} (${total}). ${willCall ? 'We will call to confirm.' : 'Thank you!'}`);
 }
 
 /**
  * Text the customer that we got their order. Fire and forget, after the
  * response has gone. Their number is never logged, only the order number.
  */
-function confirmCustomer(order, link, options) {
+function confirmCustomer(order, options) {
   const to = normalizePhPhone(order.phone_norm || order.phone || '');
-  if (!enabled() || !customerOn() || !to || !link) return;
+  if (!enabled() || !customerOn() || !to) return;
   setImmediate(() => {
-    send(customerText(order, link, options), [to])
+    send(customerText(order, options), [to])
       .then((r) => console.log(`[sms] customer #${order.id} ${r.sent ? 'sent' : 'failed'}`))
       .catch(() => {});
   });

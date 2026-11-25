@@ -125,7 +125,7 @@ test('new online orders and paid GCash orders both send the text', () => {
   // One place sends the alerts (announce); placing a cash order and a GCash payment both call it.
   assert.strictEqual((src.match(/sms\.alert\(push\.orderMessage\(order\)\)/g) || []).length, 1);
   assert.match(src, /paymongo\.onPaid\([\s\S]{0,120}announce\(order\)/);
-  assert.match(src, /announce\(order, req\);\s+return sendJson\(res, 201/);
+  assert.match(src, /announce\(order\);\s+return sendJson\(res, 201/);
 });
 
 test('texts use plain characters only, at most 160: one normal SMS, one credit', () => {

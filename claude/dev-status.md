@@ -408,9 +408,11 @@ All merged and deployed (Fly v15–v28).
 - **Customer order text and status page:** every online order gets a key
   (`pay_token`, which GCash already had). When the order is placed (GCash: once
   paid) the customer gets one text through Semaphore: "We got your order #12
-  (P320). Status: <link>". The link opens `/order/<id>.<key>`, a server-rendered
+  (P320). We will call to confirm." No link: PH networks drop business texts
+  with links that are not approved, though Semaphore says "Sent" (#210, live).
+  The confirmation screen links `/order/<id>.<key>`, a server-rendered
   page with the items, totals and status, refreshing every minute while active,
-  with no personal data. The confirmation screen shows the same link. Settings
+  with no personal data. Settings
   switch "Text customers…" (`sms_customer_on`, on by default). Tests in
   `test/order-status.test.js`.
   - **Sections:** who we are, what we serve (today's menu with prices, up
