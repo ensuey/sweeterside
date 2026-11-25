@@ -78,11 +78,12 @@ test('a cash order texts the customer once, with no link, and still alerts the o
   await settle();
   const mine = sentTo(CUSTOMER);
   assert.strictEqual(mine.length, 1, 'one text to the customer');
-  assert.ok(mine[0].message.startsWith(`Sweeter Side: We got your order #${first.id} (P258).`), mine[0].message);
+  // Delivery needs a confirmation call by default.
+  assert.strictEqual(mine[0].message, `We got your order #${first.id} with the amount of P258.\nWe will call you to confirm.\nThank you!\n\nSweeterSide`);
   // PH networks drop business texts with links that are not approved, though Semaphore says "Sent".
   assert.ok(!/https?:|www\.|sweeterside\.ph|\/order\//i.test(mine[0].message), 'no link in the text');
   assert.ok(mine[0].message.length <= 160);
-  assert.match(mine[0].message, /^[\x20-\x7E]*$/, 'plain characters only');
+  assert.match(mine[0].message, /^[\x20-\x7E\n]*$/, 'plain characters and line breaks only');
   assert.ok(!mine[0].message.includes('Juan'), 'no name in the text');
   assert.strictEqual(sentTo(OWNER).length, 1, 'the owner alert is separate');
   assert.ok(!('pay_token' in orders.get(first.id)));
@@ -184,7 +185,10 @@ test('a GCash order texts the customer only once it is paid', async () => {
   await settle();
   const mine = sentTo(CUSTOMER);
   assert.strictEqual(mine.length, 1);
-  assert.ok(mine[0].message.startsWith(`Sweeter Side: We got your order #${order.id} (P258).`), mine[0].message);
+  assert.ok(mine[0].message.startsWith(`We got your order #${order.id} with the amount of P258.\n`), mine[0].message);
+  assert.ok(mine[0].message.endsWith('Thank you!\n\nSweeterSide'), mine[0].message);
+  // No call needed: the call line is left out.
+  assert.strictEqual(sms.customerText({ id: 7, total: 1250 }), 'We got your order #7 with the amount of P1,250.\nThank you!\n\nSweeterSide');
   assert.ok(!mine[0].message.includes('http'), 'no link');
 });
 

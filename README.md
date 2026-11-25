@@ -921,7 +921,7 @@ tracking IDs or secrets. Staging has its own admin account and staff PINs.
 | `SEMAPHORE_API_KEY` | unset | Semaphore key for SMS order alerts to the numbers in Settings → Order alerts. Set it yourself: `flyctl secrets set SEMAPHORE_API_KEY=… -a sweeterside`. Unset, no texts are sent |
 | `SEMAPHORE_SENDER` | unset | The sender name Semaphore approved for the account. Semaphore sends nothing until the account has an approved sender name |
 
-Customers also get one text when we get their order (GCash orders: once paid): "Sweeter Side: We got your order #12 (P320). We will call to confirm." The text has no link: PH networks drop business texts with links that are not approved, while Semaphore still shows "Sent". The confirmation screen links the order's status page (`/order/<id>.<key>`), which shows the items, total and status, never the name, phone or address. Turn it off in Settings → Order alerts ("Text customers…"). Each text uses one Semaphore credit.
+Customers also get one text when we get their order (GCash orders: once paid): "We got your order #12 with the amount of P320. / We will call you to confirm. / Thank you! / SweeterSide", on separate lines. The text has no link: PH networks drop business texts with links that are not approved, while Semaphore still shows "Sent". The confirmation screen links the order's status page (`/order/<id>.<key>`), which shows the items, total and status, never the name, phone or address. Turn it off in Settings → Order alerts ("Text customers…"). Each text uses one Semaphore credit.
 
 
 ## Still to fill in
