@@ -438,6 +438,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date(), 
     .replace('<!--SUGGEST-->', () => esc(JSON.stringify(suggestions.forMenu())))
     .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
     .replace('<!--GCASH-->', require('./paymongo').offeredTo({ admin: !!viewer.admin }) || '0')
+    .replace('<!--SOMEONE-->', require('./someone-pays').offered() ? '1' : '0')
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
@@ -569,7 +570,10 @@ const ORDER_TYPE_LABEL = { delivery: 'Delivery', pickup: 'Pick-up', dinein: 'Din
 const HANDOVER_TEXT = { delivery: 'Your order is on the way.', pickup: 'Your order is ready for pick-up.', dinein: 'Your order is served.' };
 
 /** The status line a customer sees for their order. */
-function customerStatus(order, { status, awaiting = false, willCall = false }) {
+function customerStatus(order, { status, awaiting = false, willCall = false, someone = '' }) {
+  // Someone else pays: their payment first, then the owner's check.
+  if (status !== 'cancelled' && someone === 'awaiting') return 'Waiting for the payment from the person you sent the link to.';
+  if (status !== 'cancelled' && someone === 'checking') return 'We are checking the payment.';
   if (awaiting) return 'Waiting for your GCash payment.';
   return {
     new: willCall ? 'We got your order. We will call you to confirm it.' : 'We got your order.',
@@ -586,7 +590,7 @@ function customerStatus(order, { status, awaiting = false, willCall = false }) {
  * publicOrder() view (no name, phone or address); null shows "not found", or
  * "too many tries" with busy.
  */
-function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCall = false, busy = false } = {}) {
+function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCall = false, busy = false, someone = '' } = {}) {
   let title; let line; let body = ''; let refresh = '';
   if (!order) {
     title = busy ? 'Please wait a minute' : 'Order not found';
@@ -594,7 +598,7 @@ function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCal
       : 'Check that the link is complete, or call us.';
   } else {
     title = `Order #${order.id}`;
-    line = customerStatus(order, { status, awaiting, willCall });
+    line = customerStatus(order, { status, awaiting, willCall, someone });
     if (['new', 'confirmed', 'preparing', 'delivering'].includes(status)) {
       refresh = '<meta http-equiv="refresh" content="60">'; // the status updates by itself
     }
@@ -611,7 +615,8 @@ function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCal
       order.discount ? [`Discount${order.voucher_code ? ` (${order.voucher_code})` : ''}`, `−${peso(order.discount)}`] : null,
       order.order_type === 'delivery' ? ['Delivery fee', order.fee_to_confirm ? 'We call you with the fee' : peso(order.delivery_fee)] : null,
       ['Total', peso(order.total)],
-      order.paid_online ? ['Payment', 'Paid with GCash']
+      order.pay_method === 'someone' ? ['Payment', order.paid_online ? 'Paid by someone else' : 'Someone else is paying']
+        : order.paid_online ? ['Payment', 'Paid with GCash']
         : order.order_type === 'delivery' ? ['Payment', `Cash on delivery${order.change_due ? `: ${peso(order.cash)}, change ${peso(order.change_due)}` : ''}`]
           : ['Payment', 'Pay at the counter'],
     ].filter(Boolean).map(([k, v]) => `      <div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('\n');
@@ -629,4 +634,82 @@ function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCal
     .replace('<!--POLICY_LINKS-->', () => policyLinksHtml());
 }
 
-module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, buildPolicyHtml, buildOrderStatusHtml, POLICIES, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };
+/**
+ * The payer's page for someone-pays orders: the order, the shop's QR codes
+ * and accounts, and the reference form. view is someonePays.payView() (the
+ * receiver's first name only); null shows "not found", or "too many tries"
+ * with busy. details is someonePays.details().
+ */
+function buildPayHtml(view, details = {}, { busy = false } = {}) {
+  let title; let line; let body = '';
+  if (!view) {
+    title = busy ? 'Please wait a minute' : 'Order not found';
+    line = busy ? 'You opened this page many times. Please try again in a few minutes.'
+      : 'Check that the link is complete, or contact us.';
+  } else {
+    title = view.first_name ? `Pay for ${view.first_name}'s order` : `Pay for order #${view.id}`;
+    const waiting = view.pay_status === 'awaiting' && view.status !== 'cancelled';
+    line = view.status === 'cancelled' && view.pay_status === 'late' ? 'This order was cancelled before your payment came in. We have your reference and will refund you.'
+      : view.status === 'cancelled' ? 'This order was cancelled. Please contact us.'
+      : view.pay_status === 'checking' ? 'Thank you. We are checking your payment and will start the order.'
+        : view.pay_status === 'paid' ? 'Paid. Thank you! The order is being prepared.'
+          : `Order #${view.id}. We start it once your payment is confirmed.`;
+    const facts = [
+      ['Order', ORDER_TYPE_LABEL[view.order_type] || ''],
+      ['When', view.scheduled_label || (view.pickup_at ? `Pick-up at ${view.pickup_at}` : '')],
+      view.delivery_area ? ['Area', view.delivery_area] : null,
+    ].filter((f) => f && f[1]).map(([k, v]) => `      <div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('\n');
+    const items = view.items.map((i) => `      <li>${esc(i.qty)} × ${esc(i.name)}${i.options_text ? ` <span class="about__price">(${esc(i.options_text)})</span>` : ''}</li>`).join('\n');
+    const money = [
+      ['Subtotal', peso(view.subtotal)],
+      view.discount ? [`Discount${view.voucher_code ? ` (${view.voucher_code})` : ''}`, `−${peso(view.discount)}`] : null,
+      view.order_type === 'delivery' ? ['Delivery fee', peso(view.delivery_fee)] : null,
+      ['Total', peso(view.total)],
+    ].filter(Boolean).map(([k, v]) => `      <div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('\n');
+    body = `    <dl class="about__facts">\n${facts}\n    </dl>\n    <h2>Items</h2>\n    <ul>\n${items}\n    </ul>\n    <dl class="about__facts">\n${money}\n    </dl>`;
+    if (waiting) {
+      const qr = (rel, label) => (rel ? `\n      <img class="pay__qr" src="/${encPath(rel)}" alt="${esc(label)} QR code" width="240" height="240">
+      <p><a class="pay__save" href="/${encPath(rel)}" download>Save QR</a></p>` : '');
+      const ways = [
+        details.gcash_number ? `    <div class="pay__way">\n      <h3>GCash</h3>${qr(details.qr_gcash, 'GCash')}
+      <p>${esc(details.gcash_name)}${details.gcash_name ? '<br>' : ''}<strong>${esc(details.gcash_number)}</strong></p>\n    </div>` : '',
+        details.bank_details ? `    <div class="pay__way">\n      <h3>Bank transfer</h3>${qr(details.qr_bank, 'Bank')}
+      <p class="pay__bank">${esc(details.bank_details)}</p>\n    </div>` : '',
+      ].filter(Boolean).join('\n');
+      body += `
+    <h2>How to pay</h2>
+    <p class="pay__amount">Send exactly <strong>${esc(peso(view.total))}</strong>.</p>
+${view.pay_by ? `    <p>Pay by <strong>${esc(view.pay_by)}</strong>, or the order is cancelled.</p>\n` : ''}
+${details.qr_gcash || details.qr_bank ? '    <p>On the same phone? Tap Save QR, then in your GCash or bank app choose Scan QR and upload it from your photos.</p>\n' : ''}${ways}
+    <h2>After you pay</h2>
+    <form class="pay__form" id="pay-form" novalidate>
+      <fieldset>
+        <legend>You paid by</legend>
+        ${details.gcash_number ? '<label><input type="radio" name="method" value="gcash" checked> GCash</label>' : ''}
+        ${details.bank_details ? `<label><input type="radio" name="method" value="bank"${details.gcash_number ? '' : ' checked'}> Bank transfer</label>` : ''}
+      </fieldset>
+      <label for="pay-reference">Reference number</label>
+      <input id="pay-reference" name="reference" required minlength="4" maxlength="60" autocomplete="off" inputmode="text">
+      <label for="pay-name">Your name (optional)</label>
+      <input id="pay-name" name="name" maxlength="60" autocomplete="name">
+      <p class="pay__error" id="pay-error" role="alert" hidden></p>
+      <button class="checkout__submit" type="submit">I've paid</button>
+    </form>
+    <p class="pay__done" id="pay-done" hidden>Thank you. We are checking your payment and will start the order.</p>
+    <script src="/assets/js/pay.js" defer></script>`;
+    }
+  }
+  return fs.readFileSync(path.join(ROOT, 'templates', 'order-status.html'), 'utf8')
+    .replace('<!--REFRESH-->', '')
+    .replaceAll('<!--TITLE-->', esc(title))
+    .replace('<!--STATUS-->', esc(line))
+    .replace('<!--BODY-->', () => body)
+    .replace('Questions about your order?', 'Questions about this order?')
+    .replace('<!--SHOP_TEL-->', esc(BUSINESS.phone.tel))
+    .replace('<!--SHOP_PHONE-->', esc(BUSINESS.phone.display))
+    .replace('<!--FACEBOOK_URL-->', esc(orders.facebookUrl()))
+    .replace('<!--FOOT_NAP-->', () => seo.footHtml())
+    .replace('<!--POLICY_LINKS-->', () => policyLinksHtml());
+}
+
+module.exports = { buildHtml, buildCakesHtml, buildAboutHtml, buildPolicyHtml, buildOrderStatusHtml, buildPayHtml, POLICIES, writeStatic, menuGroups, esc, encPath, OUTPUT, TEMPLATE };

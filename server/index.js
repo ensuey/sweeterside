@@ -36,6 +36,7 @@ const reports = require('./reports');
 const audit = require('./audit');
 const stock = require('./stock');
 const paymongo = require('./paymongo');
+const someonePays = require('./someone-pays');
 const staging = require('./staging');
 const corrections = require('./corrections');
 const credit = require('./credit');
@@ -237,6 +238,11 @@ const voucherLimiter = rateLimiter(20, 10 * 60 * 1000);
 const paymentLimiter = rateLimiter(60, 10 * 60 * 1000);
 const webhookLimiter = rateLimiter(300, 10 * 60 * 1000);
 
+/* Someone else pays: the payer's page, and the reference they send. Every
+   reference counts, so nobody can try keys one after another. */
+const payPageLimiter = rateLimiter(60, 10 * 60 * 1000);
+const payRefLimiter = rateLimiter(10, 10 * 60 * 1000);
+
 /** What the customer's confirmation screen needs about their own order. */
 function publicOrder(order) {
   return {
@@ -274,6 +280,15 @@ function announce(order) {
   sms.alert(push.orderMessage(order));
   sms.confirmCustomer(order, { willCall: order.status === 'new' && orders.requiresConfirmation(order.order_type) });
 }
+
+// Someone else pays: the owner gets a text to check the payment. Once the
+// owner says it arrived, the kitchen and the receiver hear about the order;
+// the owner is not texted again.
+someonePays.onReference((order) => sms.alert(someonePays.referenceMessage(order)));
+someonePays.onReceived((order) => {
+  push.alert(push.orderMessage(order));
+  sms.confirmCustomer(order, { willCall: false });
+});
 
 // A GCash order is announced to the kitchen (and the customer) once it is paid.
 paymongo.onPaid((id) => {
@@ -547,8 +562,21 @@ async function route(req, res) {
     if (!order) return sendHtml(res, 404, render.buildOrderStatusHtml(null), headers);
     return sendHtml(res, 200, render.buildOrderStatusHtml(publicOrder(order), {
       status: order.status, awaiting: order.pay_status === 'awaiting',
+      someone: order.pay_method === 'someone' ? order.pay_status : '',
       willCall: orders.requiresConfirmation(order.order_type),
     }), headers);
+  }
+
+  // The payer's page for an order someone else pays. The payer's own key is
+  // the only way in; the page shows the receiver's first name, no phone or address.
+  if (pathname.startsWith('/pay/') && (method === 'GET' || method === 'HEAD')) {
+    const headers = { 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' };
+    const ip = clientIp(req);
+    if (payPageLimiter.limited(ip)) return sendHtml(res, 429, render.buildPayHtml(null, {}, { busy: true }), headers);
+    payPageLimiter.record(ip);
+    const order = someonePays.byPayerRef(pathname.slice('/pay/'.length));
+    if (!order) return sendHtml(res, 404, render.buildPayHtml(null), headers);
+    return sendHtml(res, 200, render.buildPayHtml(someonePays.payView(order), someonePays.details()), headers);
   }
 
   /* ---- health check (for the hosting platform) ---- */
@@ -804,8 +832,25 @@ async function route(req, res) {
         throw err;
       }
     }
+    // Someone else pays: nobody is alerted until the owner sees the money.
+    if (order.pay_method === 'someone') {
+      return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req),
+        pay_url: `${siteUrl(req)}/pay/${someonePays.payerRef(order.id)}` });
+    }
     announce(order);
     return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req) });
+  }
+
+  // The payer's reference number, from the payer's page. body: { ref, method, reference, name }.
+  if (pathname === '/api/pay/reference' && method === 'POST') {
+    if (!isJson(req)) return sendJson(res, 415, { error: 'Send it as JSON.' });
+    const ip = clientIp(req);
+    if (payRefLimiter.limited(ip)) return sendJson(res, 429, { error: 'Please wait a few minutes and try again.' });
+    payRefLimiter.record(ip);
+    const body = await readJson(req);
+    const order = someonePays.submitReference(body.ref, body);
+    console.log(`[someone-pays] #${order.id} reference sent (${order.payer_method})`);
+    return sendJson(res, 200, { ok: true });
   }
 
   /* ---- GCash (PayMongo): the customer's way back, and PayMongo's webhook ---- */
@@ -925,6 +970,17 @@ async function route(req, res) {
       { reason: body.reason === undefined ? undefined : String(body.reason) });
     if (!order) return sendJson(res, 404, { error: 'That order no longer exists.' });
     return sendJson(res, 200, { order });
+  }
+
+  // Someone else pays: the owner checked their GCash or bank app.
+  const checkMatch = pathname.match(/^\/api\/orders\/(\d+)\/payment-(received|not-received)$/);
+  if (checkMatch && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const id = Number(checkMatch[1]);
+    if (checkMatch[2] === 'received') someonePays.received(id);
+    else someonePays.notReceived(id);
+    console.log(`[someone-pays] #${id} payment ${checkMatch[2]}`);
+    return sendJson(res, 200, { order: orders.get(id) });
   }
 
   // Delete a (test) order for good. The owner's PIN every time, throttled like
@@ -1729,6 +1785,12 @@ if (require.main === module) {
 
   // GCash orders nobody paid for are cancelled after paymongo.PAY_MINUTES.
   setInterval(() => { paymongo.expireStale().catch(() => {}); }, 60 * 1000).unref();
+  setInterval(() => {
+    try {
+      const n = someonePays.expireUnpaid();
+      if (n) console.log(`[someone-pays] ${n} unpaid order(s) cancelled`);
+    } catch (err) { console.error('[someone-pays] sweep failed', err.message); }
+  }, 60 * 1000).unref();
 
   server.listen(PORT, HOST, () => {
     console.log(`Menu   http://${HOST}:${PORT}/`);

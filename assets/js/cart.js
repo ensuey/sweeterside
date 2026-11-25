@@ -32,6 +32,9 @@
   // 'live' for everyone; 'test' (PayMongo test keys) only for the signed-in owner.
   var gcashMode = $('pay') ? $('pay').dataset.gcash : '0';
   var gcashOn = gcashMode === 'live' || gcashMode === 'test';
+  // Someone else pays through a link: switched on with the shop's details set.
+  var someoneOn = !!$('pay') && $('pay').dataset.someone === '1';
+  var SOMEONE_MINUTES = 180; // the server's someone-pays LEAD_HOURS
   var leaving = false; // on the way to GCash's page
   var submitBtn = $('checkout-submit');
 
@@ -303,7 +306,9 @@
 
   /** Minutes the cart's made-to-order items need, from now (0: none). */
   function madeMinutes() {
-    return lines.reduce(function (m, l) { return Math.max(m, (catalog[l.id] ? catalog[l.id].lead : 0) * 60); }, 0);
+    var made = lines.reduce(function (m, l) { return Math.max(m, (catalog[l.id] ? catalog[l.id].lead : 0) * 60); }, 0);
+    // Someone else pays: time for them to pay and for us to check it.
+    return Math.max(made, payMethod() === 'someone' ? SOMEONE_MINUTES : 0);
   }
 
   /** The start times (minutes) offered on a day. */
@@ -448,7 +453,9 @@
       note = 'Pick-up is closed for now.';
     }
     var made = madeMinutes() / 60;
-    if (made) {
+    if (made && payMethod() === 'someone') {
+      note = (note ? note + ' ' : '') + 'When someone else pays, the times start ' + made + ' hours from now, so there is time to pay.';
+    } else if (made) {
       note = (note ? note + ' ' : '') + 'Your cart has a made-to-order item: it is ready ' + made +
         (made === 1 ? ' hour' : ' hours') + ' from now at the earliest, so the times start then.';
     } else if (enabledTypes.indexOf('dinein') > -1 && open.indexOf('dinein') === -1 && open.length) {
@@ -810,46 +817,61 @@
     $('cart-total').textContent = money(total());
     renderPay();
     var gcash = payMethod() === 'gcash';
+    var someone = payMethod() === 'someone';
     var feeLater = feeNote(type, a, subtotal() - discount(), freeMin, otherFee);
     submitBtn.textContent = sending ? (gcash ? 'Opening GCash…' : 'Placing order…')
-      : (gcash ? 'Pay with GCash · ' : 'Place order · ') + money(total()) + feeLater;
+      : (gcash ? 'Pay with GCash · ' : someone ? 'Send order · ' : 'Place order · ') + money(total()) + feeLater;
 
     renderChange();
   }
 
   /* ---------------------------- paying with GCash ---------------------------- */
 
-  /** 'gcash' when chosen and allowed, else 'cash' (in person). */
+  /** 'gcash' or 'someone' when chosen and allowed, else 'cash' (in person). */
   function payMethod() {
-    if (!gcashOn || !form.elements.pay || form.elements.pay.value !== 'gcash') return 'cash';
+    var chosen = form.elements.pay ? form.elements.pay.value : '';
     var a = type === 'delivery' ? area() : null;
-    return a && a.other ? 'cash' : 'gcash';
+    if (a && a.other) return 'cash';
+    if (chosen === 'gcash' && gcashOn) return 'gcash';
+    if (chosen === 'someone' && someoneOn && (type === 'delivery' || type === 'pickup')) return 'someone';
+    return 'cash';
   }
 
   /** The pay choice, and what changes with it: the cash field and the notes. */
   function renderPay() {
-    $('pay').hidden = !gcashOn || type === null;
-    if (!gcashOn) return;
+    var someoneShown = someoneOn && type !== 'dinein';
+    $('pay').hidden = !(gcashOn || someoneShown) || type === null;
+    if (!gcashOn && !someoneOn) return;
     $('pay-cash-label').textContent = type === 'delivery' ? 'Cash on delivery' : 'Pay at the counter';
-    // "Other area": the fee is agreed by phone first, so GCash waits for another time.
+    $('pay-gcash-opt').hidden = !gcashOn;
+    $('pay-someone-opt').hidden = !someoneShown;
+    // "Other area": the fee is agreed by phone first, so paying ahead waits for another time.
     var other = type === 'delivery' && area() && area().other;
     var gcashInput = form.querySelector('input[name="pay"][value="gcash"]');
-    gcashInput.disabled = !!other;
-    if (other && gcashInput.checked) form.querySelector('input[name="pay"][value="cash"]').checked = true;
+    var someoneInput = form.querySelector('input[name="pay"][value="someone"]');
+    gcashInput.disabled = !!other || !gcashOn;
+    someoneInput.disabled = !!other || type === 'dinein';
+    if ((gcashInput.disabled && gcashInput.checked) || (someoneInput.disabled && someoneInput.checked)) {
+      form.querySelector('input[name="pay"][value="cash"]').checked = true;
+    }
     $('pay-note').hidden = !other;
     $('pay-note').textContent = other ? 'For "Other area" we call you with the fee first, so please pay in cash.' : '';
 
     var gcash = payMethod() === 'gcash';
+    var someone = payMethod() === 'someone';
+    var ahead = gcash || someone;
     var cashField = $('o-cash').closest('.cfield');
-    cashField.hidden = type !== 'delivery' || gcash;
+    cashField.hidden = type !== 'delivery' || ahead;
     $('o-cash').disabled = cashField.hidden;
     Array.prototype.forEach.call(form.querySelectorAll('.checkout__note[data-for]'), function (note) {
-      note.hidden = gcash || note.dataset.for.split(' ').indexOf(type) === -1;
+      note.hidden = ahead || note.dataset.for.split(' ').indexOf(type) === -1;
     });
-    $('gcash-note').hidden = !gcash;
-    $('gcash-note').textContent = gcashMode === 'test'
-      ? 'Test mode: only you see GCash, because you are signed in to the admin. PayMongo takes pretend payments; no real money.'
-      : 'You will pay on GCash\'s page. Your order goes to the kitchen once it is paid.';
+    $('gcash-note').hidden = !ahead;
+    $('gcash-note').textContent = someone
+      ? 'We will give you a link to send them. Your order starts once their payment is confirmed.'
+      : gcashMode === 'test'
+        ? 'Test mode: only you see GCash, because you are signed in to the admin. PayMongo takes pretend payments; no real money.'
+        : 'You will pay on GCash\'s page. Your order goes to the kitchen once it is paid.';
   }
 
   function renderChange() {
@@ -1034,7 +1056,7 @@
       if (!landmark) errors.landmark = 'Add a landmark or directions, e.g. beside 7-Eleven, green gate.';
       else if (landmark.length < 5) errors.landmark = 'Tell us a little more so the rider can find you.';
       // Cash is optional: blank is the exact amount. Paying with GCash: no cash.
-      if (payMethod() === 'gcash') cashRaw = '';
+      if (payMethod() !== 'cash') cashRaw = '';
       if (cashRaw && (!isFinite(cash) || cash < 0 || Math.floor(cash) !== cash)) errors.cash = 'Enter the cash as a whole number of pesos.';
       else if (cashRaw && cash < total()) errors.cash = 'The total is ' + money(total()) + ', so the cash must be at least that.';
     }
@@ -1051,7 +1073,33 @@
     return errors;
   }
 
-  function showDone(order, statusUrl) {
+  /** Someone else pays: the link to send them, only one on this site. */
+  function showPayLink(order, payUrl) {
+    var link = '';
+    try {
+      var u = new URL(payUrl || '', window.location.href);
+      if (u.origin === window.location.origin && /^\/pay\/\d{1,10}\.[A-Za-z0-9_-]{32}$/.test(u.pathname)) link = u.href;
+    } catch (e) { link = ''; }
+    $('done-share').hidden = !link;
+    $('done-paylink').textContent = link;
+    $('done-share-btn').hidden = !navigator.share;
+    if (!link) return;
+    $('done-total-label').textContent = 'Total for them to pay';
+    $('done-cash-row').hidden = true;
+    $('done-change-row').hidden = true;
+    $('done-next').textContent = ''; // the share box says what happens next
+    $('done-call').hidden = true;
+    $('done-share-btn').onclick = function () {
+      navigator.share({ title: 'Sweeter Side order #' + order.id, text: 'Please pay for my order', url: link }).catch(function () {});
+    };
+    $('done-copy-btn').onclick = function () {
+      var copied = navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject();
+      copied.then(function () { $('done-copy-btn').textContent = 'Copied'; },
+        function () { $('done-copy-btn').textContent = 'Select the link above to copy it'; });
+    };
+  }
+
+  function showDone(order, statusUrl, payUrl) {
     var counter = order.order_type !== 'delivery';
     // The same link as in the customer's text, on this site only.
     var statusPath = '';
@@ -1119,6 +1167,7 @@
     $('done-call').textContent = order.order_type === 'dinein' ? ''
       : "We'll call you within about " + minutes + ' minute' + (minutes === 1 ? '' : 's') + ' to confirm.';
     $('done-call').hidden = order.order_type === 'dinein';
+    showPayLink(order, payUrl);
 
     view.hidden = true;
     done.hidden = false;
@@ -1146,7 +1195,7 @@
       address: type === 'delivery' ? form.elements.address.value : '',
       landmark: type === 'delivery' ? form.elements.landmark.value : '',
       delivery_area: type === 'delivery' ? form.elements.delivery_area.value : '',
-      cash: type === 'delivery' && payMethod() !== 'gcash' ? form.elements.cash.value.trim() : '',
+      cash: type === 'delivery' && payMethod() === 'cash' ? form.elements.cash.value.trim() : '',
       pay: payMethod(),
       table_no: type === 'dinein' ? form.elements.table_no.value : '',
       pickup_at: type === 'pickup' ? form.elements.pickup_at.value : '',
@@ -1199,7 +1248,7 @@
         save();
         form.reset();
         setType(type); // reset() unchecked the type; keep it for next time
-        showDone(r.data.order, r.data.status_url);
+        showDone(r.data.order, r.data.status_url, r.data.pay_url);
         return;
       }
       if (r.status === 422 && r.data.fields) {

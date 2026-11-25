@@ -223,7 +223,7 @@ async function settle(order, { giveUp = false } = {}) {
  */
 async function expireStale(now = new Date()) {
   const cutoff = new Date(now.getTime() - PAY_MINUTES * 60000).toISOString().slice(0, 19).replace('T', ' ');
-  const stale = db.prepare("SELECT * FROM orders WHERE pay_status = 'awaiting' AND created_at <= ? ORDER BY id LIMIT 20")
+  const stale = db.prepare("SELECT * FROM orders WHERE pay_status = 'awaiting' AND pay_method = 'gcash' AND created_at <= ? ORDER BY id LIMIT 20")
     .all(cutoff);
   for (const o of stale) {
     try {

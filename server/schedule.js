@@ -219,14 +219,14 @@ function parseWhen(type, input, now = new Date()) {
  * scheduled at least that far ahead (dine-in and "as soon as possible" too).
  * @throws ValidationError on the time field
  */
-function checkMade(type, when, hours, now = new Date()) {
+function checkMade(type, when, hours, now = new Date(), reason = '') {
   if (!hours) return;
   const field = type === 'pickup' ? 'pickup_at' : type === 'delivery' ? 'deliver_at' : 'type';
   const need = hours * 60;
   const at = when.scheduled_for ? new Date(`${when.scheduled_for.replace(' ', 'T')}Z`).getTime() : 0;
   if (at && at >= now.getTime() + (need - GRACE) * 60000) return;
   const n = type === 'dinein' ? null : next(type, now, need);
-  const what = `Your cart has a made-to-order item that needs ${hours} ${hours === 1 ? 'hour' : 'hours'}.`;
+  const what = reason || `Your cart has a made-to-order item that needs ${hours} ${hours === 1 ? 'hour' : 'hours'}.`;
   throw new ValidationError({
     [field]: type === 'dinein' ? `${what} Choose pick-up or delivery for later.`
       : n ? `${what} Choose a time: the first is ${whenText(n.date, n.minutes, now)}.`

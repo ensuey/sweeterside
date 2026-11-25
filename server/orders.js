@@ -17,6 +17,7 @@ const delivery = require('./delivery');
 const itemOptions = require('./options');
 const stock = require('./stock');
 const schedule = require('./schedule');
+const someonePays = require('./someone-pays');
 
 const { ValidationError } = menu;
 
@@ -263,6 +264,17 @@ function parseShareImage(input) {
   return img.rel;
 }
 
+/** An uploaded image for the setting `key` (like the share image), or '' to remove it. */
+function parseUpload(key) {
+  return (input) => {
+    const rel = String(input ?? '').trim();
+    if (!rel) return '';
+    const img = rel.startsWith('assets/uploads/') ? menu.resolveImage(rel) : null;
+    if (!img) throw new ValidationError({ [key]: 'Upload the image first, then save.' });
+    return img.rel;
+  };
+}
+
 /** Free delivery from this much (pesos, after discounts); blank turns it off. */
 function parseFreeMin(input) {
   const raw = input === null || input === undefined ? '' : String(input).trim();
@@ -422,6 +434,7 @@ function settings() {
     auto_confirm_trusted: trust.on,
     trusted_min_completed: trust.min_completed,
     trusted_max_flags: trust.max_flags,
+    ...someonePays.settingsView(),
   };
 }
 
@@ -453,6 +466,7 @@ function updateSettings(input) {
     auto_confirm_trusted: parseSwitch('auto_confirm_trusted'),
     trusted_min_completed: parseCount('trusted_min_completed', 1, 50),
     trusted_max_flags: parseCount('trusted_max_flags', 0, 10),
+    ...someonePays.parsers(parseSwitch, parseUpload),
   };
   const values = {};
   const errors = {};
@@ -700,10 +714,14 @@ function create(input, { now = new Date(), admin = false } = {}) {
     }
   }
 
-  const payMethod = input.pay === 'gcash' ? 'gcash' : '';
-  if (input.pay !== undefined && !['', 'cash', 'gcash'].includes(input.pay)) errors.pay = 'Choose how you will pay.';
-  if (payMethod && !require('./paymongo').offeredTo({ admin })) {
+  const payMethod = ['gcash', 'someone'].includes(input.pay) ? input.pay : '';
+  if (input.pay !== undefined && !['', 'cash', 'gcash', 'someone'].includes(input.pay)) errors.pay = 'Choose how you will pay.';
+  if (payMethod === 'gcash' && !require('./paymongo').offeredTo({ admin })) {
     errors.pay = 'GCash is not available right now. Please choose another way to pay.';
+  }
+  if (payMethod === 'someone') {
+    if (!someonePays.offered()) errors.pay = 'Someone else paying is not available right now. Please choose another way to pay.';
+    else if (type !== 'delivery' && type !== 'pickup') errors.pay = 'Someone else can pay for delivery or pick-up orders.';
   }
 
   let tableNo = '';
@@ -734,12 +752,19 @@ function create(input, { now = new Date(), admin = false } = {}) {
     q = quote(input.items, type, now, input.voucher, input.delivery_area, when.service_date);
     // A made-to-order item: the order must be for a time far enough ahead.
     schedule.checkMade(type, when, q.madeHours, now);
+    // Someone else pays: time for them to pay and for the shop to check it.
+    if (payMethod === 'someone' && !errors.pay) {
+      schedule.checkMade(type, when, someonePays.LEAD_HOURS, now,
+        `When someone else pays, choose a time at least ${someonePays.LEAD_HOURS} hours ahead.`);
+    }
     if (type === 'delivery' && !q.area) {
       errors.delivery_area = 'Choose your area, or "Other area" and we will call you with the fee.';
     }
     // The fee for "Other area" is agreed by phone, so there is nothing to pay online yet.
     if (payMethod && q.area && q.area.to_confirm) {
-      errors.pay = 'For "Other area" we call you with the fee first, so please pay in cash.';
+      errors.pay = payMethod === 'someone'
+        ? 'For "Other area" we call you with the fee first, so someone else cannot pay ahead.'
+        : 'For "Other area" we call you with the fee first, so please pay in cash.';
     }
   } catch (err) {
     if (!(err instanceof ValidationError)) throw err;
@@ -800,14 +825,15 @@ function create(input, { now = new Date(), admin = false } = {}) {
                           table_no, pickup_at, gross_cents, subtotal_cents, voucher_code, discount_cents,
                           delivery_fee_cents, total_cents, cash_cents, change_due_cents, pricing,
                           delivery_area_id, delivery_area, fee_to_confirm, scheduled_for, scheduled_date,
-                          pay_method, pay_status, pay_token)
-      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+                          pay_method, pay_status, pay_token, payer_token)
+      VALUES ('online', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       type, status, name, phone, phoneNorm, address, landmark, tableNo, pickupAt,
       t.gross, t.subtotal, q.voucher ? q.voucher.code : '', t.voucher_discount,
       t.delivery_fee, t.total, cash * 100, changeDue * 100, JSON.stringify(q.priced),
       q.area ? q.area.id : null, q.area ? q.area.name : '', q.area && q.area.to_confirm ? 1 : 0,
       when.scheduled_for, when.scheduled_date,
-      payMethod, payMethod ? 'awaiting' : '', require('./paymongo').newPayToken());
+      payMethod, payMethod ? 'awaiting' : '', require('./paymongo').newPayToken(),
+      payMethod === 'someone' ? someonePays.newToken() : null);
     insertLines(info.lastInsertRowid, q.priced.lines, q.lines);
     return info.lastInsertRowid;
   });
@@ -881,6 +907,7 @@ function withLines(order, { fullIds = false } = {}) {
   delete order.last_request_key;
   // The customer's key to their order never goes out with it.
   delete order.pay_token;
+  delete order.payer_token;
   if (order.pricing && !fullIds) {
     order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
   }
@@ -913,7 +940,7 @@ function byRef(ref) {
  */
 // A POS tab that has not been sent to the kitchen is not in the queue yet,
 // and is not counted with it.
-const IN_QUEUE = "NOT (source = 'pos' AND kitchen_sent_at IS NULL) AND pay_status <> 'awaiting'";
+const IN_QUEUE = "NOT (source = 'pos' AND kitchen_sent_at IS NULL) AND pay_status NOT IN ('awaiting','checking')";
 // A POS order never sent to the kitchen that is done anyway: paid at the
 // counter, or discarded. It is finished, so it shows under Finished (where it
 // can be deleted). A tab merged into another is left out: its lines moved.
@@ -926,6 +953,8 @@ function list(which = 'active') {
   const filter = {
     active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')}) AND ${IN_QUEUE}`,
     finished: `WHERE ${FINISHED}`,
+    // Someone else pays: waiting for the payer, or for the owner to check it.
+    payment: "WHERE pay_method = 'someone' AND pay_status IN ('awaiting','checking') AND status <> 'cancelled'",
     all: '',
   }[which];
   if (filter === undefined) throw Object.assign(new Error('Unknown order filter.'), { status: 400 });
@@ -933,7 +962,8 @@ function list(which = 'active') {
   const params = which === 'active' ? ACTIVE_STATUSES : [];
   // Active orders oldest first (the queue); finished ones newest first.
   // Scheduled orders take their place by the time they are for.
-  const order = which === 'active' ? 'COALESCE(scheduled_for, created_at) ASC, id ASC' : 'id DESC';
+  const order = which === 'active' ? 'COALESCE(scheduled_for, created_at) ASC, id ASC'
+    : which === 'payment' ? 'id ASC' : 'id DESC';
   return withHistory(db.prepare(`SELECT * FROM orders ${filter} ORDER BY ${order} LIMIT 200`)
     .all(...params).map((o) => withLines(o)));
 }
@@ -972,6 +1002,8 @@ function counts() {
                            FROM orders WHERE ${HELD_DONE}`).get();
   out.completed += held.completed || 0;
   out.cancelled += held.cancelled || 0;
+  // Someone-pays payments waiting for the owner's check.
+  out.payment = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE pay_method = 'someone' AND pay_status = 'checking' AND status <> 'cancelled'").get().n;
   return out;
 }
 
@@ -982,8 +1014,13 @@ function counts() {
  */
 function setStatus(id, status, { reason } = {}) {
   if (!STATUSES.includes(status)) throw new ValidationError({ status: 'Choose a valid status.' });
-  const order = db.prepare('SELECT status, order_type, cancel_reason, refunded_cents FROM orders WHERE id = ?').get(Number(id));
+  const order = db.prepare('SELECT status, order_type, cancel_reason, refunded_cents, pay_method, pay_status FROM orders WHERE id = ?').get(Number(id));
   if (!order) return null;
+
+  // Someone else pays: nothing moves on until the owner has checked the payment.
+  if (order.pay_method === 'someone' && ['awaiting', 'checking'].includes(order.pay_status) && status !== 'cancelled') {
+    throw Object.assign(new Error('Someone else is paying this order. Check the payment first (Orders → Payment).'), { status: 409 });
+  }
 
   // Money taken stays with a sale: refund it before cancelling.
   if (status === 'cancelled' && order.status !== 'cancelled') {

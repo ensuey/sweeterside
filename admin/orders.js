@@ -92,11 +92,17 @@ function historyText(h) {
 }
 
 /** Badges under the name: blocked, the number's history, and how long it has waited. */
+/** How an online order was paid ahead: GCash through PayMongo, or someone else by GCash or bank. */
+function paidLabel(o) {
+  if (o.pay_method === 'someone') return o.payer_method === 'bank' ? 'Paid by bank transfer' : 'Paid by GCash';
+  return 'Paid with GCash';
+}
+
 function flagsHtml(o) {
   const flags = [];
   if (o.source === 'pos') flags.push(`<span class="flag">Counter${o.paid_at ? ' · paid' : ''}</span>`);
   else if (o.paid_at) flags.push('<span class="flag flag--good">Paid</span>');
-  else if (o.pay_status === 'paid') flags.push('<span class="flag flag--good">Paid with GCash</span>');
+  else if (o.pay_status === 'paid') flags.push(`<span class="flag flag--good">${paidLabel(o)}</span>`);
   if (o.blocked) flags.push('<span class="flag flag--bad">Blocked number</span>');
   if (o.history) {
     const kind = o.history.no_show || o.history.fake ? 'bad'
@@ -120,10 +126,12 @@ function actionsHtml(o) {
   const actions = [];
   // A counter order paid without going to the kitchen has nothing to confirm.
   const heldPos = o.source === 'pos' && !o.kitchen_sent_at;
-  if (o.status === 'new' && !heldPos) {
+  // Someone else pays: nothing to confirm or collect until their payment is checked.
+  const payerWait = o.pay_method === 'someone' && ['awaiting', 'checking'].includes(o.pay_status);
+  if (o.status === 'new' && !heldPos && !payerWait) {
     actions.push(`<button class="btn btn--primary btn--sm" type="button" data-confirm>Confirm</button>`);
   }
-  if (!orderPaid(o) && o.status !== 'cancelled') {
+  if (!orderPaid(o) && o.status !== 'cancelled' && !payerWait) {
     actions.push(`<a class="btn btn--ghost btn--sm" href="/admin/pos?pay=${o.id}">Take payment</a>`);
   }
   if (o.phone_norm && !o.blocked) {
@@ -206,7 +214,24 @@ function orderHtml(o) {
   // Delivery collects cash at the door; the other types pay at the counter.
   // GCash orders were paid online; one cancelled after paying needs a refund in PayMongo.
   const gcashRefund = o.pay_method === 'gcash' && (o.pay_status === 'late' || (o.pay_status === 'paid' && o.status === 'cancelled'));
-  const payment = gcashRefund
+  // Someone else pays: the reference to check in the GCash or bank app.
+  const via = o.payer_method === 'bank' ? 'bank' : 'GCash';
+  const someone = o.pay_method !== 'someone' ? ''
+    : o.pay_status === 'checking'
+    ? `<dt>Check your ${via} for ${money(o.total)}</dt>
+        <dd class="order__change">Ref <strong>${esc(o.payer_reference)}</strong>${o.payer_name ? ` from ${esc(o.payer_name)}` : ''}</dd>
+        <dd class="order__paycheck"><button class="btn btn--primary btn--sm" type="button" data-paid>Payment received</button>
+          <button class="btn btn--ghost btn--sm" type="button" data-not-paid>Not received</button></dd>`
+    : o.pay_status === 'awaiting'
+    ? `<dd class="order__change">Someone else pays. Waiting for their payment${o.payer_checked ? ' (the last one did not arrive)' : ''}.</dd>`
+    : o.pay_status === 'late'
+    ? `<dd class="order__change order__refund">Paid by ${via} after it was cancelled (ref ${esc(o.payer_reference)}${o.payer_name ? `, from ${esc(o.payer_name)}` : ''}): refund the payer.</dd>`
+    : o.pay_status === 'paid' && o.status === 'cancelled'
+    ? `<dd class="order__change order__refund">${paidLabel(o)} (ref ${esc(o.payer_reference)}), then cancelled: refund the payer.</dd>`
+    : o.pay_status === 'paid'
+    ? `<dd class="order__change">${paidLabel(o)} · ref ${esc(o.payer_reference)}</dd>`
+    : '';
+  const payment = someone || (gcashRefund
     ? '<dd class="order__change order__refund">Paid with GCash, then cancelled: refund it in the PayMongo dashboard.</dd>'
     : o.pay_status === 'paid'
     ? '<dd class="order__change">Paid with GCash</dd>'
@@ -219,7 +244,7 @@ function orderHtml(o) {
         <dd class="order__change">${o.change_due === 0
           ? 'Exact / no change needed'
           : `Bring ${money(o.change_due)} change`}</dd>`
-    : '<dd class="order__change">Pays at the counter</dd>';
+    : '<dd class="order__change">Pays at the counter</dd>');
 
   return `
     <li class="order" data-order-id="${o.id}" data-status="${esc(o.status)}" data-type="${esc(type)}">
@@ -321,6 +346,7 @@ function finishedHtml(orders) {
 function renderOrders(counts) {
   const list = $('orders');
   list.innerHTML = state.ordersShow === 'finished' ? finishedHtml(state.orders) : state.orders.map(orderHtml).join('');
+  $('n-payment').textContent = counts.payment || 0;
 
   const active = counts.new + counts.confirmed + counts.preparing + counts.delivering;
   $('n-active').textContent = active;
@@ -330,6 +356,7 @@ function renderOrders(counts) {
   empty.hidden = state.orders.length > 0;
   empty.textContent = state.ordersShow === 'active'
     ? 'No orders waiting. New ones appear here on their own.'
+    : state.ordersShow === 'payment' ? 'No orders waiting for someone else to pay.'
     : 'No finished orders yet.';
 
   $('orders-summary').textContent = counts.new
@@ -539,6 +566,20 @@ function pollOrders() {
   });
 }
 
+/** Someone else pays: the owner checked the GCash or bank app. */
+async function checkPayment(id, btn) {
+  const paid = btn.matches('[data-paid]');
+  btn.disabled = true;
+  try {
+    await api(`/api/orders/${id}/payment-${paid ? 'received' : 'not-received'}`, { method: 'POST' });
+    toast(paid ? `Order #${id} is paid and in To do.` : `Order #${id}: the payer can send the reference again.`);
+    await loadOrders();
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+  }
+}
+
 /* ---------------------------- events ---------------------------- */
 
 // Remember which older orders are open, so a refresh does not close them.
@@ -556,9 +597,10 @@ $('orders').addEventListener('change', (event) => {
 });
 
 $('orders').addEventListener('click', async (event) => {
-  const btn = event.target.closest('[data-confirm], [data-block], [data-delete]');
+  const btn = event.target.closest('[data-confirm], [data-block], [data-delete], [data-paid], [data-not-paid]');
   if (!btn) return;
   const id = Number(btn.closest('.order').dataset.orderId);
+  if (btn.matches('[data-paid], [data-not-paid]')) { checkPayment(id, btn); return; }
   if (btn.matches('[data-block]')) { openBlock(id); return; }
   if (btn.matches('[data-delete]')) { openDelete(id); return; }
   btn.disabled = true;

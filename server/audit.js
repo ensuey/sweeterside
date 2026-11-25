@@ -14,6 +14,7 @@ const ACTIONS = [
   'stock_count', 'stock_add', 'stock_off', 'ingredient_change', 'order_delete',
   'payment_correct', 'payment_delete', 'cash_move_correct', 'cash_move_delete',
   'credit_account', 'credit_collect', 'credit_collection_delete',
+  'someone_paid', 'someone_not_paid',
 ];
 
 /**
