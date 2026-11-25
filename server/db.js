@@ -730,6 +730,21 @@ addMissingColumns('orders', {
 });
 db.exec("CREATE INDEX IF NOT EXISTS idx_orders_pay ON orders(pay_status) WHERE pay_status = 'awaiting'");
 
+/* Someone else pays (server/someone-pays.js): pay_method 'someone'. The
+   payer has their own key (payer_token), apart from the receiver's
+   pay_token. The payer's reference waits in payer_* while pay_status is
+   'checking'; payer_checked is 1 once the owner said Not received, so the
+   order no longer cancels itself. */
+addMissingColumns('orders', {
+  payer_token: 'TEXT',
+  payer_method: "TEXT NOT NULL DEFAULT ''",
+  payer_reference: "TEXT NOT NULL DEFAULT ''",
+  payer_name: "TEXT NOT NULL DEFAULT ''",
+  payer_sent_at: 'TEXT',
+  payer_checked: 'INTEGER NOT NULL DEFAULT 0',
+});
+db.exec("CREATE INDEX IF NOT EXISTS idx_orders_pay_wait ON orders(pay_status) WHERE pay_status IN ('awaiting','checking')");
+
 /* A custom line: something not on the menu (a custom cake, a deposit), named
    and priced at the counter. No menu item, so no stock. */
 addMissingColumns('order_items', { custom: 'INTEGER NOT NULL DEFAULT 0' });
