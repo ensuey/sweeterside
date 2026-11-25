@@ -172,3 +172,116 @@ test('the payer key is never sent with orders', () => {
   assert.strictEqual(orders.get(o.id).payer_token, undefined);
   assert.ok(orders.list('all').every((x) => x.payer_token === undefined));
 });
+
+/* ---------------------------- the owner's check ---------------------------- */
+
+const audit = require('../server/audit');
+const sent = (o, reference = '1012345678') => someonePays.submitReference(someonePays.payerRef(o.id), { method: 'gcash', reference });
+const rowOf = (id) => db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
+
+test('received: into the queue confirmed and paid, once', () => {
+  turnOn();
+  const heard = [];
+  someonePays.onReceived((x) => heard.push(x.id));
+  const o = place();
+  sent(o);
+  assert.strictEqual(someonePays.received(o.id), 'paid');
+  assert.strictEqual(someonePays.received(o.id), 'already');
+  const r = rowOf(o.id);
+  assert.deepStrictEqual([r.pay_status, r.status, r.online_paid_cents], ['paid', 'confirmed', 12900]);
+  assert.ok(r.online_paid_at);
+  assert.strictEqual(orders.list('active').filter((x) => x.id === o.id).length, 1);
+  assert.deepStrictEqual(heard, [o.id], 'announced once');
+  assert.ok(audit.list({}).some((a) => a.action === 'someone_paid' && a.order_id === o.id));
+  someonePays.onReceived(() => {});
+});
+
+test('received: refused while no reference was sent', () => {
+  turnOn();
+  const o = place();
+  assert.strictEqual(errorsOf(() => someonePays.received(o.id)).status, 409);
+  assert.strictEqual(rowOf(o.id).pay_status, 'awaiting');
+});
+
+test('not received: back to waiting, reference cleared, never cancelled by itself', () => {
+  turnOn();
+  const o = place();
+  sent(o);
+  someonePays.notReceived(o.id);
+  const r = rowOf(o.id);
+  assert.deepStrictEqual([r.pay_status, r.payer_reference, r.payer_method, r.payer_checked], ['awaiting', '', '', 1]);
+  someonePays.expireUnpaid(manila(18));
+  assert.strictEqual(rowOf(o.id).status, 'new');
+  sent(o, '555555'); // the same link takes a new reference
+  assert.strictEqual(rowOf(o.id).pay_status, 'checking');
+});
+
+test('auto-cancel: 60 minutes before its time with no reference, stock freed; not while checking', () => {
+  turnOn();
+  const id = frappe().id;
+  menu.setStock(id, { availability: 'available', daily_limit: '50' });
+  const left = () => menu.list({ now: NOON }).find((i) => i.id === id).remaining;
+  const before = left();
+  const quiet = place({ pickup_at: '17:00' });
+  const checking = place({ pickup_at: '17:00' });
+  sent(checking);
+  assert.strictEqual(someonePays.expireUnpaid(manila(15, 59)), 0, 'not yet');
+  assert.strictEqual(someonePays.expireUnpaid(manila(16, 0)), 1);
+  assert.deepStrictEqual([rowOf(quiet.id).status, rowOf(quiet.id).cancel_reason], ['cancelled', 'unpaid']);
+  assert.strictEqual(rowOf(checking.id).status, 'new');
+  assert.strictEqual(left(), before - 1, 'only the one being checked still holds stock');
+  menu.setStock(id, { availability: 'available', daily_limit: '' });
+});
+
+test('auto-cancel: 24 hours after ordering with no reference', () => {
+  turnOn();
+  const o = place({ pickup_at: '12:00', pickup_date: '2026-10-25' });
+  db.prepare("UPDATE orders SET created_at = '2026-10-23 04:00:00' WHERE id = ?").run(o.id); // noon Manila
+  assert.strictEqual(someonePays.expireUnpaid(manila(11, 59, 24)), 0);
+  assert.strictEqual(someonePays.expireUnpaid(manila(12, 0, 24)), 1);
+});
+
+test('the Payment list holds the orders waiting or being checked, oldest first', () => {
+  turnOn();
+  const a = place();
+  const b = place();
+  sent(b);
+  const ids = orders.list('payment').map((x) => x.id);
+  assert.ok(ids.indexOf(a.id) >= 0 && ids.indexOf(a.id) < ids.indexOf(b.id));
+  assert.ok(orders.counts().payment >= 1, 'being checked is counted');
+});
+
+test('the owner text on a reference has the order, total, method and reference, no name or phone', () => {
+  turnOn();
+  const o = place();
+  const text = someonePays.referenceMessage(sent(o, '7777 8888'));
+  assert.match(`${text.title} ${text.body}`, new RegExp(`#${o.id}.*129.*GCash.*7777 8888`));
+  assert.ok(!/Ana|Reyes|0917/.test(`${text.title} ${text.body}`));
+});
+
+test('routes: the payer page and reference are public by key; the owner check needs a session', async () => {
+  turnOn();
+  const o = place();
+  const ref = someonePays.payerRef(o.id);
+  const { server } = require('../server/index');
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${server.address().port}`;
+  try {
+    const page = await fetch(`${url}/pay/${ref}`);
+    assert.strictEqual(page.status, 200);
+    assert.strictEqual(page.headers.get('referrer-policy'), 'no-referrer');
+    assert.match(await page.text(), /I've paid/);
+    assert.strictEqual((await fetch(`${url}/pay/${o.id}.${'B'.repeat(32)}`)).status, 404);
+    const post = (body, type = 'application/json') => fetch(`${url}/api/pay/reference`,
+      { method: 'POST', headers: { 'Content-Type': type }, body: JSON.stringify(body) });
+    assert.strictEqual((await post({ ref, method: 'gcash', reference: '123456' }, 'text/plain')).status, 415);
+    assert.strictEqual((await post({ ref, method: 'gcash', reference: '1' })).status, 422);
+    assert.strictEqual((await post({ ref, method: 'gcash', reference: '123456' })).status, 200);
+    assert.strictEqual((await post({ ref, method: 'gcash', reference: '123456' })).status, 409);
+    const check = await fetch(`${url}/api/orders/${o.id}/payment-received`, { method: 'POST' });
+    assert.strictEqual(check.status, 401);
+    assert.strictEqual(rowOf(o.id).pay_status, 'checking', 'not released without a session');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

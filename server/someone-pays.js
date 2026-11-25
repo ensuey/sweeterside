@@ -158,8 +158,81 @@ function submitReference(ref, input = {}) {
   return after;
 }
 
+/** The owner's "check payment" text: the order, total, method and reference. No name or phone. */
+function referenceMessage(order) {
+  return {
+    title: `Check payment #${order.id}`,
+    body: `P${order.total} by ${METHODS[order.payer_method] || 'payment'}, ref ${order.payer_reference}`,
+  };
+}
+
+/* ---------------------------- the owner's check ---------------------------- */
+
+let receivedListener = () => {};
+/** index.js announces the order (kitchen alert, the receiver's text) once it is paid. */
+function onReceived(fn) { receivedListener = fn; }
+
+function auditCheck(action, order, actor) {
+  require('./audit').record({
+    action, staff: actor || null, approver: null, order_id: order.id, amount_cents: order.total_cents,
+    reason: '', details: { method: order.payer_method, reference: order.payer_reference },
+  });
+}
+
+/**
+ * The owner saw the money arrive. The order goes into the queue, paid and
+ * confirmed (no call needed: the money is checked).
+ * @returns 'paid', or 'already' when it was paid before
+ */
+function received(id, actor = null) {
+  const result = transaction(() => {
+    const o = db.prepare("SELECT * FROM orders WHERE id = ? AND pay_method = 'someone'").get(Number(id));
+    if (!o) throw httpError(404, 'That order no longer exists.');
+    if (o.pay_status === 'paid') return 'already';
+    if (o.status === 'cancelled') throw httpError(409, 'This order was cancelled.');
+    if (o.pay_status !== 'checking') throw httpError(409, 'No payment was sent for this order yet.');
+    db.prepare(`UPDATE orders SET pay_status = 'paid', online_paid_cents = total_cents, online_paid_at = datetime('now'),
+                  status = CASE status WHEN 'new' THEN 'confirmed' ELSE status END, updated_at = datetime('now')
+                WHERE id = ?`).run(o.id);
+    auditCheck('someone_paid', o, actor);
+    return 'paid';
+  });
+  if (result === 'paid') {
+    try { receivedListener(orders().get(id)); } catch { console.warn(`[someone-pays] #${id} alert failed`); }
+  }
+  return result;
+}
+
+/** The money did not arrive: the payer can send a reference again; the order no longer cancels itself. */
+function notReceived(id, actor = null) {
+  transaction(() => {
+    const o = db.prepare("SELECT * FROM orders WHERE id = ? AND pay_method = 'someone'").get(Number(id));
+    if (!o) throw httpError(404, 'That order no longer exists.');
+    if (o.pay_status !== 'checking' || o.status === 'cancelled') throw httpError(409, 'There is no payment to check on this order.');
+    db.prepare(`UPDATE orders SET pay_status = 'awaiting', payer_method = '', payer_reference = '', payer_sent_at = NULL,
+                  payer_checked = 1, updated_at = datetime('now') WHERE id = ?`).run(o.id);
+    auditCheck('someone_not_paid', o, actor);
+  });
+  return orders().get(id);
+}
+
+/**
+ * Cancel orders nobody sent a reference for: 24 hours after ordering, or 60
+ * minutes before their time, whichever comes first. Their stock is free again.
+ * Run every minute. @returns how many were cancelled
+ */
+function expireUnpaid(now = new Date()) {
+  const sql = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+  return db.prepare(`UPDATE orders SET status = 'cancelled', cancel_reason = 'unpaid', pay_status = '',
+                       updated_at = datetime('now')
+                     WHERE pay_method = 'someone' AND pay_status = 'awaiting' AND payer_checked = 0
+                       AND status <> 'cancelled' AND (created_at <= ? OR scheduled_for <= ?)`)
+    .run(sql(now.getTime() - MAX_WAIT_HOURS * 3600000), sql(now.getTime() + CUTOFF_MINUTES * 60000)).changes;
+}
+
 module.exports = {
   LEAD_HOURS, CUTOFF_MINUTES, MAX_WAIT_HOURS, REFERENCE_MAX, NAME_MAX,
   METHODS, details, offered, newToken, parsers, settingsView,
-  payerRef, byPayerRef, payView, onReference, submitReference,
+  payerRef, byPayerRef, payView, onReference, submitReference, referenceMessage,
+  onReceived, received, notReceived, expireUnpaid,
 };

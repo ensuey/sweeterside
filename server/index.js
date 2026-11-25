@@ -281,6 +281,15 @@ function announce(order) {
   sms.confirmCustomer(order, { willCall: order.status === 'new' && orders.requiresConfirmation(order.order_type) });
 }
 
+// Someone else pays: the owner gets a text to check the payment. Once the
+// owner says it arrived, the kitchen and the receiver hear about the order;
+// the owner is not texted again.
+someonePays.onReference((order) => sms.alert(someonePays.referenceMessage(order)));
+someonePays.onReceived((order) => {
+  push.alert(push.orderMessage(order));
+  sms.confirmCustomer(order, { willCall: false });
+});
+
 // A GCash order is announced to the kitchen (and the customer) once it is paid.
 paymongo.onPaid((id) => {
   const order = orders.get(id);
@@ -822,6 +831,11 @@ async function route(req, res) {
         throw err;
       }
     }
+    // Someone else pays: nobody is alerted until the owner sees the money.
+    if (order.pay_method === 'someone') {
+      return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req),
+        pay_url: `${siteUrl(req)}/pay/${someonePays.payerRef(order.id)}` });
+    }
     announce(order);
     return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req) });
   }
@@ -955,6 +969,17 @@ async function route(req, res) {
       { reason: body.reason === undefined ? undefined : String(body.reason) });
     if (!order) return sendJson(res, 404, { error: 'That order no longer exists.' });
     return sendJson(res, 200, { order });
+  }
+
+  // Someone else pays: the owner checked their GCash or bank app.
+  const checkMatch = pathname.match(/^\/api\/orders\/(\d+)\/payment-(received|not-received)$/);
+  if (checkMatch && method === 'POST') {
+    if (!requireApiAuth(req, res, { csrf: true })) return;
+    const id = Number(checkMatch[1]);
+    if (checkMatch[2] === 'received') someonePays.received(id);
+    else someonePays.notReceived(id);
+    console.log(`[someone-pays] #${id} payment ${checkMatch[2]}`);
+    return sendJson(res, 200, { order: orders.get(id) });
   }
 
   // Delete a (test) order for good. The owner's PIN every time, throttled like
@@ -1759,6 +1784,12 @@ if (require.main === module) {
 
   // GCash orders nobody paid for are cancelled after paymongo.PAY_MINUTES.
   setInterval(() => { paymongo.expireStale().catch(() => {}); }, 60 * 1000).unref();
+  setInterval(() => {
+    try {
+      const n = someonePays.expireUnpaid();
+      if (n) console.log(`[someone-pays] ${n} unpaid order(s) cancelled`);
+    } catch (err) { console.error('[someone-pays] sweep failed', err.message); }
+  }, 60 * 1000).unref();
 
   server.listen(PORT, HOST, () => {
     console.log(`Menu   http://${HOST}:${PORT}/`);

@@ -953,6 +953,8 @@ function list(which = 'active') {
   const filter = {
     active: `WHERE status IN (${ACTIVE_STATUSES.map(() => '?').join(',')}) AND ${IN_QUEUE}`,
     finished: `WHERE ${FINISHED}`,
+    // Someone else pays: waiting for the payer, or for the owner to check it.
+    payment: "WHERE pay_method = 'someone' AND pay_status IN ('awaiting','checking') AND status <> 'cancelled'",
     all: '',
   }[which];
   if (filter === undefined) throw Object.assign(new Error('Unknown order filter.'), { status: 400 });
@@ -960,7 +962,8 @@ function list(which = 'active') {
   const params = which === 'active' ? ACTIVE_STATUSES : [];
   // Active orders oldest first (the queue); finished ones newest first.
   // Scheduled orders take their place by the time they are for.
-  const order = which === 'active' ? 'COALESCE(scheduled_for, created_at) ASC, id ASC' : 'id DESC';
+  const order = which === 'active' ? 'COALESCE(scheduled_for, created_at) ASC, id ASC'
+    : which === 'payment' ? 'id ASC' : 'id DESC';
   return withHistory(db.prepare(`SELECT * FROM orders ${filter} ORDER BY ${order} LIMIT 200`)
     .all(...params).map((o) => withLines(o)));
 }
@@ -999,6 +1002,8 @@ function counts() {
                            FROM orders WHERE ${HELD_DONE}`).get();
   out.completed += held.completed || 0;
   out.cancelled += held.cancelled || 0;
+  // Someone-pays payments waiting for the owner's check.
+  out.payment = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE pay_method = 'someone' AND pay_status = 'checking' AND status <> 'cancelled'").get().n;
   return out;
 }
 

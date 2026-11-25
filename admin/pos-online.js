@@ -195,7 +195,7 @@ async function showOnline() {
     <li class="tab${isNew ? ' tab--unopened' : ''}" data-online-id="${o.id}">
       <div class="tab__main">
         <span class="tab__title">${esc(onlineType(o))} · ${esc(o.customer_name)} <span class="tab__id">#${o.id}</span>${waiting}</span>
-        <span class="tab__meta">${esc(ONLINE_STATUS[o.status] || o.status)} · ${plural(units, 'item')} · ${minutesAgo(o.created_at)} ago · ${o.pay_status === 'paid' ? 'Paid with GCash' : o.paid_at ? 'Paid' : 'Not paid'}</span>
+        <span class="tab__meta">${esc(ONLINE_STATUS[o.status] || o.status)} · ${plural(units, 'item')} · ${minutesAgo(o.created_at)} ago · ${o.pay_status === 'paid' ? (o.pay_method === 'someone' ? 'Paid ahead' : 'Paid with GCash') : o.paid_at ? 'Paid' : 'Not paid'}</span>
       </div>
       <span class="tab__total">${money(o.total)}</span>
       <div class="tab__actions"><button class="btn btn--primary btn--sm" type="button" data-online-open>Open</button></div>
@@ -267,7 +267,7 @@ function renderOnline() {
   ].filter(Boolean).join('');
 
   $('od-body').innerHTML = `
-    <p class="od__state"><strong>${esc(status)}</strong> · ${o.pay_status === 'paid' ? '<span class="flag flag--good">Paid with GCash</span>' : o.paid_at ? '<span class="flag flag--good">Paid</span>' : 'Not paid'} · ${minutesAgo(o.created_at)} ago</p>
+    <p class="od__state"><strong>${esc(status)}</strong> · ${o.pay_status === 'paid' ? `<span class="flag flag--good">${o.pay_method === 'someone' ? 'Paid ahead' : 'Paid with GCash'}</span>` : o.paid_at ? '<span class="flag flag--good">Paid</span>' : 'Not paid'} · ${minutesAgo(o.created_at)} ago</p>
     <div class="od__who">
       <span class="od__name">${esc(o.customer_name)}</span>
       ${o.phone ? `<a href="tel:${esc(o.phone_norm || o.phone)}">${esc(o.phone)}</a>` : ''}
