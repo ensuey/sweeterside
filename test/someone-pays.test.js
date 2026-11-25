@@ -285,3 +285,57 @@ test('routes: the payer page and reference are public by key; the owner check ne
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+/* ---------------------------- checkout, status page, settings ---------------------------- */
+
+const ROOT = path.join(__dirname, '..');
+const src = (p) => fs.readFileSync(path.join(ROOT, p), 'utf8');
+
+test('checkout offers "Someone else will pay" only when ready, not for dine-in or Other area', () => {
+  const tpl = src('templates/menu.html');
+  assert.match(tpl, /data-someone="<!--SOMEONE-->"/);
+  assert.match(tpl, /<input type="radio" name="pay" value="someone">/);
+  orders.updateSettings({ someone_pays: '0' });
+  assert.match(render.buildHtml(), /data-someone="0"/);
+  turnOn();
+  assert.match(render.buildHtml(), /data-someone="1"/);
+  const cart = src('assets/js/cart.js');
+  const pay = /function renderPay\(\) \{[\s\S]*?\n  \}/.exec(cart)[0];
+  assert.match(pay, /type === 'dinein'/);
+  assert.match(pay, /someoneInput\.disabled = !!other/);
+});
+
+test('someone pays: the cart offers times from 3 hours ahead, no ASAP', () => {
+  const cart = src('assets/js/cart.js');
+  assert.match(cart, /var SOMEONE_MINUTES = 180;/);
+  assert.match(/function madeMinutes\(\) \{[\s\S]*?\n  \}/.exec(cart)[0], /payMethod\(\) === 'someone' \? SOMEONE_MINUTES : 0/);
+  assert.strictEqual(someonePays.LEAD_HOURS * 60, 180, 'the server and the cart agree');
+});
+
+test('done screen shares the pay link, set as text', () => {
+  const cart = src('assets/js/cart.js');
+  assert.match(cart, /navigator\.share/);
+  assert.match(cart, /navigator\.clipboard/);
+  assert.ok(cart.includes(String.raw`/^\/pay\/\d{1,10}\.[A-Za-z0-9_-]{32}$/`), 'only a pay link on this site');
+  assert.match(cart, /\$\('done-paylink'\)\.textContent = /);
+  assert.match(src('templates/menu.html'), /id="done-share"/);
+});
+
+test('status page: waiting for payment, payment being checked', () => {
+  turnOn();
+  const o = place();
+  const view = (status) => render.buildOrderStatusHtml({ ...orders.get(o.id), items: [] }, { status: 'new', someone: status });
+  assert.match(view('awaiting'), /Waiting for the payment from the person you sent the link to\./);
+  assert.match(view('checking'), /We are checking the payment\./);
+});
+
+test('settings: switch, GCash name and number, bank details, two QR uploads', () => {
+  const html = src('admin/settings.html');
+  for (const id of ['someone-pays-on', 'pay-gcash-name', 'pay-gcash-number', 'pay-bank-details', 'pay-qr-gcash-file', 'pay-qr-bank-file']) {
+    assert.match(html, new RegExp(`id="${id}"`), id);
+  }
+  assert.ok(errorsOf(() => orders.updateSettings({ pay_gcash_number: '12345' })).pay_gcash_number);
+  assert.ok(errorsOf(() => orders.updateSettings({ pay_bank_details: 'x'.repeat(301) })).pay_bank_details);
+  assert.ok(errorsOf(() => orders.updateSettings({ pay_qr_gcash: '../../etc/passwd' })).pay_qr_gcash);
+  assert.strictEqual(orders.updateSettings({ pay_gcash_number: '+639175551234' }).pay_gcash_number, '0917 555 1234');
+});

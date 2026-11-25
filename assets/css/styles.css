@@ -813,6 +813,16 @@ body.cart-open-bar .foot { padding-bottom: calc(var(--sp-6) + 88px + env(safe-ar
 }
 .about__facts dt { font-weight: 700; }
 
+/* The pay link on the done screen (someone else pays). */
+.done__share { display: grid; gap: var(--sp-2); }
+.done__paylink { word-break: break-all; font-weight: 700; }
+.done__share-btns { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.done__btn {
+  min-height: 44px; padding: 0 var(--sp-4); cursor: pointer;
+  font: 700 .9375rem "Nunito", sans-serif; color: var(--navy);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--r-full);
+}
+
 /* The payer's page (someone else pays). */
 .pay__amount { font-size: 1.25rem; }
 .pay__way { border: 1px solid var(--line, rgba(58,40,22,.15)); border-radius: 16px; padding: var(--sp-4); margin-bottom: var(--sp-4); }

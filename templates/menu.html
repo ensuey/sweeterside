@@ -212,13 +212,15 @@
         <p class="cfield__err" data-err="landmark" hidden></p>
       </div>
 
-      <!-- How to pay: in person, or GCash now through PayMongo. Shown only
-           while GCash is switched on (data-gcash, set by the server). -->
-      <fieldset class="otype pay" id="pay" data-gcash="<!--GCASH-->" hidden>
+      <!-- How to pay: in person, GCash now through PayMongo, or someone else
+           pays through a link. Shown only while one of those is switched on
+           (data-gcash, data-someone, set by the server). -->
+      <fieldset class="otype pay" id="pay" data-gcash="<!--GCASH-->" data-someone="<!--SOMEONE-->" hidden>
         <legend class="checkout__title">How will you pay?</legend>
         <div class="otype__opts">
           <label class="otype__opt"><input type="radio" name="pay" value="cash" checked><span id="pay-cash-label">Cash on delivery</span></label>
           <label class="otype__opt" id="pay-gcash-opt"><input type="radio" name="pay" value="gcash"><span>GCash</span></label>
+          <label class="otype__opt" id="pay-someone-opt" hidden><input type="radio" name="pay" value="someone"><span>Someone else will pay</span></label>
         </div>
         <p class="otype__note" id="pay-note" hidden></p>
         <p class="cfield__err" data-err="pay" hidden></p>
@@ -290,6 +292,14 @@
 
     <p id="done-next"></p>
     <p class="done__call" id="done-call"></p>
+    <div class="done__share" id="done-share" hidden>
+      <p><strong>Send this link to the person paying.</strong> We start your order once their payment is confirmed.</p>
+      <p class="done__paylink" id="done-paylink"></p>
+      <div class="done__share-btns">
+        <button class="done__btn" type="button" id="done-share-btn">Share link</button>
+        <button class="done__btn" type="button" id="done-copy-btn">Copy link</button>
+      </div>
+    </div>
     <p class="done__links">
       <a class="done__link" id="done-status" hidden>See your order status</a>
       <a class="done__link" id="done-tel" href="tel:<!--SHOP_TEL-->">Call <!--SHOP_PHONE--></a>

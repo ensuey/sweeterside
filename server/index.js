@@ -562,6 +562,7 @@ async function route(req, res) {
     if (!order) return sendHtml(res, 404, render.buildOrderStatusHtml(null), headers);
     return sendHtml(res, 200, render.buildOrderStatusHtml(publicOrder(order), {
       status: order.status, awaiting: order.pay_status === 'awaiting',
+      someone: order.pay_method === 'someone' ? order.pay_status : '',
       willCall: orders.requiresConfirmation(order.order_type),
     }), headers);
   }

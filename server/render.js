@@ -438,6 +438,7 @@ function buildHtml(allItems = null, cats = categories.list(), now = new Date(), 
     .replace('<!--SUGGEST-->', () => esc(JSON.stringify(suggestions.forMenu())))
     .replace('<!--ORDER_TYPES-->', orders.enabledTypes().join(' '))
     .replace('<!--GCASH-->', require('./paymongo').offeredTo({ admin: !!viewer.admin }) || '0')
+    .replace('<!--SOMEONE-->', require('./someone-pays').offered() ? '1' : '0')
     .replace('<!--PICKUP_OPEN-->', esc(hours.open))
     .replace('<!--PICKUP_CLOSE-->', esc(hours.close))
     .replace('<!--CHIPS-->', chipsHtml(groups, items.length))
@@ -569,7 +570,10 @@ const ORDER_TYPE_LABEL = { delivery: 'Delivery', pickup: 'Pick-up', dinein: 'Din
 const HANDOVER_TEXT = { delivery: 'Your order is on the way.', pickup: 'Your order is ready for pick-up.', dinein: 'Your order is served.' };
 
 /** The status line a customer sees for their order. */
-function customerStatus(order, { status, awaiting = false, willCall = false }) {
+function customerStatus(order, { status, awaiting = false, willCall = false, someone = '' }) {
+  // Someone else pays: their payment first, then the owner's check.
+  if (status !== 'cancelled' && someone === 'awaiting') return 'Waiting for the payment from the person you sent the link to.';
+  if (status !== 'cancelled' && someone === 'checking') return 'We are checking the payment.';
   if (awaiting) return 'Waiting for your GCash payment.';
   return {
     new: willCall ? 'We got your order. We will call you to confirm it.' : 'We got your order.',
@@ -586,7 +590,7 @@ function customerStatus(order, { status, awaiting = false, willCall = false }) {
  * publicOrder() view (no name, phone or address); null shows "not found", or
  * "too many tries" with busy.
  */
-function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCall = false, busy = false } = {}) {
+function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCall = false, busy = false, someone = '' } = {}) {
   let title; let line; let body = ''; let refresh = '';
   if (!order) {
     title = busy ? 'Please wait a minute' : 'Order not found';
@@ -594,7 +598,7 @@ function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCal
       : 'Check that the link is complete, or call us.';
   } else {
     title = `Order #${order.id}`;
-    line = customerStatus(order, { status, awaiting, willCall });
+    line = customerStatus(order, { status, awaiting, willCall, someone });
     if (['new', 'confirmed', 'preparing', 'delivering'].includes(status)) {
       refresh = '<meta http-equiv="refresh" content="60">'; // the status updates by itself
     }
@@ -611,7 +615,8 @@ function buildOrderStatusHtml(order, { status = 'new', awaiting = false, willCal
       order.discount ? [`Discount${order.voucher_code ? ` (${order.voucher_code})` : ''}`, `−${peso(order.discount)}`] : null,
       order.order_type === 'delivery' ? ['Delivery fee', order.fee_to_confirm ? 'We call you with the fee' : peso(order.delivery_fee)] : null,
       ['Total', peso(order.total)],
-      order.paid_online ? ['Payment', 'Paid with GCash']
+      order.pay_method === 'someone' ? ['Payment', order.paid_online ? 'Paid by someone else' : 'Someone else is paying']
+        : order.paid_online ? ['Payment', 'Paid with GCash']
         : order.order_type === 'delivery' ? ['Payment', `Cash on delivery${order.change_due ? `: ${peso(order.cash)}, change ${peso(order.change_due)}` : ''}`]
           : ['Payment', 'Pay at the counter'],
     ].filter(Boolean).map(([k, v]) => `      <div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('\n');

@@ -207,6 +207,56 @@ async function saveTracking(event) {
   }
 }
 
+/* ---------------------------- someone else pays ---------------------------- */
+
+const QRS = { 'pay-qr-gcash': 'pay_qr_gcash', 'pay-qr-bank': 'pay_qr_bank' };
+
+function showSomeone(s) {
+  $('someone-pays-on').checked = s.someone_pays;
+  $('pay-gcash-name').value = s.pay_gcash_name;
+  $('pay-gcash-number').value = s.pay_gcash_number;
+  $('pay-bank-details').value = s.pay_bank_details;
+  $('someone-status').textContent = !s.someone_pays ? 'Off. Customers do not see it.'
+    : s.someone_pays_ready ? 'On. Customers see "Someone else will pay" at checkout.'
+      : 'On, but add a GCash number or bank details first: customers do not see it yet.';
+  for (const [id, key] of Object.entries(QRS)) {
+    $(`${id}-preview`).hidden = !s[key];
+    if (s[key]) $(`${id}-preview`).src = `/${s[key].split('/').map(encodeURIComponent).join('/')}`;
+    $(`${id}-remove`).hidden = !s[key];
+  }
+}
+
+async function saveSomeonePart(body, errId, done) {
+  const err = $(errId);
+  err.hidden = true;
+  try {
+    const s = await api('/api/settings', { method: 'PUT', body });
+    showSomeone(s);
+    if (done) toast(done(s));
+  } catch (e) {
+    err.textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+    err.hidden = false;
+  }
+}
+
+/** The QR through the same pipeline as menu photos (type checked, metadata stripped). */
+async function uploadQr(id) {
+  const file = $(`${id}-file`).files[0];
+  if (!file) return;
+  $(`${id}-status`).textContent = 'Uploading…';
+  try {
+    const res = await fetch('/api/images', { method: 'POST', headers: { 'X-CSRF-Token': state.csrf }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Upload failed.');
+    showSomeone(await api('/api/settings', { method: 'PUT', body: { [QRS[id]]: data.path } }));
+    $(`${id}-status`).textContent = 'Saved. Payers see it on their page.';
+  } catch (e) {
+    $(`${id}-status`).textContent = e.fields ? Object.values(e.fields).join(' ') : e.message;
+  } finally {
+    $(`${id}-file`).value = '';
+  }
+}
+
 /* ---------------------------- share image ---------------------------- */
 
 const LOGO_SRC = '/assets/Sweeter%20Side%20-%20PNG.png';
@@ -598,6 +648,19 @@ $('sms-on').addEventListener('change', () => saveSmsSwitch('sms-on', 'sms_on',
 $('sms-customer-on').addEventListener('change', () => saveSmsSwitch('sms-customer-on', 'sms_customer_on',
   'Customers get a text when we get their order.', 'Customers no longer get a text.'));
 $('share-file').addEventListener('change', uploadShare);
+$('someone-pays-on').addEventListener('change', () => saveSomeonePart({ someone_pays: $('someone-pays-on').checked },
+  'someone-pays-on-err', (s) => (s.someone_pays ? 'Someone else paying is on.' : 'Someone else paying is off.')));
+$('someone-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  saveSomeonePart({
+    pay_gcash_name: $('pay-gcash-name').value, pay_gcash_number: $('pay-gcash-number').value,
+    pay_bank_details: $('pay-bank-details').value,
+  }, 'someone-err', () => 'Saved.');
+});
+for (const id of Object.keys(QRS)) {
+  $(`${id}-file`).addEventListener('change', () => uploadQr(id));
+  $(`${id}-remove`).addEventListener('click', () => saveSomeonePart({ [QRS[id]]: '' }, 'someone-err', () => 'QR removed.'));
+}
 $('share-remove').addEventListener('click', removeShare);
 
 adminBoot(async () => {
@@ -609,6 +672,7 @@ adminBoot(async () => {
   showTracking(s);
   showGcash(s);
   showSms(s);
+  showSomeone(s);
   $('free-min').value = s.free_delivery_min ?? '';
   $('other-fee').value = s.other_area_fee ?? '';
   showAreas((await api('/api/delivery-areas')).areas);

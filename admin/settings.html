@@ -237,6 +237,49 @@
     <p class="field__err" id="gcash-err" hidden></p>
   </section>
 
+  <!-- Someone else pays: a payer anywhere pays through a link; the owner checks the money first. -->
+  <section class="hours" aria-labelledby="someone-title">
+    <h2 class="admin__title" id="someone-title">Someone else pays</h2>
+    <p class="admin__sub">Lets a customer order delivery or pick-up and send a link to someone else, like family abroad. They pay by GCash or bank transfer and enter the reference. You check your app and tap Payment received in Orders → Payment; only then does it reach To do. An order with no payment is cancelled 24 hours after it was placed, or 1 hour before its time.</p>
+    <p class="hint" id="someone-status"></p>
+    <label class="promo__check"><input type="checkbox" id="someone-pays-on"> Let someone else pay</label>
+    <p class="field__err" id="someone-pays-on-err" hidden></p>
+    <form class="hours__form" id="someone-form" novalidate>
+      <div class="field">
+        <label for="pay-gcash-name">GCash account name</label>
+        <input id="pay-gcash-name" type="text" maxlength="60" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pay-gcash-number">GCash number</label>
+        <input id="pay-gcash-number" type="text" inputmode="tel" autocomplete="off" placeholder="0917 123 4567">
+      </div>
+      <div class="field field--wide">
+        <label for="pay-bank-details">Bank transfer details <span class="hint">(bank, account name and number; blank hides bank transfer)</span></label>
+        <textarea id="pay-bank-details" rows="3" maxlength="300"></textarea>
+      </div>
+      <button class="btn btn--ghost" type="submit" id="someone-save">Save</button>
+    </form>
+    <p class="field__err" id="someone-err" role="alert" hidden></p>
+    <div class="share">
+      <img class="share__preview" id="pay-qr-gcash-preview" alt="Your GCash QR code" width="240" height="240" hidden>
+      <div>
+        <label class="btn btn--ghost" for="pay-qr-gcash-file">Upload your GCash QR</label>
+        <input id="pay-qr-gcash-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        <button class="link-quiet" type="button" id="pay-qr-gcash-remove" hidden>Remove</button>
+        <p class="hint" id="pay-qr-gcash-status" role="status">In GCash: Profile → My QR codes → Receive money → Save.</p>
+      </div>
+    </div>
+    <div class="share">
+      <img class="share__preview" id="pay-qr-bank-preview" alt="Your bank QR code" width="240" height="240" hidden>
+      <div>
+        <label class="btn btn--ghost" for="pay-qr-bank-file">Upload your bank QR Ph</label>
+        <input id="pay-qr-bank-file" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+        <button class="link-quiet" type="button" id="pay-qr-bank-remove" hidden>Remove</button>
+        <p class="hint" id="pay-qr-bank-status" role="status">Optional.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- How strict checkout is with new numbers. Blocked numbers have their own page. -->
   <section class="trust" aria-labelledby="trust-title">
     <h2 class="admin__title" id="trust-title">Fake-order protection</h2>
