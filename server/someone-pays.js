@@ -83,7 +83,83 @@ function settingsView() {
   };
 }
 
+/* ---------------------------- the payer ---------------------------- */
+
+const { db, transaction } = require('./db');
+const orders = () => require('./orders'); // orders.js requires this module
+
+const httpError = (status, message) => Object.assign(new Error(message), { status });
+const REF_RE = /^(\d{1,10})\.([A-Za-z0-9_-]{32})$/;
+const REFERENCE_RE = /^[A-Za-z0-9 -]+$/;
+const REFERENCE_MIN = 4;
+const METHODS = { gcash: 'GCash', bank: 'Bank transfer' };
+
+/** The payer's link key, "<id>.<payer token>", or '' when the order has none. */
+function payerRef(id) {
+  const row = db.prepare("SELECT payer_token FROM orders WHERE id = ? AND pay_method = 'someone'").get(Number(id));
+  return row && row.payer_token ? `${Number(id)}.${row.payer_token}` : '';
+}
+
+/** The order a payer's key opens, or null. The token is compared in constant time. */
+function byPayerRef(ref) {
+  const m = REF_RE.exec(String(ref || ''));
+  if (!m) return null;
+  const row = db.prepare("SELECT payer_token FROM orders WHERE id = ? AND pay_method = 'someone'").get(Number(m[1]));
+  if (!row || !row.payer_token) return null;
+  const a = Buffer.from(row.payer_token);
+  const b = Buffer.from(m[2]);
+  return a.length === b.length && crypto.timingSafeEqual(a, b) ? orders().get(Number(m[1])) : null;
+}
+
+/** What the payer sees: the order, the receiver's first name, never a phone or address. */
+function payView(order) {
+  return {
+    id: order.id, order_type: order.order_type, first_name: String(order.customer_name || '').trim().split(/\s+/)[0] || '',
+    items: order.items.map((i) => ({ qty: i.qty, name: i.name, options_text: i.options_text || '' })),
+    subtotal: order.subtotal, discount: order.discount, voucher_code: order.voucher_code,
+    delivery_fee: order.delivery_fee, total: order.total, delivery_area: order.delivery_area,
+    scheduled_label: order.scheduled_label, pickup_at: order.pickup_at,
+    status: order.status, pay_status: order.pay_status, payer_method: order.payer_method,
+  };
+}
+
+let referenceListener = () => {};
+/** index.js texts the owner when a reference comes in. */
+function onReference(fn) { referenceListener = fn; }
+
+/**
+ * The payer's reference. input: { method: 'gcash'|'bank', reference, name? }.
+ * Only while the order waits; one at a time.
+ * @returns the order, now 'checking'
+ */
+function submitReference(ref, input = {}) {
+  const errors = {};
+  const method = String(input.method ?? '');
+  const reference = String(input.reference ?? '').trim().replace(/\s+/g, ' ');
+  const name = String(input.name ?? '').trim().replace(/\s+/g, ' ');
+  if (!METHODS[method]) errors.method = 'Choose GCash or bank transfer.';
+  if (reference.length < REFERENCE_MIN || reference.length > REFERENCE_MAX || !REFERENCE_RE.test(reference)) {
+    errors.reference = 'Enter the reference number from your receipt.';
+  }
+  if (name.length > NAME_MAX) errors.name = `Keep your name under ${NAME_MAX} characters.`;
+  const order = byPayerRef(ref);
+  if (!order) throw httpError(404, 'We could not find that order.');
+  if (Object.keys(errors).length) throw new ValidationError(errors);
+  const changed = transaction(() => db.prepare(`UPDATE orders SET pay_status = 'checking', payer_method = ?,
+      payer_reference = ?, payer_name = ?, payer_sent_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ? AND pay_method = 'someone' AND pay_status = 'awaiting' AND status <> 'cancelled'`)
+    .run(method, reference, name, order.id).changes);
+  if (!changed) {
+    throw httpError(409, order.status === 'cancelled' ? 'This order was cancelled. Please contact us.'
+      : 'A payment for this order is already being checked.');
+  }
+  const after = orders().get(order.id);
+  try { referenceListener(after); } catch { console.warn(`[someone-pays] #${order.id} alert failed`); }
+  return after;
+}
+
 module.exports = {
   LEAD_HOURS, CUTOFF_MINUTES, MAX_WAIT_HOURS, REFERENCE_MAX, NAME_MAX,
-  details, offered, newToken, parsers, settingsView,
+  METHODS, details, offered, newToken, parsers, settingsView,
+  payerRef, byPayerRef, payView, onReference, submitReference,
 };

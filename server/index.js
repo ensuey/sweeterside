@@ -36,6 +36,7 @@ const reports = require('./reports');
 const audit = require('./audit');
 const stock = require('./stock');
 const paymongo = require('./paymongo');
+const someonePays = require('./someone-pays');
 const staging = require('./staging');
 const corrections = require('./corrections');
 const credit = require('./credit');
@@ -236,6 +237,11 @@ const voucherLimiter = rateLimiter(20, 10 * 60 * 1000);
 /* GCash: a customer checking on their payment, and PayMongo's webhook. */
 const paymentLimiter = rateLimiter(60, 10 * 60 * 1000);
 const webhookLimiter = rateLimiter(300, 10 * 60 * 1000);
+
+/* Someone else pays: the payer's page, and the reference they send. Every
+   reference counts, so nobody can try keys one after another. */
+const payPageLimiter = rateLimiter(60, 10 * 60 * 1000);
+const payRefLimiter = rateLimiter(10, 10 * 60 * 1000);
 
 /** What the customer's confirmation screen needs about their own order. */
 function publicOrder(order) {
@@ -551,6 +557,18 @@ async function route(req, res) {
     }), headers);
   }
 
+  // The payer's page for an order someone else pays. The payer's own key is
+  // the only way in; the page shows the receiver's first name, no phone or address.
+  if (pathname.startsWith('/pay/') && (method === 'GET' || method === 'HEAD')) {
+    const headers = { 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' };
+    const ip = clientIp(req);
+    if (payPageLimiter.limited(ip)) return sendHtml(res, 429, render.buildPayHtml(null, {}, { busy: true }), headers);
+    payPageLimiter.record(ip);
+    const order = someonePays.byPayerRef(pathname.slice('/pay/'.length));
+    if (!order) return sendHtml(res, 404, render.buildPayHtml(null), headers);
+    return sendHtml(res, 200, render.buildPayHtml(someonePays.payView(order), someonePays.details()), headers);
+  }
+
   /* ---- health check (for the hosting platform) ---- */
   if (pathname === '/healthz' && (method === 'GET' || method === 'HEAD')) {
     return sendJson(res, 200, { ok: true, items: menu.list().length });
@@ -806,6 +824,18 @@ async function route(req, res) {
     }
     announce(order);
     return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req) });
+  }
+
+  // The payer's reference number, from the payer's page. body: { ref, method, reference, name }.
+  if (pathname === '/api/pay/reference' && method === 'POST') {
+    if (!isJson(req)) return sendJson(res, 415, { error: 'Send it as JSON.' });
+    const ip = clientIp(req);
+    if (payRefLimiter.limited(ip)) return sendJson(res, 429, { error: 'Please wait a few minutes and try again.' });
+    payRefLimiter.record(ip);
+    const body = await readJson(req);
+    const order = someonePays.submitReference(body.ref, body);
+    console.log(`[someone-pays] #${order.id} reference sent (${order.payer_method})`);
+    return sendJson(res, 200, { ok: true });
   }
 
   /* ---- GCash (PayMongo): the customer's way back, and PayMongo's webhook ---- */

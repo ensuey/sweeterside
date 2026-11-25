@@ -907,6 +907,7 @@ function withLines(order, { fullIds = false } = {}) {
   delete order.last_request_key;
   // The customer's key to their order never goes out with it.
   delete order.pay_token;
+  delete order.payer_token;
   if (order.pricing && !fullIds) {
     order.pricing.claimants.forEach((c) => { c.id_no = pricing.maskId(c.id_no); });
   }

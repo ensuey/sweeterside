@@ -95,3 +95,80 @@ test('someone pays: the 15-minute GCash sweep leaves it alone', async () => {
   await paymongo.expireStale(new Date(Date.now() + 60 * 60000));
   assert.strictEqual(db.prepare('SELECT pay_status FROM orders WHERE id = ?').get(o.id).pay_status, 'awaiting');
 });
+
+/* ---------------------------- the payer's page ---------------------------- */
+
+const someonePays = require('../server/someone-pays');
+const render = require('../server/render');
+const tokenOf = (id) => db.prepare('SELECT payer_token, pay_token FROM orders WHERE id = ?').get(id);
+
+test('payer page: wrong token, receiver token, or GCash order → not found', () => {
+  turnOn();
+  const o = place();
+  const t = tokenOf(o.id);
+  assert.ok(someonePays.byPayerRef(someonePays.payerRef(o.id)), 'the right key opens it');
+  assert.strictEqual(someonePays.byPayerRef(`${o.id}.${t.pay_token}`), null, 'receiver key');
+  assert.strictEqual(someonePays.byPayerRef(`${o.id}.${'A'.repeat(32)}`), null, 'wrong key');
+  assert.strictEqual(someonePays.byPayerRef(`${o.id + 1}.${t.payer_token}`), null, 'other order');
+  assert.strictEqual(orders.byRef(`${o.id}.${t.payer_token}`), null, 'payer key does not open the status page');
+  assert.strictEqual(someonePays.payerRef(999999), '');
+});
+
+test('payer page: items, total, first name and QR; no phone, address, landmark or last name', () => {
+  turnOn();
+  orders.updateSettings({ pay_bank_details: 'BPI · Dachel S. · 1234 5678 90' });
+  const o = place({ type: 'delivery', name: 'Ana Reyes', address: '12 Mabini St', landmark: 'green gate beside the store',
+    delivery_area: AREA.id, deliver_at: '16:00', deliver_date: '2026-10-23', pickup_at: '', pickup_date: '' });
+  const html = render.buildPayHtml(someonePays.payView(someonePays.byPayerRef(someonePays.payerRef(o.id))), someonePays.details());
+  assert.match(html, /Ana/);
+  assert.match(html, /Matcha Frappe/);
+  assert.match(html, /₱129/);
+  assert.match(html, /0917 555 1234/);
+  assert.match(html, /1234 5678 90/);
+  for (const secret of ['Reyes', 'Mabini', 'green gate', '123 45']) assert.ok(!html.includes(secret), secret);
+  assert.match(html, /<script src="\/assets\/js\/pay\.js" defer><\/script>/);
+});
+
+test('payer page: still opens after the switch is turned off', () => {
+  turnOn();
+  const o = place();
+  orders.updateSettings({ someone_pays: '0' });
+  assert.ok(someonePays.byPayerRef(someonePays.payerRef(o.id)));
+  turnOn();
+});
+
+test('reference: checked, saved once, then 409', () => {
+  turnOn();
+  const o = place();
+  const ref = someonePays.payerRef(o.id);
+  for (const bad of [{ method: 'cash', reference: '1234567' }, { method: 'gcash', reference: '12' },
+    { method: 'gcash', reference: 'x'.repeat(61) }, { method: 'bank', reference: '1234<b>' },
+    { method: 'gcash', reference: '1234567', name: 'n'.repeat(61) }]) {
+    assert.ok(errorsOf(() => someonePays.submitReference(ref, bad)), JSON.stringify(bad));
+  }
+  const heard = [];
+  someonePays.onReference((x) => heard.push(x.id));
+  const r = someonePays.submitReference(ref, { method: 'gcash', reference: ' 1012 345 678901 ', name: 'Tita Lorna' });
+  assert.strictEqual(r.pay_status, 'checking');
+  assert.deepStrictEqual(heard, [o.id]);
+  const row = db.prepare('SELECT * FROM orders WHERE id = ?').get(o.id);
+  assert.deepStrictEqual([row.payer_method, row.payer_reference, row.payer_name], ['gcash', '1012 345 678901', 'Tita Lorna']);
+  assert.ok(row.payer_sent_at);
+  assert.strictEqual(errorsOf(() => someonePays.submitReference(ref, { method: 'bank', reference: '99999' })).status, 409);
+  assert.strictEqual(errorsOf(() => someonePays.submitReference('1.bad', { method: 'bank', reference: '99999' })).status, 404);
+  someonePays.onReference(() => {});
+});
+
+test('reference: a cancelled order → 409', () => {
+  turnOn();
+  const o = place();
+  orders.setStatus(o.id, 'cancelled');
+  assert.strictEqual(errorsOf(() => someonePays.submitReference(someonePays.payerRef(o.id), { method: 'gcash', reference: '123456' })).status, 409);
+});
+
+test('the payer key is never sent with orders', () => {
+  turnOn();
+  const o = place();
+  assert.strictEqual(orders.get(o.id).payer_token, undefined);
+  assert.ok(orders.list('all').every((x) => x.payer_token === undefined));
+});
