@@ -67,7 +67,7 @@ const place = (body) => fetch(`${url}/api/orders`, { method: 'POST', headers: { 
 
 let first; // { id, ref }
 
-test('a cash order texts the customer once, with the link to its status, and still alerts the owner', async () => {
+test('a cash order texts the customer once, with no link, and still alerts the owner', async () => {
   texts.length = 0;
   const res = await place(input());
   assert.strictEqual(res.status, 201);
@@ -78,8 +78,9 @@ test('a cash order texts the customer once, with the link to its status, and sti
   await settle();
   const mine = sentTo(CUSTOMER);
   assert.strictEqual(mine.length, 1, 'one text to the customer');
-  assert.ok(mine[0].message.includes(`#${first.id}`) && mine[0].message.includes(body.status_url), mine[0].message);
-  assert.ok(mine[0].message.includes('P258'));
+  assert.ok(mine[0].message.startsWith(`Sweeter Side: We got your order #${first.id} (P258).`), mine[0].message);
+  // PH networks drop business texts with links that are not approved, though Semaphore says "Sent".
+  assert.ok(!/https?:|www\.|sweeterside\.ph|\/order\//i.test(mine[0].message), 'no link in the text');
   assert.ok(mine[0].message.length <= 160);
   assert.match(mine[0].message, /^[\x20-\x7E]*$/, 'plain characters only');
   assert.ok(!mine[0].message.includes('Juan'), 'no name in the text');
@@ -159,14 +160,14 @@ test('switched off, or with no Semaphore key, the customer gets no text; the ord
   delete process.env.SEMAPHORE_API_KEY;
   try {
     texts.length = 0;
-    sms.confirmCustomer({ id: 1, total: 1, phone_norm: '+639171234567' }, 'https://sweeterside.ph/order/x');
+    sms.confirmCustomer({ id: 1, total: 1, phone_norm: '+639171234567' });
     await settle();
     assert.strictEqual(texts.length, 0);
   } finally {
     process.env.SEMAPHORE_API_KEY = 'sk-test-semaphore-key-123';
   }
-  sms.confirmCustomer({ id: 1, total: 1, phone_norm: '' }, 'https://sweeterside.ph/order/x');
-  sms.confirmCustomer({ id: 1, total: 1, phone: '<script>' }, 'https://sweeterside.ph/order/x');
+  sms.confirmCustomer({ id: 1, total: 1, phone_norm: '' });
+  sms.confirmCustomer({ id: 1, total: 1, phone: '<script>' });
   await settle();
   assert.strictEqual(texts.length, 0, 'no valid number: nothing sent');
 });
@@ -183,7 +184,8 @@ test('a GCash order texts the customer only once it is paid', async () => {
   await settle();
   const mine = sentTo(CUSTOMER);
   assert.strictEqual(mine.length, 1);
-  assert.ok(mine[0].message.includes(`https://sweeterside.ph/order/${orders.customerRef(order.id)}`), mine[0].message);
+  assert.ok(mine[0].message.startsWith(`Sweeter Side: We got your order #${order.id} (P258).`), mine[0].message);
+  assert.ok(!mine[0].message.includes('http'), 'no link');
 });
 
 test('robots.txt keeps status pages out, and opening one too often is slowed down', async () => {

@@ -582,7 +582,7 @@ function customerStatus(order, { status, awaiting = false, willCall = false }) {
 }
 
 /**
- * The customer's own order page, from the link in their text. order is the
+ * The customer's own order page, from the confirmation screen's link. order is the
  * publicOrder() view (no name, phone or address); null shows "not found", or
  * "too many tries" with busy.
  */

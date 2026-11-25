@@ -269,11 +269,10 @@ function statusUrl(id, req) {
 }
 
 /** The owner's alerts, and the customer's "we got your order" text. */
-function announce(order, req) {
+function announce(order) {
   push.alert(push.orderMessage(order));
   sms.alert(push.orderMessage(order));
-  sms.confirmCustomer(order, statusUrl(order.id, req),
-    { willCall: order.status === 'new' && orders.requiresConfirmation(order.order_type) });
+  sms.confirmCustomer(order, { willCall: order.status === 'new' && orders.requiresConfirmation(order.order_type) });
 }
 
 // A GCash order is announced to the kitchen (and the customer) once it is paid.
@@ -282,7 +281,7 @@ paymongo.onPaid((id) => {
   if (order) announce(order);
 });
 
-/* Customers opening their order's status page from the link in their text. */
+/* Customers opening their order's status page from the confirmation screen's link. */
 const statusLimiter = rateLimiter(60, 10 * 60 * 1000);
 
 /* Cake bookings and their reference photos are public writes as well. */
@@ -537,7 +536,7 @@ async function route(req, res) {
     return sendHtml(res, 200, render.buildPolicyHtml(pathname), customerHeaders());
   }
 
-  // The customer's own order, from the link in their text. The key is the
+  // The customer's own order, from the confirmation screen's link. The key is the
   // only way in; the page shows no name, phone or address, and no trackers.
   if (pathname.startsWith('/order/') && (method === 'GET' || method === 'HEAD')) {
     const headers = { 'X-Robots-Tag': 'noindex, nofollow', 'Referrer-Policy': 'no-referrer' };
@@ -805,7 +804,7 @@ async function route(req, res) {
         throw err;
       }
     }
-    announce(order, req);
+    announce(order);
     return sendJson(res, 201, { order: publicOrder(order), status_url: statusUrl(order.id, req) });
   }
 
