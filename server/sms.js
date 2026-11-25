@@ -125,11 +125,18 @@ function alert(message) {
  * The customer's "we got your order" text. No link: PH networks drop
  * business texts with links that are not approved, while Semaphore still
  * says "Sent". The status link is on the confirmation screen instead.
- * 'Sweeter Side: We got your order #12 (P320). We will call to confirm.'
+ * Line breaks are plain characters too, so it stays one normal SMS:
+ * 'We got your order #12 with the amount of P320.\nWe will call you to confirm.\nThank you!\n\nSweeterSide'
  */
 function customerText(order, { willCall = false } = {}) {
   const total = `P${Number(order.total).toLocaleString('en-US')}`;
-  return plainSms(`Sweeter Side: We got your order #${order.id} (${total}). ${willCall ? 'We will call to confirm.' : 'Thank you!'}`);
+  return [
+    `We got your order #${order.id} with the amount of ${total}.`,
+    willCall ? 'We will call you to confirm.' : null,
+    'Thank you!',
+    '',
+    'SweeterSide',
+  ].filter((l) => l !== null).map(plainSms).join('\n');
 }
 
 /**

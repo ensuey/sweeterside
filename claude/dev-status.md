@@ -407,8 +407,8 @@ All merged and deployed (Fly v15–v28).
   change. Linked from every customer footer, the checkout and the cake form.
 - **Customer order text and status page:** every online order gets a key
   (`pay_token`, which GCash already had). When the order is placed (GCash: once
-  paid) the customer gets one text through Semaphore: "We got your order #12
-  (P320). We will call to confirm." No link: PH networks drop business texts
+  paid) the customer gets one text through Semaphore, on separate lines: "We got your order #12 with the amount of P320. / We will call you to confirm. /
+  Thank you! / SweeterSide". No link: PH networks drop business texts
   with links that are not approved, though Semaphore says "Sent" (#210, live).
   The confirmation screen links `/order/<id>.<key>`, a server-rendered
   page with the items, totals and status, refreshing every minute while active,
