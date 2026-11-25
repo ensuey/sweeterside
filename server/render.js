@@ -649,7 +649,8 @@ function buildPayHtml(view, details = {}, { busy = false } = {}) {
   } else {
     title = view.first_name ? `Pay for ${view.first_name}'s order` : `Pay for order #${view.id}`;
     const waiting = view.pay_status === 'awaiting' && view.status !== 'cancelled';
-    line = view.status === 'cancelled' ? 'This order was cancelled. Please contact us.'
+    line = view.status === 'cancelled' && view.pay_status === 'late' ? 'This order was cancelled before your payment came in. We have your reference and will refund you.'
+      : view.status === 'cancelled' ? 'This order was cancelled. Please contact us.'
       : view.pay_status === 'checking' ? 'Thank you. We are checking your payment and will start the order.'
         : view.pay_status === 'paid' ? 'Paid. Thank you! The order is being prepared.'
           : `Order #${view.id}. We start it once your payment is confirmed.`;
@@ -678,6 +679,7 @@ function buildPayHtml(view, details = {}, { busy = false } = {}) {
       body += `
     <h2>How to pay</h2>
     <p class="pay__amount">Send exactly <strong>${esc(peso(view.total))}</strong>.</p>
+${view.pay_by ? `    <p>Pay by <strong>${esc(view.pay_by)}</strong>, or the order is cancelled.</p>\n` : ''}
 ${details.qr_gcash || details.qr_bank ? '    <p>On the same phone? Tap Save QR, then in your GCash or bank app choose Scan QR and upload it from your photos.</p>\n' : ''}${ways}
     <h2>After you pay</h2>
     <form class="pay__form" id="pay-form" novalidate>

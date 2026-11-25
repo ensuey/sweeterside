@@ -339,3 +339,50 @@ test('settings: switch, GCash name and number, bank details, two QR uploads', ()
   assert.ok(errorsOf(() => orders.updateSettings({ pay_qr_gcash: '../../etc/passwd' })).pay_qr_gcash);
   assert.strictEqual(orders.updateSettings({ pay_gcash_number: '+639175551234' }).pay_gcash_number, '0917 555 1234');
 });
+
+/* ---------------------------- from the final review ---------------------------- */
+
+test('a payment sent after the order was cancelled is kept for a refund, and the owner is told', () => {
+  turnOn();
+  const heard = [];
+  someonePays.onReference((x) => heard.push([x.id, x.pay_status]));
+  const o = place({ pickup_at: '17:00' });
+  someonePays.expireUnpaid(manila(16, 30)); // within the hour: cancelled
+  assert.strictEqual(rowOf(o.id).status, 'cancelled');
+  const e = errorsOf(() => sent(o, '4444 5555'));
+  assert.strictEqual(e.status, 409);
+  assert.match(e.message, /refund/);
+  const r = rowOf(o.id);
+  assert.deepStrictEqual([r.pay_status, r.payer_reference], ['late', '4444 5555']);
+  assert.deepStrictEqual(heard, [[o.id, 'late']]);
+  assert.match(someonePays.referenceMessage(orders.get(o.id)).title, /cancelled/i);
+  assert.strictEqual(errorsOf(() => sent(o, '6666 7777')).status, 409, 'only once');
+  assert.strictEqual(rowOf(o.id).payer_reference, '4444 5555');
+  someonePays.onReference(() => {});
+});
+
+test('the payer page says when to pay by', () => {
+  turnOn();
+  const o = place({ pickup_at: '17:00' });
+  const html = render.buildPayHtml(someonePays.payView(someonePays.byPayerRef(someonePays.payerRef(o.id))), someonePays.details());
+  assert.match(html, /Pay by <strong>Fri 23 Oct, 4:00 PM<\/strong>/);
+});
+
+test('while waiting for someone else to pay, the status can only be cancelled', () => {
+  turnOn();
+  const o = place();
+  for (const s of ['confirmed', 'preparing', 'delivering', 'completed']) {
+    assert.strictEqual(errorsOf(() => orders.setStatus(o.id, s)).status, 409, s);
+  }
+  sent(o);
+  assert.strictEqual(errorsOf(() => orders.setStatus(o.id, 'completed')).status, 409, 'checking too');
+  assert.strictEqual(orders.setStatus(o.id, 'cancelled').status, 'cancelled');
+});
+
+test('auto-cancel touches only new or confirmed orders', () => {
+  turnOn();
+  const o = place({ pickup_at: '17:00' });
+  db.prepare("UPDATE orders SET status = 'completed' WHERE id = ?").run(o.id); // set before the guard existed
+  someonePays.expireUnpaid(manila(16, 30));
+  assert.strictEqual(rowOf(o.id).status, 'completed');
+});

@@ -224,6 +224,8 @@ function orderHtml(o) {
           <button class="btn btn--ghost btn--sm" type="button" data-not-paid>Not received</button></dd>`
     : o.pay_status === 'awaiting'
     ? `<dd class="order__change">Someone else pays. Waiting for their payment${o.payer_checked ? ' (the last one did not arrive)' : ''}.</dd>`
+    : o.pay_status === 'late'
+    ? `<dd class="order__change order__refund">Paid by ${via} after it was cancelled (ref ${esc(o.payer_reference)}${o.payer_name ? `, from ${esc(o.payer_name)}` : ''}): refund the payer.</dd>`
     : o.pay_status === 'paid' && o.status === 'cancelled'
     ? `<dd class="order__change order__refund">${paidLabel(o)} (ref ${esc(o.payer_reference)}), then cancelled: refund the payer.</dd>`
     : o.pay_status === 'paid'

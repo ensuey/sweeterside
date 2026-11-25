@@ -111,6 +111,16 @@ function byPayerRef(ref) {
   return a.length === b.length && crypto.timingSafeEqual(a, b) ? orders().get(Number(m[1])) : null;
 }
 
+const toSql = (ms) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+const fromSql = (sql) => new Date(`${String(sql).replace(' ', 'T')}Z`).getTime();
+
+/** When an order with no reference cancels itself: 24 hours after ordering, or 60 minutes before its time. UTC SQL text. */
+function payBySql(order) {
+  const times = [fromSql(order.created_at) + MAX_WAIT_HOURS * 3600000];
+  if (order.scheduled_for) times.push(fromSql(order.scheduled_for) - CUTOFF_MINUTES * 60000);
+  return toSql(Math.min(...times));
+}
+
 /** What the payer sees: the order, the receiver's first name, never a phone or address. */
 function payView(order) {
   return {
@@ -120,6 +130,7 @@ function payView(order) {
     delivery_fee: order.delivery_fee, total: order.total, delivery_area: order.delivery_area,
     scheduled_label: order.scheduled_label, pickup_at: order.pickup_at,
     status: order.status, pay_status: order.pay_status, payer_method: order.payer_method,
+    pay_by: order.payer_checked ? '' : require('./schedule').label({ scheduled_for: payBySql(order), order_type: 'pickup' }),
   };
 }
 
@@ -150,6 +161,16 @@ function submitReference(ref, input = {}) {
     WHERE id = ? AND pay_method = 'someone' AND pay_status = 'awaiting' AND status <> 'cancelled'`)
     .run(method, reference, name, order.id).changes);
   if (!changed) {
+    // Cancelled before the money came: keep the reference so the shop can refund it.
+    const late = order.status === 'cancelled' && ['', 'awaiting'].includes(order.pay_status) && db.prepare(`
+      UPDATE orders SET pay_status = 'late', payer_method = ?, payer_reference = ?, payer_name = ?,
+        payer_sent_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ? AND pay_method = 'someone' AND status = 'cancelled' AND pay_status IN ('', 'awaiting')`)
+      .run(method, reference, name, order.id).changes;
+    if (late) {
+      try { referenceListener(orders().get(order.id)); } catch { console.warn(`[someone-pays] #${order.id} alert failed`); }
+      throw httpError(409, 'This order was cancelled before your payment came in. We have your reference and will refund you.');
+    }
     throw httpError(409, order.status === 'cancelled' ? 'This order was cancelled. Please contact us.'
       : 'A payment for this order is already being checked.');
   }
@@ -160,6 +181,12 @@ function submitReference(ref, input = {}) {
 
 /** The owner's "check payment" text: the order, total, method and reference. No name or phone. */
 function referenceMessage(order) {
+  if (order.pay_status === 'late') {
+    return {
+      title: `Refund #${order.id}: paid after it was cancelled`,
+      body: `P${order.total} by ${METHODS[order.payer_method] || 'payment'}, ref ${order.payer_reference}`,
+    };
+  }
   return {
     title: `Check payment #${order.id}`,
     body: `P${order.total} by ${METHODS[order.payer_method] || 'payment'}, ref ${order.payer_reference}`,
@@ -226,7 +253,7 @@ function expireUnpaid(now = new Date()) {
   return db.prepare(`UPDATE orders SET status = 'cancelled', cancel_reason = 'unpaid', pay_status = '',
                        updated_at = datetime('now')
                      WHERE pay_method = 'someone' AND pay_status = 'awaiting' AND payer_checked = 0
-                       AND status <> 'cancelled' AND (created_at <= ? OR scheduled_for <= ?)`)
+                       AND status IN ('new', 'confirmed') AND (created_at <= ? OR scheduled_for <= ?)`)
     .run(sql(now.getTime() - MAX_WAIT_HOURS * 3600000), sql(now.getTime() + CUTOFF_MINUTES * 60000)).changes;
 }
 

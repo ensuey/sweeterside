@@ -1014,8 +1014,13 @@ function counts() {
  */
 function setStatus(id, status, { reason } = {}) {
   if (!STATUSES.includes(status)) throw new ValidationError({ status: 'Choose a valid status.' });
-  const order = db.prepare('SELECT status, order_type, cancel_reason, refunded_cents FROM orders WHERE id = ?').get(Number(id));
+  const order = db.prepare('SELECT status, order_type, cancel_reason, refunded_cents, pay_method, pay_status FROM orders WHERE id = ?').get(Number(id));
   if (!order) return null;
+
+  // Someone else pays: nothing moves on until the owner has checked the payment.
+  if (order.pay_method === 'someone' && ['awaiting', 'checking'].includes(order.pay_status) && status !== 'cancelled') {
+    throw Object.assign(new Error('Someone else is paying this order. Check the payment first (Orders → Payment).'), { status: 409 });
+  }
 
   // Money taken stays with a sale: refund it before cancelling.
   if (status === 'cancelled' && order.status !== 'cancelled') {
