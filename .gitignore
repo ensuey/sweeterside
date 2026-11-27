@@ -37,3 +37,6 @@ assets/uploads/
 
 # Impeccable design-review snapshots (local tool output)
 .impeccable/
+
+# graphify knowledge-graph output (local tool output)
+graphify-out/
