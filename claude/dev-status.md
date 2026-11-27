@@ -361,7 +361,7 @@ All merged and deployed (Fly v15–v28).
 - **#34 (v26): local SEO and AI search** for café, coffee shop, cake shop
   and pastries in San Isidro, Davao Oriental.
   - **One source for the facts:** `server/business.js` holds the name,
-    address (Unit 5, Lasaca Bldg, Public Market, Batobato, San Isidro, Davao
+    address (Lasaca Building, Purok Rizal, Batobato, San Isidro, Davao
     Oriental 8209), map position (6.8340817, 126.0873542), phone
     (0932 762 0367), hours (daily 10:00–20:00, assumed every day), the
     Google Maps and Facebook links, and delivery areas (Batobato, Manikling,

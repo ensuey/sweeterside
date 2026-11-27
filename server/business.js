@@ -4,7 +4,8 @@
    they always say exactly the same thing. Keep them identical to the Google
    Business Profile: a different name, address or phone hurts local search.
 
-   Given by the owner on 2026-11-03. */
+   Given by the owner on 2026-11-03; the address as registered with PayMongo
+   on 2026-11-27. */
 
 const BUSINESS = {
   name: 'Sweeter Side by Dachel',
@@ -14,7 +15,7 @@ const BUSINESS = {
     + 'plus pasta and sandwiches. Dine in, pick up or delivery.',
   phone: { display: '0932 762 0367', tel: '+639327620367' },
   address: {
-    street: 'Unit 5, Lasaca Bldg, Public Market, Batobato',
+    street: 'Lasaca Building, Purok Rizal, Batobato',
     locality: 'San Isidro',
     region: 'Davao Oriental',
     postalCode: '8209',
@@ -29,7 +30,7 @@ const BUSINESS = {
   priceRange: '₱',
 };
 
-/** "Unit 5, …, San Isidro, Davao Oriental 8209" */
+/** "Lasaca Building, …, San Isidro, Davao Oriental 8209" */
 function addressLine(b = BUSINESS) {
   return `${b.address.street}, ${b.address.locality}, ${b.address.region} ${b.address.postalCode}`;
 }
