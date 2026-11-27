@@ -58,7 +58,7 @@ test('the structured data is a café and bakery with the address, hours, map and
   const biz = graph.find((n) => n['@id'] === 'https://sweeterside.ph/#business');
   assert.deepStrictEqual(biz['@type'], ['CafeOrCoffeeShop', 'Bakery']);
   assert.deepStrictEqual(biz.address, {
-    '@type': 'PostalAddress', streetAddress: 'Unit 5, Lasaca Bldg, Public Market, Batobato',
+    '@type': 'PostalAddress', streetAddress: 'Lasaca Building, Purok Rizal, Batobato',
     addressLocality: 'San Isidro', addressRegion: 'Davao Oriental', postalCode: '8209', addressCountry: 'PH',
   });
   assert.deepStrictEqual([biz.geo.latitude, biz.geo.longitude], [6.8340817, 126.0873542]);
